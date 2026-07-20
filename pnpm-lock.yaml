@@ -39,6 +39,9 @@ importers:
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
       eslint:
         specifier: 9.39.5
         version: 9.39.5(supports-color@8.1.1)

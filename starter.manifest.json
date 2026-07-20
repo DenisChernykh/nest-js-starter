@@ -1,0 +1,10 @@
+{
+  "$schema": "./docs/schemas/starter-manifest.schema.json",
+  "manifestVersion": 1,
+  "starter": {
+    "name": "nest-js-starter",
+    "version": "0.1.0-alpha.0",
+    "sourceRevision": "unreleased"
+  },
+  "appliedRecipes": []
+}
