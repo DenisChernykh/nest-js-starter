@@ -107,4 +107,46 @@ describe('cross-module import policy', () => {
 
     expect(violations).toEqual([])
   })
+
+  it.each([
+    'module-public-api-runtime-declaration',
+    'module-public-api-type-declaration',
+    'module-public-api-default-export',
+    'module-public-api-export-assignment',
+    'module-public-api-local-export-list',
+  ])(
+    'rejects a non-application top-level statement in %s',
+    async (fixtureName) => {
+      const violations = await findModuleImportViolations(
+        join(process.cwd(), fixturesRoot, fixtureName),
+      )
+
+      expect(violations).toEqual([
+        {
+          file: 'modules/orders/index.ts',
+          reason: 'module-public-api-exports-non-application',
+          specifier: '<non-application-statement>',
+        },
+      ])
+    },
+  )
+
+  it('rejects import-then-re-export in a module root', async () => {
+    const violations = await findModuleImportViolations(
+      join(process.cwd(), fixturesRoot, 'module-public-api-import-reexport'),
+    )
+
+    expect(violations).toEqual([
+      {
+        file: 'modules/orders/index.ts',
+        reason: 'module-public-api-exports-non-application',
+        specifier: '<non-application-statement>',
+      },
+      {
+        file: 'modules/orders/index.ts',
+        reason: 'module-public-api-exports-non-application',
+        specifier: '<non-application-statement>',
+      },
+    ])
+  })
 })

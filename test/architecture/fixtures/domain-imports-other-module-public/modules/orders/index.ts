@@ -1,3 +1,1 @@
-export interface OrdersApi {
-  readonly kind: 'orders'
-}
+export * from '@/modules/orders/application'

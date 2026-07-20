@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -9,14 +9,8 @@ const schemaPath = join(
   'docs/schemas/starter-manifest.schema.json',
 )
 
-async function writeManifest(value: unknown): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), 'starter-manifest-'))
-  const manifestPath = join(directory, 'starter.manifest.json')
-  await writeFile(manifestPath, JSON.stringify(value), 'utf8')
-  return manifestPath
-}
-
 describe('starter manifest', () => {
+  const temporaryRoots: string[] = []
   const validManifest = {
     $schema: './docs/schemas/starter-manifest.schema.json',
     manifestVersion: 1,
@@ -27,6 +21,22 @@ describe('starter manifest', () => {
     },
     appliedRecipes: [],
   } as const
+
+  afterEach(async () => {
+    await Promise.all(
+      temporaryRoots
+        .splice(0)
+        .map((root) => rm(root, { force: true, recursive: true })),
+    )
+  })
+
+  async function writeManifest(value: unknown): Promise<string> {
+    const directory = await mkdtemp(join(tmpdir(), 'starter-manifest-'))
+    temporaryRoots.push(directory)
+    const manifestPath = join(directory, 'starter.manifest.json')
+    await writeFile(manifestPath, JSON.stringify(value), 'utf8')
+    return manifestPath
+  }
 
   it('accepts the committed version-one manifest', async () => {
     await expect(

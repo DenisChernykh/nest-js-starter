@@ -3,6 +3,8 @@ import { dirname, relative, resolve, sep } from 'node:path'
 
 import ts from 'typescript'
 
+const nonApplicationStatementSpecifier = '<non-application-statement>'
+
 /**
  * Describes a forbidden import across a module ownership boundary.
  */
@@ -88,6 +90,47 @@ function collectSpecifiers(
   return specifiers
 }
 
+/**
+ * Lists module-root statements that are not direct application re-exports.
+ *
+ * @remarks Only export declarations targeting the module's relative or aliased
+ * application entrypoint are valid. Statements without a module specifier use
+ * the stable `<non-application-statement>` sentinel.
+ * @param sourceText - TypeScript source of the module root entrypoint.
+ * @param fileName - File name used to construct the TypeScript syntax tree.
+ * @param moduleName - Module directory name used by the aliased application path.
+ * @returns One reportable specifier for every non-conforming top-level statement.
+ */
+function collectModulePublicApiViolationSpecifiers(
+  sourceText: string,
+  fileName: string,
+  moduleName: string,
+): readonly string[] {
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    sourceText,
+    ts.ScriptTarget.Latest,
+    true,
+  )
+  const allowedSpecifiers = new Set([
+    './application',
+    `@/modules/${moduleName}/application`,
+  ])
+
+  return sourceFile.statements.flatMap((statement) => {
+    if (
+      !ts.isExportDeclaration(statement) ||
+      statement.moduleSpecifier === undefined ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      return [nonApplicationStatementSpecifier]
+    }
+
+    const specifier = statement.moduleSpecifier.text
+    return allowedSpecifiers.has(specifier) ? [] : [specifier]
+  })
+}
+
 function normalizedRelative(root: string, path: string): string {
   return relative(root, path).split(sep).join('/')
 }
@@ -116,22 +159,22 @@ export async function findModuleImportViolations(
     )?.[1]
     const sourceText = await readFile(file, 'utf8')
 
-    for (const specifier of collectSpecifiers(sourceText, file)) {
-      if (publicIndexModule !== undefined) {
-        const allowedSpecifiers = new Set([
-          './application',
-          `@/modules/${publicIndexModule}/application`,
-        ])
-        if (!allowedSpecifiers.has(specifier)) {
-          violations.push({
-            file: fileRelative,
-            reason: 'module-public-api-exports-non-application',
-            specifier,
-          })
-        }
-        continue
+    if (publicIndexModule !== undefined) {
+      for (const specifier of collectModulePublicApiViolationSpecifiers(
+        sourceText,
+        file,
+        publicIndexModule,
+      )) {
+        violations.push({
+          file: fileRelative,
+          reason: 'module-public-api-exports-non-application',
+          specifier,
+        })
       }
+      continue
+    }
 
+    for (const specifier of collectSpecifiers(sourceText, file)) {
       const aliasMatch = /^@\/modules\/([^/]+)(.*)$/.exec(specifier)
       const aliasSuffix = aliasMatch?.[2]
       const relativeTarget = specifier.startsWith('.')
