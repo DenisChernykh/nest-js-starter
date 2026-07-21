@@ -1,9 +1,7 @@
-import { ConfigService } from '@nestjs/config'
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
-import type { ValidatedRuntimeEnvironment } from '@/platform/config/runtime-config.types'
-import { validateRuntimeEnvironment } from '@/platform/config/runtime-environment'
+import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { PrismaTransactionAdapter } from '@/platform/database/prisma-transaction.adapter'
 import { PrismaTransactionContext } from '@/platform/database/prisma-transaction.context'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
@@ -20,16 +18,14 @@ describe('Prisma transaction boundary', () => {
   beforeAll(async () => {
     container = await startPostgresContainer()
     process.env['DATABASE_URL'] = container.getConnectionUri()
-    const environment = validateRuntimeEnvironment(
+    const environment = buildApiRuntimeConfig(
       requiredRuntimeEnvironment({
         DATABASE_URL: container.getConnectionUri(),
         DATABASE_CONNECTION_TIMEOUT_MS: '2000',
         DATABASE_HEALTH_TIMEOUT_MS: '2000',
       }),
     )
-    const config = new RuntimeConfigService(
-      new ConfigService<ValidatedRuntimeEnvironment, true>(environment),
-    )
+    const config = new RuntimeConfigService(environment)
     const context = new PrismaTransactionContext()
     provider = new PrismaClientProvider(config, context)
     adapter = new PrismaTransactionAdapter(provider, context, config)

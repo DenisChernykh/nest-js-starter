@@ -3,6 +3,32 @@
  */
 export type RuntimeEnvironment = 'development' | 'test' | 'production'
 
+/** Logging levels that may be emitted by the production JSON sink. */
+export type RuntimeLogLevel =
+  'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
+
+/** Immutable service identity and base logger policy. */
+export interface LoggingRuntimeConfig {
+  readonly level: RuntimeLogLevel
+  readonly serviceName: string
+  readonly serviceVersion: string
+  readonly serviceRevision: string
+}
+
+/** Immutable standard OpenTelemetry SDK and OTLP HTTP exporter settings. */
+export interface OpenTelemetryRuntimeConfig {
+  readonly disabled: boolean
+  readonly endpoint?: string
+  readonly tracesEndpoint?: string
+  readonly metricsEndpoint?: string
+  readonly protocol: 'http/protobuf'
+  readonly exporterTimeoutMs: number
+  readonly metricExportIntervalMs: number
+  readonly metricExportTimeoutMs: number
+  readonly batchSpanScheduleDelayMs: number
+  readonly batchSpanExportTimeoutMs: number
+}
+
 /**
  * Immutable HTTP listener, origin and deadline settings.
  */
@@ -73,11 +99,23 @@ export interface AuthRuntimeConfig {
  */
 export interface ApplicationRuntimeConfig {
   readonly environment: RuntimeEnvironment
+  readonly logging: LoggingRuntimeConfig
+  readonly observability: OpenTelemetryRuntimeConfig
   readonly http: HttpRuntimeConfig
   readonly database: DatabaseRuntimeConfig
   readonly redis: RedisRuntimeConfig
   readonly auth: AuthRuntimeConfig
 }
+
+/** PostgreSQL-only process projection without HTTP, Redis or auth settings. */
+export interface PostgresCommandRuntimeConfig {
+  readonly environment: RuntimeEnvironment
+  readonly logging: LoggingRuntimeConfig
+  readonly database: DatabaseRuntimeConfig
+}
+
+/** Injection token for one prevalidated immutable API runtime config. */
+export const APPLICATION_RUNTIME_CONFIG = Symbol('APPLICATION_RUNTIME_CONFIG')
 
 /**
  * Non-secret configuration projection safe for startup diagnostics.
@@ -133,6 +171,22 @@ export class RuntimeConfigurationError extends Error {
  */
 export interface ValidatedRuntimeEnvironment {
   readonly NODE_ENV: RuntimeEnvironment
+  readonly LOG_LEVEL: RuntimeLogLevel
+  readonly OTEL_SERVICE_NAME: string
+  readonly SERVICE_VERSION: string
+  readonly SERVICE_REVISION: string
+  readonly OTEL_SDK_DISABLED: boolean
+  readonly OTEL_EXPORTER_OTLP_ENDPOINT?: string
+  readonly OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?: string
+  readonly OTEL_EXPORTER_OTLP_METRICS_ENDPOINT?: string
+  readonly OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf'
+  readonly OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: 'http/protobuf'
+  readonly OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: 'http/protobuf'
+  readonly OTEL_EXPORTER_OTLP_TIMEOUT: number
+  readonly OTEL_METRIC_EXPORT_INTERVAL: number
+  readonly OTEL_METRIC_EXPORT_TIMEOUT: number
+  readonly OTEL_BSP_SCHEDULE_DELAY: number
+  readonly OTEL_BSP_EXPORT_TIMEOUT: number
   readonly API_HOST: string
   readonly API_PORT: number
   readonly PUBLIC_API_URL: string
@@ -171,4 +225,20 @@ export interface ValidatedRuntimeEnvironment {
   readonly AUTH_LOGIN_IP_LIMIT: number
   readonly AUTH_LOGIN_ACCOUNT_LIMIT: number
   readonly AUTH_LOGIN_WINDOW_MS: number
+}
+
+/** Normalized environment keys accepted by a PostgreSQL-only command. */
+export interface ValidatedPostgresCommandEnvironment {
+  readonly NODE_ENV: RuntimeEnvironment
+  readonly LOG_LEVEL: RuntimeLogLevel
+  readonly OTEL_SERVICE_NAME: string
+  readonly SERVICE_VERSION: string
+  readonly SERVICE_REVISION: string
+  readonly DATABASE_URL: string
+  readonly DATABASE_POOL_MAX: number
+  readonly DATABASE_CONNECTION_TIMEOUT_MS: number
+  readonly DATABASE_IDLE_TIMEOUT_MS: number
+  readonly DATABASE_HEALTH_TIMEOUT_MS: number
+  readonly DATABASE_TRANSACTION_MAX_WAIT_MS: number
+  readonly DATABASE_TRANSACTION_TIMEOUT_MS: number
 }

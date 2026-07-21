@@ -2,7 +2,10 @@ import { isIP } from 'node:net'
 
 import Joi from 'joi'
 
-import type { ValidatedRuntimeEnvironment } from './runtime-config.types'
+import type {
+  ValidatedPostgresCommandEnvironment,
+  ValidatedRuntimeEnvironment,
+} from './runtime-config.types'
 
 const maximumTimeoutMs = 86_400_000
 
@@ -99,6 +102,25 @@ function normalizeRedisUrl(value: string): string | undefined {
   }
 }
 
+function normalizeOtlpHttpUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value.trim())
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.hostname === '' ||
+      url.username !== '' ||
+      url.password !== '' ||
+      url.search !== '' ||
+      url.hash !== ''
+    ) {
+      return undefined
+    }
+    return url.toString()
+  } catch {
+    return undefined
+  }
+}
+
 function decodeSecret(value: string): Uint8Array | undefined {
   if (!/^[A-Za-z0-9_-]+$/u.test(value)) return undefined
   const decoded = Buffer.from(value, 'base64url')
@@ -129,6 +151,66 @@ function usesLogicalRedisDatabase(value: string | undefined): boolean {
 
 const positiveMilliseconds = Joi.number().integer().min(1).max(maximumTimeoutMs)
 const sessionMilliseconds = Joi.number().integer().min(1).max(7_776_000_000)
+const runtimeMode = Joi.string()
+  .valid('development', 'test', 'production')
+  .default('development')
+const databaseUrl = Joi.string()
+  .trim()
+  .required()
+  .custom((value: string, helpers) =>
+    isPostgreSqlUrl(value) ? value : helpers.error('any.invalid'),
+  )
+const databasePoolMax = Joi.number().integer().min(1).max(100).default(10)
+const databaseConnectionTimeout = positiveMilliseconds.default(2_000)
+const databaseIdleTimeout = positiveMilliseconds.default(300_000)
+const databaseHealthTimeout = positiveMilliseconds.default(2_000)
+const databaseTransactionMaxWait = positiveMilliseconds.default(5_000)
+const databaseTransactionTimeout = positiveMilliseconds.default(10_000)
+const logLevel = Joi.string()
+  .valid('trace', 'debug', 'info', 'warn', 'error', 'fatal')
+  .default('info')
+const serviceName = Joi.string()
+  .trim()
+  .pattern(/^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/u)
+  .default('nest-js-starter')
+const serviceVersion = Joi.string()
+  .trim()
+  .pattern(/^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$/u)
+  .default('0.1.0-alpha.0')
+const serviceRevision = Joi.string()
+  .trim()
+  .pattern(/^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$/u)
+  .default('unknown')
+const otlpHttpUrl = Joi.string()
+  .trim()
+  .custom(
+    (value: string, helpers) =>
+      normalizeOtlpHttpUrl(value) ?? helpers.error('any.invalid'),
+  )
+const otlpProtocol = Joi.string()
+  .valid('http/protobuf')
+  .default('http/protobuf')
+const exporterTimeout = Joi.number().integer().min(1).max(30_000).default(1_000)
+const metricExportInterval = Joi.number()
+  .integer()
+  .min(1_000)
+  .max(maximumTimeoutMs)
+  .default(60_000)
+const metricExportTimeout = Joi.number()
+  .integer()
+  .min(1)
+  .max(30_000)
+  .default(10_000)
+const batchSpanScheduleDelay = Joi.number()
+  .integer()
+  .min(1)
+  .max(60_000)
+  .default(5_000)
+const batchSpanExportTimeout = Joi.number()
+  .integer()
+  .min(1)
+  .max(30_000)
+  .default(1_000)
 const redisUrl = Joi.string()
   .trim()
   .custom(
@@ -151,9 +233,23 @@ const secretBytes = Joi.string()
  */
 export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
   {
-    NODE_ENV: Joi.string()
-      .valid('development', 'test', 'production')
-      .default('development'),
+    NODE_ENV: runtimeMode,
+    LOG_LEVEL: logLevel,
+    OTEL_SERVICE_NAME: serviceName,
+    SERVICE_VERSION: serviceVersion,
+    SERVICE_REVISION: serviceRevision,
+    OTEL_SDK_DISABLED: Joi.boolean().default(false),
+    OTEL_EXPORTER_OTLP_ENDPOINT: otlpHttpUrl.empty('').optional(),
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: otlpHttpUrl.empty('').optional(),
+    OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: otlpHttpUrl.empty('').optional(),
+    OTEL_EXPORTER_OTLP_PROTOCOL: otlpProtocol,
+    OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: otlpProtocol,
+    OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: otlpProtocol,
+    OTEL_EXPORTER_OTLP_TIMEOUT: exporterTimeout,
+    OTEL_METRIC_EXPORT_INTERVAL: metricExportInterval,
+    OTEL_METRIC_EXPORT_TIMEOUT: metricExportTimeout,
+    OTEL_BSP_SCHEDULE_DELAY: batchSpanScheduleDelay,
+    OTEL_BSP_EXPORT_TIMEOUT: batchSpanExportTimeout,
     API_HOST: Joi.string().trim().min(1).default('127.0.0.1'),
     API_PORT: Joi.number().integer().min(1).max(65_535).default(3000),
     PUBLIC_API_URL: Joi.string()
@@ -187,18 +283,13 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     HTTP_KEEP_ALIVE_TIMEOUT_MS: positiveMilliseconds.default(5_000),
     HTTP_DRAIN_TIMEOUT_MS: positiveMilliseconds.default(6_000),
     SHUTDOWN_GRACE_MS: positiveMilliseconds.default(10_000),
-    DATABASE_URL: Joi.string()
-      .trim()
-      .required()
-      .custom((value: string, helpers) =>
-        isPostgreSqlUrl(value) ? value : helpers.error('any.invalid'),
-      ),
-    DATABASE_POOL_MAX: Joi.number().integer().min(1).max(100).default(10),
-    DATABASE_CONNECTION_TIMEOUT_MS: positiveMilliseconds.default(2_000),
-    DATABASE_IDLE_TIMEOUT_MS: positiveMilliseconds.default(300_000),
-    DATABASE_HEALTH_TIMEOUT_MS: positiveMilliseconds.default(2_000),
-    DATABASE_TRANSACTION_MAX_WAIT_MS: positiveMilliseconds.default(5_000),
-    DATABASE_TRANSACTION_TIMEOUT_MS: positiveMilliseconds.default(10_000),
+    DATABASE_URL: databaseUrl,
+    DATABASE_POOL_MAX: databasePoolMax,
+    DATABASE_CONNECTION_TIMEOUT_MS: databaseConnectionTimeout,
+    DATABASE_IDLE_TIMEOUT_MS: databaseIdleTimeout,
+    DATABASE_HEALTH_TIMEOUT_MS: databaseHealthTimeout,
+    DATABASE_TRANSACTION_MAX_WAIT_MS: databaseTransactionMaxWait,
+    DATABASE_TRANSACTION_TIMEOUT_MS: databaseTransactionTimeout,
     REDIS_COORDINATION_URL: redisUrl.required(),
     REDIS_CACHE_URL: redisUrl.empty('').optional(),
     REDIS_CONNECT_TIMEOUT_MS: positiveMilliseconds.default(2_000),
@@ -266,6 +357,9 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     value.REDIS_CONNECT_TIMEOUT_MS > value.REDIS_HEALTH_TIMEOUT_MS ||
     value.REDIS_SHUTDOWN_TIMEOUT_MS >
       value.SHUTDOWN_GRACE_MS - value.HTTP_DRAIN_TIMEOUT_MS ||
+    value.OTEL_METRIC_EXPORT_TIMEOUT > value.OTEL_METRIC_EXPORT_INTERVAL ||
+    value.OTEL_BSP_EXPORT_TIMEOUT >
+      value.SHUTDOWN_GRACE_MS - value.HTTP_DRAIN_TIMEOUT_MS ||
     value.AUTH_SESSION_IDLE_TIMEOUT_MS >
       value.AUTH_SESSION_ABSOLUTE_TIMEOUT_MS ||
     value.AUTH_SESSION_TOUCH_INTERVAL_MS >=
@@ -281,3 +375,29 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
 
   return failures ? helpers.error('any.invalid') : value
 })
+
+/**
+ * Validates only the environment keys required by PostgreSQL one-shot commands.
+ *
+ * @remarks Redis, auth, HTTP and telemetry exporter settings are intentionally
+ * absent. Unknown process keys remain ignored by the validation caller.
+ */
+export const postgresCommandEnvironmentSchema =
+  Joi.object<ValidatedPostgresCommandEnvironment>({
+    NODE_ENV: runtimeMode,
+    LOG_LEVEL: logLevel,
+    OTEL_SERVICE_NAME: serviceName,
+    SERVICE_VERSION: serviceVersion,
+    SERVICE_REVISION: serviceRevision,
+    DATABASE_URL: databaseUrl,
+    DATABASE_POOL_MAX: databasePoolMax,
+    DATABASE_CONNECTION_TIMEOUT_MS: databaseConnectionTimeout,
+    DATABASE_IDLE_TIMEOUT_MS: databaseIdleTimeout,
+    DATABASE_HEALTH_TIMEOUT_MS: databaseHealthTimeout,
+    DATABASE_TRANSACTION_MAX_WAIT_MS: databaseTransactionMaxWait,
+    DATABASE_TRANSACTION_TIMEOUT_MS: databaseTransactionTimeout,
+  }).custom((value: ValidatedPostgresCommandEnvironment, helpers) =>
+    value.DATABASE_CONNECTION_TIMEOUT_MS > value.DATABASE_HEALTH_TIMEOUT_MS
+      ? helpers.error('any.invalid')
+      : value,
+  )

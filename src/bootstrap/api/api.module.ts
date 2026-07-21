@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common'
+import { Module, type DynamicModule } from '@nestjs/common'
 import { APP_INTERCEPTOR } from '@nestjs/core'
 
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
+import type { ApplicationRuntimeConfig } from '@/platform/config/runtime-config.types'
 import { DatabaseModule } from '@/platform/database/database.module'
 import { HealthModule } from '@/platform/http/health/health.module'
 import { RequestOperationInterceptor } from '@/platform/http/bootstrap/request-operation.interceptor'
@@ -12,20 +13,31 @@ import { RedisModule } from '@/platform/redis/redis.module'
 /**
  * Определяет composition root API process без прямых driver imports.
  */
-@Module({
-  imports: [
-    RuntimeConfigModule,
-    DatabaseModule,
-    RedisModule,
-    LifecycleModule,
-    HealthModule,
-    AuthModule,
-  ],
-  providers: [
-    {
-      provide: APP_INTERCEPTOR,
-      useClass: RequestOperationInterceptor,
-    },
-  ],
-})
-export class ApiModule {}
+@Module({})
+export class ApiModule {
+  /**
+   * Composes the API graph around one already validated runtime config.
+   *
+   * @param config - Immutable API process configuration.
+   * @returns Dynamic API root with global typed config registration.
+   */
+  public static forRoot(config: ApplicationRuntimeConfig): DynamicModule {
+    return {
+      module: ApiModule,
+      imports: [
+        RuntimeConfigModule.forRoot(config),
+        DatabaseModule,
+        RedisModule,
+        LifecycleModule,
+        HealthModule,
+        AuthModule,
+      ],
+      providers: [
+        {
+          provide: APP_INTERCEPTOR,
+          useClass: RequestOperationInterceptor,
+        },
+      ],
+    }
+  }
+}

@@ -1,11 +1,12 @@
 import { performance } from 'node:perf_hooks'
 
-import { Injectable, Optional } from '@nestjs/common'
+import { Inject, Injectable, Optional } from '@nestjs/common'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 
 import { PrismaClient, type Prisma } from '@/generated/prisma/client'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
+import type { DatabaseRuntimeConfig } from '@/platform/config/runtime-config.types'
 
 import { runBoundedPostgresQuery } from './bounded-postgres-query'
 import { DatabaseUnavailableError } from './database.contracts'
@@ -91,7 +92,8 @@ export class PrismaClientProvider {
   }
 
   public constructor(
-    config: RuntimeConfigService,
+    @Inject(RuntimeConfigService)
+    config: { readonly database: DatabaseRuntimeConfig },
     @Optional() transactionContext?: PrismaTransactionContext,
   ) {
     this.transactionContext =

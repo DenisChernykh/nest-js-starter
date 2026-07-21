@@ -1,11 +1,6 @@
-import { ConfigService } from '@nestjs/config'
-
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
-import type {
-  AuthRuntimeConfig,
-  ValidatedRuntimeEnvironment,
-} from '@/platform/config/runtime-config.types'
-import { validateRuntimeEnvironment } from '@/platform/config/runtime-environment'
+import type { AuthRuntimeConfig } from '@/platform/config/runtime-config.types'
+import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 
 const databaseUrl =
   'postgresql://starter:local-password@localhost:5432/starter?schema=public'
@@ -14,24 +9,23 @@ const secret = (byte: number): string =>
   Buffer.alloc(32, byte).toString('base64url')
 
 function createService(): RuntimeConfigService {
-  const environment = validateRuntimeEnvironment({
-    DATABASE_URL: databaseUrl,
-    REDIS_COORDINATION_URL:
-      'redis://default:local-redis-password@127.0.0.1:6379',
-    AUTH_SESSION_KEY_SECRET: secret(1),
-    AUTH_CSRF_SECRET: secret(2),
-    AUTH_RATE_LIMIT_KEY_SECRET: secret(3),
-    AUTH_NETWORK_METADATA_SECRET: secret(4),
-    AUTH_CSRF_ORIGINS: 'http://localhost:3000,http://admin.local:3001',
-    PUBLIC_API_URL: 'http://localhost:3000/',
-    CORS_ORIGINS:
-      'http://localhost:3000/, http://admin.local:3001/, http://localhost:3000',
-    TRUST_PROXY_CIDRS: '127.0.0.1, 10.0.0.0/8',
-  })
-  const configService = new ConfigService<ValidatedRuntimeEnvironment, true>(
-    environment,
+  return new RuntimeConfigService(
+    buildApiRuntimeConfig({
+      DATABASE_URL: databaseUrl,
+      REDIS_COORDINATION_URL:
+        'redis://default:local-redis-password@127.0.0.1:6379',
+      AUTH_SESSION_KEY_SECRET: secret(1),
+      AUTH_CSRF_SECRET: secret(2),
+      AUTH_RATE_LIMIT_KEY_SECRET: secret(3),
+      AUTH_NETWORK_METADATA_SECRET: secret(4),
+      AUTH_CSRF_ORIGINS: 'http://localhost:3000,http://admin.local:3001',
+      PUBLIC_API_URL: 'http://localhost:3000/',
+      CORS_ORIGINS:
+        'http://localhost:3000/, http://admin.local:3001/, http://localhost:3000',
+      TRUST_PROXY_CIDRS: '127.0.0.1, 10.0.0.0/8',
+      OTEL_SDK_DISABLED: true,
+    }),
   )
-  return new RuntimeConfigService(configService)
 }
 
 describe('RuntimeConfigService', () => {
@@ -82,6 +76,26 @@ describe('RuntimeConfigService', () => {
     expect(Object.isFrozen(exposedAuth.csrfOrigins)).toBe(true)
     exposedAuth.sessionKeySecret[0] = 255
     expect(runtimeService.auth.sessionKeySecret[0]).toBe(1)
+  })
+
+  it('exposes immutable logging and observability groups', () => {
+    const service = createService()
+
+    expect(service.logging).toEqual({
+      level: 'info',
+      serviceName: 'nest-js-starter',
+      serviceVersion: '0.1.0-alpha.0',
+      serviceRevision: 'unknown',
+    })
+    expect(service.observability).toEqual(
+      expect.objectContaining({
+        disabled: true,
+        protocol: 'http/protobuf',
+        exporterTimeoutMs: 1_000,
+      }),
+    )
+    expect(Object.isFrozen(service.logging)).toBe(true)
+    expect(Object.isFrozen(service.observability)).toBe(true)
   })
 
   it('returns a frozen startup-safe summary without the database URL', () => {

@@ -4,6 +4,8 @@ import { NestFactory } from '@nestjs/core'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
+import type { ApplicationRuntimeConfig } from '@/platform/config/runtime-config.types'
+import { createApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import type {
   DatabaseLifecycle,
   DatabaseReadinessProbe,
@@ -68,11 +70,20 @@ export interface ApiRuntimeResources {
   readonly shutdownGraceMs?: number
 }
 
-/** Creates, configures and initializes the API without opening its listener. */
-export async function configureApi(): Promise<ApiRuntimeResources> {
-  const app = await NestFactory.create<NestExpressApplication>(ApiModule, {
-    bodyParser: false,
-  })
+/**
+ * Creates, configures and initializes the API without opening its listener.
+ *
+ * @param runtimeConfig - Prevalidated config or process environment projection.
+ */
+export async function configureApi(
+  runtimeConfig: ApplicationRuntimeConfig = createApiRuntimeConfig(),
+): Promise<ApiRuntimeResources> {
+  const app = await NestFactory.create<NestExpressApplication>(
+    ApiModule.forRoot(runtimeConfig),
+    {
+      bodyParser: false,
+    },
+  )
   const config = app.get(RuntimeConfigService)
   const lifecycle = app.get(ApplicationLifecycleState)
   const registry = app.get(HealthRegistry)

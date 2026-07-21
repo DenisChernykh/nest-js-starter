@@ -1,14 +1,12 @@
 import type { Server } from 'node:http'
 
-import { ConfigService } from '@nestjs/config'
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import request from 'supertest'
 
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
-import type { ValidatedRuntimeEnvironment } from '@/platform/config/runtime-config.types'
-import { validateRuntimeEnvironment } from '@/platform/config/runtime-environment'
+import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
 import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
@@ -29,7 +27,7 @@ describe('hardened HTTP bootstrap', () => {
     const expressApp = moduleRef.createNestApplication<NestExpressApplication>({
       bodyParser: false,
     })
-    const environment = validateRuntimeEnvironment(
+    const environment = buildApiRuntimeConfig(
       requiredRuntimeEnvironment({
         DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
         CORS_ORIGINS: 'https://allowed.example',
@@ -41,9 +39,7 @@ describe('hardened HTTP bootstrap', () => {
         HTTP_KEEP_ALIVE_TIMEOUT_MS: '5000',
       }),
     )
-    const config = new RuntimeConfigService(
-      new ConfigService<ValidatedRuntimeEnvironment, true>(environment),
-    )
+    const config = new RuntimeConfigService(environment)
     lifecycle = expressApp.get(ApplicationLifecycleState)
     const registry = expressApp.get(HealthRegistry)
     registry.register({
@@ -66,15 +62,13 @@ describe('hardened HTTP bootstrap', () => {
       trustedModuleRef.createNestApplication<NestExpressApplication>({
         bodyParser: false,
       })
-    const trustedEnvironment = validateRuntimeEnvironment(
+    const trustedEnvironment = buildApiRuntimeConfig(
       requiredRuntimeEnvironment({
         DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
         TRUST_PROXY_CIDRS: '127.0.0.1/32,::1/128',
       }),
     )
-    const trustedConfig = new RuntimeConfigService(
-      new ConfigService<ValidatedRuntimeEnvironment, true>(trustedEnvironment),
-    )
+    const trustedConfig = new RuntimeConfigService(trustedEnvironment)
     trustedExpress.get(HealthRegistry).seal()
     trustedExpress.get(ApplicationLifecycleState).markReady()
     configureHttpApplication(

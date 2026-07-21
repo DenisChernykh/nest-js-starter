@@ -1,5 +1,8 @@
 import { RuntimeConfigurationError } from '@/platform/config/runtime-config.types'
-import { validateRuntimeEnvironment } from '@/platform/config/runtime-environment'
+import {
+  buildPostgresCommandConfig,
+  validateRuntimeEnvironment,
+} from '@/platform/config/runtime-environment'
 
 const databaseUrl =
   'postgresql://starter:local-password@localhost:5432/starter?schema=public'
@@ -54,8 +57,122 @@ describe('validateRuntimeEnvironment', () => {
           'redis://default:local-redis-password@127.0.0.1:6379',
         AUTH_SESSION_COOKIE_NAME: 'nest-js-starter-session',
         AUTH_COOKIE_SECURE: false,
+        LOG_LEVEL: 'info',
+        OTEL_SERVICE_NAME: 'nest-js-starter',
+        SERVICE_VERSION: '0.1.0-alpha.0',
+        SERVICE_REVISION: 'unknown',
+        OTEL_SDK_DISABLED: false,
+        OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
+        OTEL_EXPORTER_OTLP_TIMEOUT: 1_000,
+        OTEL_METRIC_EXPORT_INTERVAL: 60_000,
+        OTEL_METRIC_EXPORT_TIMEOUT: 10_000,
+        OTEL_BSP_SCHEDULE_DELAY: 5_000,
+        OTEL_BSP_EXPORT_TIMEOUT: 1_000,
       }),
     )
+  })
+
+  it('normalizes reviewed logging metadata and standard OTLP HTTP settings', () => {
+    expect(
+      validateEnvironment({
+        LOG_LEVEL: 'debug',
+        OTEL_SERVICE_NAME: 'orders-api',
+        SERVICE_VERSION: '2026.07.21',
+        SERVICE_REVISION: 'abc1234',
+        OTEL_SDK_DISABLED: 'true',
+        OTEL_EXPORTER_OTLP_ENDPOINT: ' https://collector.example.com/otel/ ',
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:
+          'https://collector.example.com/v1/traces',
+        OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:
+          'https://collector.example.com/v1/metrics',
+        OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf',
+        OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: 'http/protobuf',
+        OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: 'http/protobuf',
+        OTEL_EXPORTER_OTLP_TIMEOUT: '750',
+        OTEL_METRIC_EXPORT_INTERVAL: '30000',
+        OTEL_METRIC_EXPORT_TIMEOUT: '5000',
+        OTEL_BSP_SCHEDULE_DELAY: '2500',
+        OTEL_BSP_EXPORT_TIMEOUT: '750',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        LOG_LEVEL: 'debug',
+        OTEL_SERVICE_NAME: 'orders-api',
+        SERVICE_VERSION: '2026.07.21',
+        SERVICE_REVISION: 'abc1234',
+        OTEL_SDK_DISABLED: true,
+        OTEL_EXPORTER_OTLP_ENDPOINT: 'https://collector.example.com/otel/',
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:
+          'https://collector.example.com/v1/traces',
+        OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:
+          'https://collector.example.com/v1/metrics',
+        OTEL_EXPORTER_OTLP_TIMEOUT: 750,
+        OTEL_METRIC_EXPORT_INTERVAL: 30_000,
+        OTEL_METRIC_EXPORT_TIMEOUT: 5_000,
+        OTEL_BSP_SCHEDULE_DELAY: 2_500,
+        OTEL_BSP_EXPORT_TIMEOUT: 750,
+      }),
+    )
+  })
+
+  it.each([
+    ['silent logging', { LOG_LEVEL: 'silent' }],
+    ['empty service name', { OTEL_SERVICE_NAME: ' ' }],
+    ['spaced service version', { SERVICE_VERSION: 'release candidate' }],
+    ['FTP collector', { OTEL_EXPORTER_OTLP_ENDPOINT: 'ftp://collector/otel' }],
+    [
+      'credential-bearing collector',
+      { OTEL_EXPORTER_OTLP_ENDPOINT: 'https://user:secret@collector/otel' },
+    ],
+    [
+      'query-bearing traces collector',
+      {
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:
+          'https://collector/v1/traces?token=secret',
+      },
+    ],
+    ['gRPC protocol', { OTEL_EXPORTER_OTLP_PROTOCOL: 'grpc' }],
+    ['zero exporter timeout', { OTEL_EXPORTER_OTLP_TIMEOUT: 0 }],
+    [
+      'metric timeout above interval',
+      {
+        OTEL_METRIC_EXPORT_INTERVAL: 1_000,
+        OTEL_METRIC_EXPORT_TIMEOUT: 1_001,
+      },
+    ],
+    [
+      'span export timeout outside shutdown reserve',
+      {
+        HTTP_DRAIN_TIMEOUT_MS: 6_000,
+        SHUTDOWN_GRACE_MS: 10_000,
+        OTEL_BSP_EXPORT_TIMEOUT: 4_001,
+      },
+    ],
+  ])('rejects %s', (_name, input) => {
+    expect(() => validateEnvironment(input)).toThrow(RuntimeConfigurationError)
+  })
+
+  it('does not retain rejected collector credentials', () => {
+    const sentinel = 'DO_NOT_LEAK_OTEL_CREDENTIAL'
+
+    try {
+      validateEnvironment({
+        OTEL_EXPORTER_OTLP_ENDPOINT: `https://${sentinel}@collector/otel`,
+      })
+      throw new Error('Expected validation to fail')
+    } catch (error: unknown) {
+      expect(String(error)).not.toContain(sentinel)
+      expect(JSON.stringify(error)).not.toContain(sentinel)
+      expect(error).toBeInstanceOf(RuntimeConfigurationError)
+    }
+  })
+
+  it('builds PostgreSQL command config without Redis or auth placeholders', () => {
+    const config = buildPostgresCommandConfig({ DATABASE_URL: databaseUrl })
+    expect(config.database.url).toBe(databaseUrl)
+    expect(config.logging.serviceName).toBe('nest-js-starter')
+    expect(config).not.toHaveProperty('redis')
+    expect(config).not.toHaveProperty('auth')
   })
 
   it('accepts an HTTPS production configuration with explicit proxies', () => {
