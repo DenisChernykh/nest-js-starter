@@ -115,6 +115,17 @@ describe('RedisSessionStore', () => {
     expect(issued.csrfToken).not.toBe(issued.rawToken)
   })
 
+  it.each([
+    { idleTimeoutMs: 0 },
+    { absoluteTimeoutMs: 999 },
+    { touchIntervalMs: 0 },
+    { touchIntervalMs: 1_000 },
+  ])('rejects an invalid finite expiry policy: %o', (overrides) => {
+    expect(() => createStore(executor, crypto, overrides)).toThrow(
+      'Redis session expiry policy is invalid',
+    )
+  })
+
   it('throttles touch, bounds absolute expiry and lists current metadata', async () => {
     const nowMs = Date.now()
     const issued = await issue(store, nowMs)
@@ -160,6 +171,10 @@ describe('RedisSessionStore', () => {
     await expect(
       store.readAndTouch(second.rawToken, Date.now()),
     ).resolves.toBeUndefined()
+  })
+
+  it('treats cleanup of a user without indexed sessions as idempotent', async () => {
+    await expect(store.revokeAll(userId)).resolves.toBe(0)
   })
 
   it('fails closed and deletes a malformed record', async () => {

@@ -29,6 +29,7 @@ import { BrowserOriginGuard } from '@/modules/auth/presentation/browser-origin.g
 import { PermissionGuard } from '@/modules/auth/presentation/permission.guard'
 import { SessionCsrfGuard } from '@/modules/auth/presentation/session-csrf.guard'
 
+/** Deterministic auth use-case doubles exposed to transport contract tests. */
 export interface AuthTestDoubles {
   readonly login: { readonly execute: jest.Mock }
   readonly authenticate: { readonly execute: jest.Mock }
@@ -40,6 +41,7 @@ export interface AuthTestDoubles {
   readonly changePassword: { readonly execute: jest.Mock }
 }
 
+/** Running in-memory auth transport application and its deterministic fixtures. */
 export interface AuthTestHarness {
   readonly app: INestApplication
   readonly server: Server

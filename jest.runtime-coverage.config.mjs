@@ -5,7 +5,7 @@ const config = {
   collectCoverageFrom: ['src/**/*.ts', '!src/generated/**', '!src/**/*.d.ts'],
   coverageDirectory: 'coverage/runtime',
   coverageProvider: 'v8',
-  coverageReporters: ['text', 'text-summary', 'lcov'],
+  coverageReporters: ['text', 'text-summary', 'json-summary', 'lcov'],
   coverageThreshold: {
     global: {
       branches: 75,

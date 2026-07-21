@@ -1,5 +1,9 @@
 import type { AuthPersistencePort } from '@/modules/auth/application/auth-persistence.port'
 import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
+import {
+  AuthDependencyUnavailableError,
+  AuthorizationDeniedError,
+} from '@/modules/auth/application/auth-errors'
 import { definePermissions } from '@/modules/auth/application/permission'
 import { RoleRegistry } from '@/modules/auth/application/role-registry'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
@@ -80,5 +84,80 @@ describe('AuthenticateSessionUseCase', () => {
     await expect(target.execute('raw', 100)).rejects.toMatchObject({
       code: 'AUTHENTICATION_REQUIRED',
     })
+  })
+
+  it('fails closed when the opaque session no longer exists', async () => {
+    const target = new AuthenticateSessionUseCase(
+      {
+        readAndTouch: jest.fn(() => Promise.resolve(undefined)),
+      } as unknown as SessionStorePort,
+      {} as AuthPersistencePort,
+      new RoleRegistry([]),
+    )
+
+    await expect(target.execute('raw', 100)).rejects.toMatchObject({
+      code: 'AUTHENTICATION_REQUIRED',
+    })
+  })
+
+  it('preserves typed dependency outages without exposing their cause', async () => {
+    const target = new AuthenticateSessionUseCase(
+      {
+        readAndTouch: jest.fn(() =>
+          Promise.reject(new AuthDependencyUnavailableError()),
+        ),
+      } as unknown as SessionStorePort,
+      {} as AuthPersistencePort,
+      new RoleRegistry([]),
+    )
+
+    await expect(target.execute('raw', 100)).rejects.toBeInstanceOf(
+      AuthDependencyUnavailableError,
+    )
+  })
+
+  it('maps authorization state errors to an unauthenticated result', async () => {
+    const sessions = {
+      readAndTouch: jest.fn(() => Promise.resolve(record)),
+    } as unknown as SessionStorePort
+    const persistence = {
+      findAuthProjectionByUserId: jest.fn(() =>
+        Promise.resolve({
+          userId: 'user',
+          email: 'user@example.com',
+          normalizedEmail: 'user@example.com',
+          status: 'active' as const,
+          sessionGeneration: 2n,
+          roleKeys: [],
+        }),
+      ),
+      readGlobalSessionEpoch: jest.fn(() => Promise.resolve(3n)),
+    } as unknown as AuthPersistencePort
+    const roles = {
+      resolve: jest.fn(() => {
+        throw new AuthorizationDeniedError()
+      }),
+    } as unknown as RoleRegistry
+
+    await expect(
+      new AuthenticateSessionUseCase(sessions, persistence, roles).execute(
+        'raw',
+        100,
+      ),
+    ).rejects.toMatchObject({ code: 'AUTHENTICATION_REQUIRED' })
+  })
+
+  it('maps unexpected adapter failures to a dependency outage', async () => {
+    const target = new AuthenticateSessionUseCase(
+      {
+        readAndTouch: jest.fn(() => Promise.reject(new Error('driver detail'))),
+      } as unknown as SessionStorePort,
+      {} as AuthPersistencePort,
+      new RoleRegistry([]),
+    )
+
+    await expect(target.execute('raw', 100)).rejects.toBeInstanceOf(
+      AuthDependencyUnavailableError,
+    )
   })
 })

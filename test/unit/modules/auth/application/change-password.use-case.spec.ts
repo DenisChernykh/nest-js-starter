@@ -116,4 +116,83 @@ describe('ChangePasswordUseCase', () => {
       }),
     ).resolves.toEqual({ cleanupComplete: false })
   })
+
+  it('rejects an incorrect current password before hashing or mutation', async () => {
+    const persistence = {
+      findCredentialByNormalizedEmail: jest.fn(() =>
+        Promise.resolve({
+          userId: 'user',
+          normalizedEmail: 'user@example.com',
+          email: 'user@example.com',
+          status: 'active' as const,
+          sessionGeneration: 0n,
+          passwordHash: 'old',
+          passwordVersion: 0,
+          roleKeys: [],
+        }),
+      ),
+    } as unknown as AuthPersistencePort
+    const passwords = {
+      verify: jest.fn(() =>
+        Promise.resolve({ matches: false, needsRehash: false }),
+      ),
+      hash: jest.fn(),
+    } as unknown as PasswordHasherPort
+    const target = new ChangePasswordUseCase(
+      persistence,
+      passwords,
+      { run: (operation) => operation() },
+      {} as SessionStorePort,
+    )
+
+    await expect(
+      target.execute({
+        userId: 'user',
+        normalizedEmail: 'user@example.com',
+        currentPassword: 'wrong',
+        newPassword: 'new',
+      }),
+    ).rejects.toMatchObject({ code: 'AUTHENTICATION_FAILED' })
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(passwords.hash).not.toHaveBeenCalled()
+  })
+
+  it('rejects a stale password version inside the transaction', async () => {
+    const persistence = {
+      findCredentialByNormalizedEmail: jest.fn(() =>
+        Promise.resolve({
+          userId: 'user',
+          normalizedEmail: 'user@example.com',
+          email: 'user@example.com',
+          status: 'active' as const,
+          sessionGeneration: 0n,
+          passwordHash: 'old',
+          passwordVersion: 1,
+          roleKeys: [],
+        }),
+      ),
+      replacePasswordIfVersion: jest.fn(() => Promise.resolve(false)),
+    } as unknown as AuthPersistencePort
+    const passwords = {
+      verify: jest.fn(() =>
+        Promise.resolve({ matches: true, needsRehash: false }),
+      ),
+      hash: jest.fn(() => Promise.resolve('new-hash')),
+    } as unknown as PasswordHasherPort
+    const target = new ChangePasswordUseCase(
+      persistence,
+      passwords,
+      { run: (operation) => operation() },
+      {} as SessionStorePort,
+    )
+
+    await expect(
+      target.execute({
+        userId: 'user',
+        normalizedEmail: 'user@example.com',
+        currentPassword: 'old',
+        newPassword: 'new',
+      }),
+    ).rejects.toMatchObject({ code: 'AUTH_STATE_CONFLICT' })
+  })
 })

@@ -55,6 +55,32 @@ describe('auth session management', () => {
     expect(sessions.csrfToken).not.toHaveBeenCalled()
   })
 
+  it('returns the CSRF token derived from the current stored record', async () => {
+    const record = {
+      schema: 1 as const,
+      publicId: 'current',
+      userId: 'user',
+      sessionGeneration: '1',
+      globalSessionEpoch: '1',
+      csrfSeed: 'seed',
+      createdAtMs: 1,
+      lastSeenAtMs: 1,
+      absoluteExpiresAtMs: 10,
+      deviceLabel: 'browser',
+      networkFingerprint: 'network',
+    }
+    const sessions = {
+      readAndTouch: jest.fn(() => Promise.resolve(record)),
+      csrfToken: jest.fn(() => 'csrf'),
+    } as unknown as SessionStorePort
+
+    await expect(
+      new GetCsrfTokenQuery(sessions).execute('raw', 2),
+    ).resolves.toEqual({ csrfToken: 'csrf' })
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(sessions.csrfToken).toHaveBeenCalledWith(record)
+  })
+
   it('returns a sorted immutable principal projection without I/O', () => {
     expect(new GetMeQuery().execute(principal)).toEqual({
       userId: 'user',
@@ -102,5 +128,23 @@ describe('auth session management', () => {
       'logout-all',
       'user',
     )
+  })
+
+  it('reports complete cleanup after durable logout-all succeeds', async () => {
+    const persistence = {
+      incrementSessionGeneration: jest.fn(() => Promise.resolve(2n)),
+    } as unknown as AuthPersistencePort
+    const sessions = {
+      revokeAll: jest.fn(() => Promise.resolve(2)),
+    } as unknown as SessionStorePort
+    const target = new LogoutAllUseCase(
+      persistence,
+      { run: (operation) => operation() },
+      sessions,
+    )
+
+    await expect(target.execute('user')).resolves.toEqual({
+      cleanupComplete: true,
+    })
   })
 })
