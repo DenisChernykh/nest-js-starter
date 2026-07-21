@@ -12,6 +12,14 @@ import {
   Res,
 } from '@nestjs/common'
 import type { Request, Response } from 'express'
+import {
+  ApiBody,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiTags,
+} from '@nestjs/swagger'
 
 import { ChangePasswordUseCase } from '../application/change-password.use-case'
 import { GetCsrfTokenQuery } from '../application/get-csrf-token.query'
@@ -21,17 +29,22 @@ import { LoginUseCase } from '../application/login.use-case'
 import { LogoutAllUseCase } from '../application/logout-all.use-case'
 import { LogoutUseCase } from '../application/logout.use-case'
 import { RevokeSessionUseCase } from '../application/revoke-session.use-case'
-import type { AuthDurableMutationResult } from '../application/auth.types'
-import type { BrowserSessionSummary } from '../application/session-store.port'
 import { AuthCookieAdapter } from './auth-cookie.adapter'
 import {
   ChangePasswordRequestDto,
-  type LoginResponseDto,
   LoginRequestDto,
   SessionPathDto,
 } from './auth.dto'
+import {
+  AuthMutationResponseDto,
+  CsrfTokenResponseDto,
+  CurrentUserResponseDto,
+  LoginResponseDto,
+  SessionsResponseDto,
+} from './auth-response.dto'
 import { AuthRequestContext } from './auth-request.context'
 import { CsrfTokenExempt } from './session-csrf.guard'
+import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.decorator'
 import { PublicEndpoint } from '@/platform/http/policy/public-endpoint.decorator'
 import { SafeEndpoint } from '@/platform/http/policy/safe-endpoint.decorator'
 
@@ -52,6 +65,7 @@ export type LoginRequestMetadataFactory = (input: {
 
 /** Hardened browser-session HTTP API with no raw-token response surface. */
 @Controller('auth')
+@ApiTags('auth')
 export class AuthController {
   public constructor(
     private readonly loginUseCase: LoginUseCase,
@@ -72,6 +86,26 @@ export class AuthController {
   @HttpCode(200)
   @PublicEndpoint()
   @CsrfTokenExempt()
+  @ApiOperation({
+    operationId: 'authLogin',
+    summary: 'Create a browser session',
+    security: [],
+  })
+  @ApiBody({ type: LoginRequestDto })
+  @ApiOkResponse({
+    type: LoginResponseDto,
+    description: 'Browser session created and its HttpOnly cookie issued.',
+  })
+  @ApiProblemResponses(
+    'MALFORMED_REQUEST',
+    'AUTHENTICATION_REQUIRED',
+    'PAYLOAD_TOO_LARGE',
+    'UNSUPPORTED_MEDIA_TYPE',
+    'VALIDATION_FAILED',
+    'RATE_LIMIT_EXCEEDED',
+    'INTERNAL_ERROR',
+    'DEPENDENCY_UNAVAILABLE',
+  )
   public async login(
     @Body() body: LoginRequestDto,
     @Req() request: Request,
@@ -102,6 +136,20 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(204)
+  @ApiOperation({
+    operationId: 'authLogout',
+    summary: 'Revoke the current browser session',
+    security: [{ sessionCookie: [], csrfToken: [] }],
+  })
+  @ApiNoContentResponse({
+    description: 'Current session revoked and its browser cookie cleared.',
+  })
+  @ApiProblemResponses(
+    'AUTHENTICATION_REQUIRED',
+    'AUTHORIZATION_DENIED',
+    'INTERNAL_ERROR',
+    'DEPENDENCY_UNAVAILABLE',
+  )
   public async logout(
     @Res({ passthrough: true }) response: Response,
   ): Promise<void> {
@@ -112,13 +160,43 @@ export class AuthController {
 
   @Get('me')
   @SafeEndpoint()
-  public me(): ReturnType<GetMeQuery['execute']> {
+  @ApiOperation({
+    operationId: 'authGetMe',
+    summary: 'Get the current authenticated identity',
+    security: [{ sessionCookie: [] }],
+  })
+  @ApiOkResponse({
+    type: CurrentUserResponseDto,
+    description: 'Fresh current-user projection.',
+  })
+  @ApiProblemResponses(
+    'AUTHENTICATION_REQUIRED',
+    'AUTHORIZATION_DENIED',
+    'INTERNAL_ERROR',
+    'DEPENDENCY_UNAVAILABLE',
+  )
+  public me(): CurrentUserResponseDto {
     return this.getMeQuery.execute(this.requestContext.principal)
   }
 
   @Get('csrf')
   @SafeEndpoint()
-  public csrf(): ReturnType<GetCsrfTokenQuery['execute']> {
+  @ApiOperation({
+    operationId: 'authGetCsrfToken',
+    summary: 'Get the current session-bound CSRF token',
+    security: [{ sessionCookie: [] }],
+  })
+  @ApiOkResponse({
+    type: CsrfTokenResponseDto,
+    description: 'Session-bound CSRF token for unsafe browser requests.',
+  })
+  @ApiProblemResponses(
+    'AUTHENTICATION_REQUIRED',
+    'AUTHORIZATION_DENIED',
+    'INTERNAL_ERROR',
+    'DEPENDENCY_UNAVAILABLE',
+  )
+  public csrf(): Promise<CsrfTokenResponseDto> {
     return this.getCsrfTokenQuery.execute(
       this.requestContext.rawToken,
       Date.now(),
@@ -126,10 +204,31 @@ export class AuthController {
   }
 
   @Put('password')
+  @ApiOperation({
+    operationId: 'authChangePassword',
+    summary: 'Change the current account password',
+    security: [{ sessionCookie: [], csrfToken: [] }],
+  })
+  @ApiBody({ type: ChangePasswordRequestDto })
+  @ApiOkResponse({
+    type: AuthMutationResponseDto,
+    description: 'Password changed durably and session cleanup attempted.',
+  })
+  @ApiProblemResponses(
+    'MALFORMED_REQUEST',
+    'AUTHENTICATION_REQUIRED',
+    'AUTHORIZATION_DENIED',
+    'CONFLICT',
+    'PAYLOAD_TOO_LARGE',
+    'UNSUPPORTED_MEDIA_TYPE',
+    'VALIDATION_FAILED',
+    'INTERNAL_ERROR',
+    'DEPENDENCY_UNAVAILABLE',
+  )
   public async changePassword(
     @Body() body: ChangePasswordRequestDto,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<AuthDurableMutationResult> {
+  ): Promise<AuthMutationResponseDto> {
     const principal = this.requestContext.principal
     const result = await this.changePasswordUseCase.execute({
       userId: principal.userId,
@@ -143,9 +242,22 @@ export class AuthController {
 
   @Get('sessions')
   @SafeEndpoint()
-  public async sessions(): Promise<{
-    readonly sessions: readonly BrowserSessionSummary[]
-  }> {
+  @ApiOperation({
+    operationId: 'authListSessions',
+    summary: 'List browser sessions owned by the current user',
+    security: [{ sessionCookie: [] }],
+  })
+  @ApiOkResponse({
+    type: SessionsResponseDto,
+    description: 'Owned browser sessions with safe device metadata.',
+  })
+  @ApiProblemResponses(
+    'AUTHENTICATION_REQUIRED',
+    'AUTHORIZATION_DENIED',
+    'INTERNAL_ERROR',
+    'DEPENDENCY_UNAVAILABLE',
+  )
+  public async sessions(): Promise<SessionsResponseDto> {
     return {
       sessions: await this.listSessionsQuery.execute(
         this.requestContext.principal,
@@ -155,6 +267,30 @@ export class AuthController {
 
   @Delete('sessions/:sessionId')
   @HttpCode(204)
+  @ApiOperation({
+    operationId: 'authRevokeSession',
+    summary: 'Revoke one owned browser session',
+    security: [{ sessionCookie: [], csrfToken: [] }],
+  })
+  @ApiParam({
+    name: 'sessionId',
+    required: true,
+    schema: {
+      type: 'string',
+      minLength: 22,
+      maxLength: 22,
+      pattern: '^[A-Za-z0-9_-]{22}$',
+      example: 'AbCdEfGhIjKlMnOpQrStUv',
+    },
+  })
+  @ApiNoContentResponse({ description: 'Owned session revoked if present.' })
+  @ApiProblemResponses(
+    'AUTHENTICATION_REQUIRED',
+    'AUTHORIZATION_DENIED',
+    'VALIDATION_FAILED',
+    'INTERNAL_ERROR',
+    'DEPENDENCY_UNAVAILABLE',
+  )
   public async revokeSession(@Param() path: SessionPathDto): Promise<void> {
     await this.revokeSessionUseCase.execute(
       this.requestContext.principal,
@@ -163,9 +299,24 @@ export class AuthController {
   }
 
   @Delete('sessions')
+  @ApiOperation({
+    operationId: 'authLogoutAll',
+    summary: 'Revoke every browser session for the current user',
+    security: [{ sessionCookie: [], csrfToken: [] }],
+  })
+  @ApiOkResponse({
+    type: AuthMutationResponseDto,
+    description: 'All sessions revoked durably and Redis cleanup attempted.',
+  })
+  @ApiProblemResponses(
+    'AUTHENTICATION_REQUIRED',
+    'AUTHORIZATION_DENIED',
+    'INTERNAL_ERROR',
+    'DEPENDENCY_UNAVAILABLE',
+  )
   public async logoutAll(
     @Res({ passthrough: true }) response: Response,
-  ): Promise<AuthDurableMutationResult> {
+  ): Promise<AuthMutationResponseDto> {
     const result = await this.logoutAllUseCase.execute(
       this.requestContext.principal.userId,
     )
