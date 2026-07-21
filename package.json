@@ -13,6 +13,7 @@
     "architecture:generator:golden": "(cd test/fixtures/module-generator && ../../../node_modules/.bin/depcruise --config ../../../dependency-cruiser.generator-golden.config.mjs --output-type err src) && tsx scripts/architecture/check-module-imports.ts test/fixtures/module-generator/expected/src",
     "architecture:check": "corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run architecture:check:run",
     "architecture:check:run": "depcruise --config .dependency-cruiser.cjs --output-type err src && tsx scripts/architecture/check-module-imports.ts src",
+    "auth:create-admin": "corepack pnpm@11.15.1 run prisma:generate && tsx src/bootstrap/admin/main.ts",
     "build": "corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run build:compiled",
     "build:clean": "tsx scripts/build/clean-dist.ts",
     "build:compiled": "corepack pnpm@11.15.1 run build:clean && tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
