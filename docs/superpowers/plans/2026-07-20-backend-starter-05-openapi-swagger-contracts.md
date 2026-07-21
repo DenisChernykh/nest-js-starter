@@ -82,9 +82,11 @@ Task 0 обязан повторить registry queries перед installation.
 | `openapi-diff`               |         `0.24.1` | Node `>=18`; OpenAPI 3 breaking/non-breaking classification     |
 | `openapi-response-validator` |         `12.1.3` | bundled TypeScript declarations; AJV-backed response validation |
 | `@hey-api/openapi-ts`        |         `0.99.0` | Node `>=22.18`; TypeScript peer admits `>=6`, including 7       |
-| `@hey-api/client-fetch`      |         `0.13.1` | peer `@hey-api/openapi-ts <2`; Fetch runtime smoke              |
 
 `openapi-typescript@7.13.0` исключён: его current peer требует TypeScript `^5`.
+`@hey-api/client-fetch@0.13.1` исключён после Task 0 refresh: registry install
+metadata помечает package deprecated, потому что Fetch client plugin уже встроен
+в `@hey-api/openapi-ts`.
 `swagger-ui-express` исключён: Nest Swagger 11 сам поставляет и обслуживает
 `swagger-ui-dist`, поэтому отдельный Express wrapper расширил бы dependency
 surface без capability gain.
@@ -224,7 +226,7 @@ dependencies have stable exact compatible versions.
 - [ ] RED: extend toolchain tests to reject a Swagger CLI plugin/transformer
       configuration and to prove all new direct specs are exact stable pins.
 - [ ] Install `@nestjs/swagger` as runtime dependency and Redocly, OpenAPI Diff,
-      response validator, Hey API generator/client as dev dependencies.
+      response validator and Hey API generator as dev dependencies.
 - [ ] Do not add Nest CLI, Swagger CLI plugin, `swagger-ui-express` or
       `openapi-typescript`.
 - [ ] GREEN: run the narrow toolchain test and frozen install.
@@ -235,7 +237,7 @@ Commands:
 ```bash
 corepack pnpm@11.15.1 exec jest --config jest.unit.config.mjs --runInBand test/unit/toolchain/typescript-bridge.spec.ts
 corepack pnpm@11.15.1 add --save-exact @nestjs/swagger@<refreshed>
-corepack pnpm@11.15.1 add --save-dev --save-exact @redocly/cli@<refreshed> openapi-diff@<refreshed> openapi-response-validator@<refreshed> @hey-api/openapi-ts@<refreshed> @hey-api/client-fetch@<refreshed>
+corepack pnpm@11.15.1 add --save-dev --save-exact @redocly/cli@<refreshed> openapi-diff@<refreshed> openapi-response-validator@<refreshed> @hey-api/openapi-ts@<refreshed>
 corepack pnpm@11.15.1 install --frozen-lockfile
 corepack pnpm@11.15.1 run toolchain:check
 git add package.json pnpm-lock.yaml scripts/toolchain/check-typescript-bridge.ts test/unit/toolchain/typescript-bridge.spec.ts
@@ -427,8 +429,8 @@ git commit -m "test(openapi): detect breaking contract changes"
 
 - [ ] RED: smoke fails for stale/missing output and for a consumer using a
       nonexistent operation or wrong request/response contract.
-- [ ] Configure Hey API with local `docs/api/openapi.json`, Fetch client and
-      TypeScript output in an ignored temporary directory.
+- [ ] Configure Hey API with local `docs/api/openapi.json`, its bundled Fetch
+      client plugin and TypeScript output in an ignored temporary directory.
 - [ ] Generate from local bytes only, compile the generated client plus a small
       consumer with native TypeScript 7, then remove output in `finally`.
 - [ ] Do not commit generated consumer code; only config and handwritten smoke
