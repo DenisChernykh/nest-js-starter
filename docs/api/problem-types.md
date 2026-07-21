@@ -23,3 +23,8 @@ Every response also contains `instance`, `requestId`, and the stable fields
 `type`, `title`, `status`, `detail`, and `code`. Only `VALIDATION_FAILED` may add
 `errors`; each item contains an RFC 6901 `pointer`, finite client `code`, and
 constant `detail`. Rejected values and validator messages are never returned.
+
+The response-conformance gate keeps this table, the runtime
+`PROBLEM_REGISTRY`, and the exact `ProblemResponseDto.code` OpenAPI enum in
+lockstep. A problem code absent from any one of these sources fails the full
+verification suite.

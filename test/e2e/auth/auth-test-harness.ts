@@ -61,10 +61,11 @@ export async function createAuthTestHarness(
 ): Promise<AuthTestHarness> {
   const rawToken = 'A'.repeat(43)
   const csrfToken = 'B'.repeat(43)
+  const currentSessionId = 'C'.repeat(22)
   const cookieName = secureCookie ? '__Host-session' : 'nest-js-starter-session'
   const principal: AuthenticatedPrincipal = {
     userId: 'user-1',
-    sessionId: 'session-current',
+    sessionId: currentSessionId,
     normalizedEmail: 'user@example.com',
     roleKeys: ['admin'],
     permissions: new Set(),
@@ -74,7 +75,7 @@ export async function createAuthTestHarness(
       execute: jest.fn(() =>
         Promise.resolve({
           rawToken,
-          publicId: 'session-current',
+          publicId: currentSessionId,
           csrfToken,
           absoluteExpiresAt: new Date('2030-01-01T00:00:00.000Z'),
         }),
@@ -88,7 +89,7 @@ export async function createAuthTestHarness(
       execute: jest.fn(() =>
         Promise.resolve([
           {
-            publicId: 'session-current',
+            publicId: currentSessionId,
             createdAt: new Date('2029-01-01T00:00:00.000Z'),
             lastSeenAt: new Date('2029-01-02T00:00:00.000Z'),
             absoluteExpiresAt: new Date('2030-01-01T00:00:00.000Z'),

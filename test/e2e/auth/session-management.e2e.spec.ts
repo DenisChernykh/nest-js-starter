@@ -24,7 +24,7 @@ describe('browser session management contract', () => {
     expect(response.body).toEqual({
       sessions: [
         expect.objectContaining({
-          publicId: 'session-current',
+          publicId: 'C'.repeat(22),
           current: true,
           deviceLabel: 'test browser',
         }),
