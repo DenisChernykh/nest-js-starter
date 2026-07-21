@@ -43,6 +43,13 @@ export interface DatabaseBoundaryViolation {
   readonly specifier: string
 }
 
+/** Describes a read endpoint missing its explicit safety review marker. */
+export interface UnsafeEndpointViolation {
+  readonly file: string
+  readonly reason: 'missing-safe-endpoint'
+  readonly specifier: string
+}
+
 async function listTypeScriptFiles(
   directory: string,
 ): Promise<readonly string[]> {
@@ -156,6 +163,134 @@ function collectModulePublicApiViolationSpecifiers(
 
 function normalizedRelative(root: string, path: string): string {
   return relative(root, path).split(sep).join('/')
+}
+
+function decoratorCallee(decorator: ts.Decorator): ts.Expression {
+  return ts.isCallExpression(decorator.expression)
+    ? decorator.expression.expression
+    : decorator.expression
+}
+
+function matchesDecorator(
+  expression: ts.Expression,
+  identifiers: ReadonlySet<string>,
+  namespaces: ReadonlySet<string>,
+  propertyNames: ReadonlySet<string>,
+): boolean {
+  return (
+    (ts.isIdentifier(expression) && identifiers.has(expression.text)) ||
+    (ts.isPropertyAccessExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      namespaces.has(expression.expression.text) &&
+      propertyNames.has(expression.name.text))
+  )
+}
+
+function importedDecoratorNames(sourceFile: ts.SourceFile): {
+  readonly nestReads: ReadonlySet<string>
+  readonly nestNamespaces: ReadonlySet<string>
+  readonly safeMarkers: ReadonlySet<string>
+  readonly safeNamespaces: ReadonlySet<string>
+} {
+  const nestReads = new Set<string>()
+  const nestNamespaces = new Set<string>()
+  const safeMarkers = new Set<string>()
+  const safeNamespaces = new Set<string>()
+
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.importClause === undefined
+    ) {
+      continue
+    }
+    const source = statement.moduleSpecifier.text
+    const bindings = statement.importClause.namedBindings
+    if (bindings === undefined) continue
+    if (ts.isNamespaceImport(bindings)) {
+      if (source === '@nestjs/common') nestNamespaces.add(bindings.name.text)
+      if (source.endsWith('/safe-endpoint.decorator')) {
+        safeNamespaces.add(bindings.name.text)
+      }
+      continue
+    }
+    for (const element of bindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text
+      if (
+        source === '@nestjs/common' &&
+        (importedName === 'Get' || importedName === 'Head')
+      ) {
+        nestReads.add(element.name.text)
+      }
+      if (
+        source.endsWith('/safe-endpoint.decorator') &&
+        importedName === 'SafeEndpoint'
+      ) {
+        safeMarkers.add(element.name.text)
+      }
+    }
+  }
+  return { nestReads, nestNamespaces, safeMarkers, safeNamespaces }
+}
+
+/**
+ * Finds production GET/HEAD handlers without the explicit safe marker.
+ *
+ * @param sourceRoot - Root containing TypeScript production or fixture files.
+ * @returns Stable file-sorted endpoint violations.
+ */
+export async function findUnsafeEndpointViolations(
+  sourceRoot: string,
+): Promise<readonly UnsafeEndpointViolation[]> {
+  const files = await listTypeScriptFiles(sourceRoot)
+  const violations: UnsafeEndpointViolation[] = []
+  const readProperties = new Set(['Get', 'Head'])
+  const safeProperties = new Set(['SafeEndpoint'])
+
+  for (const file of files) {
+    const sourceText = await readFile(file, 'utf8')
+    const sourceFile = ts.createSourceFile(
+      file,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const imports = importedDecoratorNames(sourceFile)
+    function visit(node: ts.Node): void {
+      if (ts.isMethodDeclaration(node)) {
+        const decorators = ts.canHaveDecorators(node)
+          ? (ts.getDecorators(node) ?? [])
+          : []
+        const isRead = decorators.some((decorator) =>
+          matchesDecorator(
+            decoratorCallee(decorator),
+            imports.nestReads,
+            imports.nestNamespaces,
+            readProperties,
+          ),
+        )
+        const isSafe = decorators.some((decorator) =>
+          matchesDecorator(
+            decoratorCallee(decorator),
+            imports.safeMarkers,
+            imports.safeNamespaces,
+            safeProperties,
+          ),
+        )
+        if (isRead && !isSafe) {
+          violations.push({
+            file: normalizedRelative(sourceRoot, file),
+            reason: 'missing-safe-endpoint',
+            specifier: node.name.getText(sourceFile),
+          })
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+  }
+  return violations
 }
 
 function moduleFromPath(root: string, path: string): string | undefined {

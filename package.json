@@ -30,6 +30,8 @@
     "test": "corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run test:run",
     "test:architecture": "corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run test:architecture:run",
     "test:architecture:run": "jest --config jest.architecture.config.mjs --runInBand",
+    "test:e2e": "corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run test:e2e:run",
+    "test:e2e:run": "jest --config jest.e2e.config.mjs --runInBand",
     "test:generator": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --config jest.generator.config.mjs --runInBand",
     "test:generator:golden": "jest --config jest.generator-golden.config.mjs --runInBand",
     "test:integration": "corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run test:integration:run",

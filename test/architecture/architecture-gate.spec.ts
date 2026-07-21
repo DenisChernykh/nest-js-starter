@@ -4,6 +4,7 @@ import {
   findDatabaseBoundaryViolations,
   findModuleImportViolations,
   findRuntimeConfigAccessViolations,
+  findUnsafeEndpointViolations,
 } from '@scripts/architecture/module-import-policy'
 import { runArchitectureCommand } from '@test/architecture/architecture-command'
 
@@ -212,6 +213,26 @@ describe('database ownership policy', () => {
   it('allows database drivers only at approved composition edges', async () => {
     const violations = await findDatabaseBoundaryViolations(
       join(process.cwd(), fixturesRoot, 'database-boundary-valid'),
+    )
+
+    expect(violations).toEqual([])
+  })
+})
+
+describe('safe endpoint policy', () => {
+  it('rejects a Nest GET without the explicit safety marker', async () => {
+    const violations = await findUnsafeEndpointViolations(
+      join(process.cwd(), fixturesRoot, 'safe-endpoint-missing'),
+    )
+
+    expect(violations).toEqual([
+      expect.objectContaining({ reason: 'missing-safe-endpoint' }),
+    ])
+  })
+
+  it('accepts aliased marker and namespaced Nest HEAD decorators', async () => {
+    const violations = await findUnsafeEndpointViolations(
+      join(process.cwd(), fixturesRoot, 'safe-endpoint-valid'),
     )
 
     expect(violations).toEqual([])

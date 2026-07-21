@@ -4,20 +4,27 @@ import {
   findDatabaseBoundaryViolations,
   findModuleImportViolations,
   findRuntimeConfigAccessViolations,
+  findUnsafeEndpointViolations,
 } from './module-import-policy'
 
 async function main(): Promise<void> {
   const sourceRoot = resolve(process.argv[2] ?? 'src')
-  const [databaseViolations, moduleViolations, runtimeConfigViolations] =
-    await Promise.all([
-      findDatabaseBoundaryViolations(sourceRoot),
-      findModuleImportViolations(sourceRoot),
-      findRuntimeConfigAccessViolations(sourceRoot),
-    ])
+  const [
+    databaseViolations,
+    moduleViolations,
+    runtimeConfigViolations,
+    unsafeEndpointViolations,
+  ] = await Promise.all([
+    findDatabaseBoundaryViolations(sourceRoot),
+    findModuleImportViolations(sourceRoot),
+    findRuntimeConfigAccessViolations(sourceRoot),
+    findUnsafeEndpointViolations(sourceRoot),
+  ])
   const violations = [
     ...databaseViolations,
     ...moduleViolations,
     ...runtimeConfigViolations,
+    ...unsafeEndpointViolations,
   ]
 
   if (violations.length > 0) {
