@@ -1,10 +1,8 @@
-import { ConfigService } from '@nestjs/config'
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 
 import { PrismaAuthRepository } from '@/modules/auth/infrastructure/prisma-auth.repository'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
-import type { ValidatedRuntimeEnvironment } from '@/platform/config/runtime-config.types'
-import { validateRuntimeEnvironment } from '@/platform/config/runtime-environment'
+import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import { PrismaTransactionAdapter } from '@/platform/database/prisma-transaction.adapter'
 import { PrismaTransactionContext } from '@/platform/database/prisma-transaction.context'
@@ -24,7 +22,7 @@ describe('PrismaAuthRepository', () => {
       databaseUrl,
     )
     if (migration.exitCode !== 0) throw new Error('Auth migration failed')
-    const environment = validateRuntimeEnvironment({
+    const environment = buildApiRuntimeConfig({
       DATABASE_URL: databaseUrl,
       DATABASE_CONNECTION_TIMEOUT_MS: '2000',
       DATABASE_HEALTH_TIMEOUT_MS: '2000',
@@ -35,9 +33,7 @@ describe('PrismaAuthRepository', () => {
       AUTH_NETWORK_METADATA_SECRET: Buffer.alloc(32, 4).toString('base64url'),
       AUTH_CSRF_ORIGINS: 'http://localhost:3000',
     })
-    const config = new RuntimeConfigService(
-      new ConfigService<ValidatedRuntimeEnvironment, true>(environment),
-    )
+    const config = new RuntimeConfigService(environment)
     const context = new PrismaTransactionContext()
     provider = new PrismaClientProvider(config, context)
     const transaction = new PrismaTransactionAdapter(provider, context, config)

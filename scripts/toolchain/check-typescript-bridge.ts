@@ -9,6 +9,27 @@ const EXPECTED_COMPATIBILITY_ALIAS = 'npm:@typescript/typescript6@6.0.2'
 const STABLE_VERSION = /^\d+\.\d+\.\d+$/u
 const STABLE_ALIAS = /^npm:(?:@[^/]+\/)?[^@]+@\d+\.\d+\.\d+$/u
 const COMPATIBILITY_VERSION = /^6\.0\.\d+$/u
+const OBSERVABILITY_DEPENDENCY_FAMILY = {
+  '@opentelemetry/api': '1.9.1',
+  '@opentelemetry/exporter-metrics-otlp-http': '0.220.0',
+  '@opentelemetry/exporter-trace-otlp-http': '0.220.0',
+  '@opentelemetry/instrumentation-http': '0.220.0',
+  '@opentelemetry/instrumentation-pg': '0.72.0',
+  '@opentelemetry/instrumentation-redis': '0.68.0',
+  '@opentelemetry/resources': '2.9.0',
+  '@opentelemetry/sdk-metrics': '2.9.0',
+  '@opentelemetry/sdk-node': '0.220.0',
+  '@opentelemetry/sdk-trace-base': '2.9.0',
+  '@opentelemetry/semantic-conventions': '1.43.0',
+  pino: '10.3.1',
+} as const
+const FORBIDDEN_OBSERVABILITY_DEPENDENCIES = [
+  '@opentelemetry/auto-instrumentations-node',
+  '@opentelemetry/instrumentation-express',
+  'nestjs-pino',
+  'pino-http',
+  'pino-pretty',
+] as const
 
 /**
  * Minimal root manifest fields inspected by the toolchain gate.
@@ -54,6 +75,50 @@ export function assertExactStableDirectDependencies(
       `Direct dependencies must use exact stable versions: ${invalidSpecs
         .map(([name, spec]) => `${name}=${spec}`)
         .join(', ')}`,
+    )
+  }
+}
+
+/**
+ * Verifies the exact reviewed logging and OpenTelemetry dependency family.
+ *
+ * @param manifest - Package manifest dependency sections to inspect.
+ * @param expectedFamily - Exact registry snapshot approved for the slice.
+ * @throws Error when a package is missing, mismatched, ranged or forbidden.
+ */
+export function assertObservabilityDependencyFamily(
+  manifest: TypeScriptBridgeManifest,
+  expectedFamily: Readonly<Record<string, string>>,
+): void {
+  const directDependencies = {
+    ...(manifest.devDependencies ?? {}),
+    ...(manifest.dependencies ?? {}),
+  }
+  const failures: string[] = []
+
+  for (const [packageName, expectedVersion] of Object.entries(expectedFamily)) {
+    if (!STABLE_VERSION.test(expectedVersion)) {
+      failures.push(`${packageName} expected pin is not exact stable`)
+      continue
+    }
+
+    const actualVersion = manifest.dependencies?.[packageName]
+    if (actualVersion !== expectedVersion) {
+      failures.push(
+        `${packageName} must equal ${expectedVersion}, received ${actualVersion ?? 'missing'}`,
+      )
+    }
+  }
+
+  for (const packageName of FORBIDDEN_OBSERVABILITY_DEPENDENCIES) {
+    if (packageName in directDependencies) {
+      failures.push(`${packageName} is forbidden`)
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(
+      `Invalid observability dependency family: ${failures.join('; ')}`,
     )
   }
 }
@@ -148,6 +213,10 @@ function main(): void {
   }
 
   assertExactStableDirectDependencies(manifestValue)
+  assertObservabilityDependencyFamily(
+    manifestValue,
+    OBSERVABILITY_DEPENDENCY_FAMILY,
+  )
   assertTypeScriptBridge(manifestValue, evidence)
   if (nativePackageVersion !== '7.0.2') {
     fail(['@typescript/native package metadata must be 7.0.2'])

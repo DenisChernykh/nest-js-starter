@@ -12,6 +12,12 @@ import type {
 import type { PasswordHasherPort } from './password-hasher.port'
 import type { SessionStorePort } from './session-store.port'
 import type { TransactionPort } from '@/shared/application/transaction.port'
+import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
+import {
+  NOOP_TELEMETRY,
+  type AuthTelemetryOutcome,
+  type TelemetryPort,
+} from '@/shared/application/telemetry.port'
 
 /** Current/new password mutation fields bound to one authenticated identity. */
 export interface ChangePasswordInput {
@@ -29,9 +35,19 @@ export class ChangePasswordUseCase {
     private readonly transaction: TransactionPort,
     private readonly sessions: SessionStorePort,
     private readonly cleanupObserver?: AuthSessionCleanupObserver,
+    private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
+    private readonly telemetry: TelemetryPort = NOOP_TELEMETRY,
   ) {}
 
   public async execute(
+    input: ChangePasswordInput,
+  ): Promise<AuthDurableMutationResult> {
+    return this.telemetry.runAuthOperation('change_password', () =>
+      this.performChange(input),
+    )
+  }
+
+  private async performChange(
     input: ChangePasswordInput,
   ): Promise<AuthDurableMutationResult> {
     try {
@@ -57,14 +73,66 @@ export class ChangePasswordUseCase {
       })
       try {
         await this.sessions.revokeAll(input.userId)
+        this.audit.emit({
+          action: 'password_change',
+          outcome: 'success',
+          reasonCode: 'PASSWORD_CHANGED',
+          actorId: input.userId,
+          targetType: 'user',
+          targetId: input.userId,
+        })
+        this.telemetry.recordAuthOutcome('change_password', 'success')
         return { cleanupComplete: true }
       } catch {
         this.cleanupObserver?.cleanupIncomplete('change-password', input.userId)
+        this.audit.emit({
+          action: 'password_change',
+          outcome: 'partial',
+          reasonCode: 'CLEANUP_INCOMPLETE',
+          actorId: input.userId,
+          targetType: 'user',
+          targetId: input.userId,
+        })
+        this.telemetry.recordAuthOutcome('change_password', 'partial')
         return { cleanupComplete: false }
       }
     } catch (error: unknown) {
-      if (error instanceof AuthError) throw error
+      if (error instanceof AuthError) {
+        this.audit.emit({
+          action: 'password_change',
+          outcome: error.code === 'AUTH_STATE_CONFLICT' ? 'conflict' : 'denied',
+          reasonCode:
+            error.code === 'AUTH_STATE_CONFLICT'
+              ? 'STATE_CONFLICT'
+              : error.code === 'AUTHENTICATION_FAILED'
+                ? 'INVALID_CURRENT_PASSWORD'
+                : 'DEPENDENCY_UNAVAILABLE',
+          actorId: input.userId,
+          targetType: 'user',
+          targetId: input.userId,
+        })
+        this.telemetry.recordAuthOutcome(
+          'change_password',
+          this.authErrorOutcome(error),
+        )
+        throw error
+      }
+      this.audit.emit({
+        action: 'password_change',
+        outcome: 'denied',
+        reasonCode: 'DEPENDENCY_UNAVAILABLE',
+        actorId: input.userId,
+        targetType: 'user',
+        targetId: input.userId,
+      })
+      this.telemetry.recordAuthOutcome('change_password', 'dependency_error')
       throw new AuthDependencyUnavailableError()
     }
+  }
+
+  private authErrorOutcome(error: AuthError): AuthTelemetryOutcome {
+    if (error.code === 'AUTH_STATE_CONFLICT') return 'conflict'
+    if (error.code === 'AUTHENTICATION_FAILED') return 'denied'
+    return 'dependency_error'
   }
 }

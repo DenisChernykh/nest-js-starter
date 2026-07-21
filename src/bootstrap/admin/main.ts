@@ -5,6 +5,8 @@ import { createPostgresCommandRuntimeConfig } from '@/platform/config/postgres-c
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import { PrismaTransactionAdapter } from '@/platform/database/prisma-transaction.adapter'
 import { PrismaTransactionContext } from '@/platform/database/prisma-transaction.context'
+import { PinoLogSink } from '@/platform/logging/pino-log.sink'
+import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
 
 /** Runs the PostgreSQL-only one-shot administrator bootstrap command. */
 export async function main(
@@ -20,7 +22,11 @@ export async function main(
       transactionContext,
       config,
     )
-    const useCase = createInitialAdminCommand(provider, transaction)
+    const useCase = createInitialAdminCommand(
+      provider,
+      transaction,
+      new AuthAuditLogger(new PinoLogSink(config)),
+    )
     await provider.connect(
       AbortSignal.timeout(config.database.connectionTimeoutMs),
     )

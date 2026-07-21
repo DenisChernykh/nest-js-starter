@@ -1,7 +1,7 @@
 import type { Server } from 'node:http'
 
 import { ValidationPipe } from '@nestjs/common'
-import { Reflector } from '@nestjs/core'
+import { HttpAdapterHost, Reflector } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 import type { INestApplication } from '@nestjs/common'
 import cookieParser from 'cookie-parser'
@@ -21,13 +21,17 @@ import {
   AuthController,
 } from '@/modules/auth/presentation/auth.controller'
 import { AuthCookieAdapter } from '@/modules/auth/presentation/auth-cookie.adapter'
-import { AuthHttpErrorMapper } from '@/modules/auth/presentation/auth-http-error.mapper'
 import { AuthRequestContext } from '@/modules/auth/presentation/auth-request.context'
 import { AuthRequestInterceptor } from '@/modules/auth/presentation/auth-request.interceptor'
 import { AuthenticationGuard } from '@/modules/auth/presentation/authentication.guard'
 import { BrowserOriginGuard } from '@/modules/auth/presentation/browser-origin.guard'
 import { PermissionGuard } from '@/modules/auth/presentation/permission.guard'
 import { SessionCsrfGuard } from '@/modules/auth/presentation/session-csrf.guard'
+import { RequestContext } from '@/platform/http/context/request-context'
+import { createRequestContextMiddleware } from '@/platform/http/context/request-context.middleware'
+import { ProblemExceptionFilter } from '@/platform/http/errors/problem-exception.filter'
+import { RequestValidationError } from '@/platform/http/errors/request-validation.error'
+import { mapValidationErrors } from '@/platform/http/errors/validation-error.mapper'
 
 /** Deterministic auth use-case doubles exposed to transport contract tests. */
 export interface AuthTestDoubles {
@@ -131,6 +135,8 @@ export async function createAuthTestHarness(
     ],
   }).compile()
   const app = moduleRef.createNestApplication()
+  const httpRequestContext = new RequestContext()
+  app.use(createRequestContextMiddleware(httpRequestContext))
   app.use(cookieParser())
   app.useGlobalPipes(
     new ValidationPipe({
@@ -138,6 +144,8 @@ export async function createAuthTestHarness(
       whitelist: true,
       forbidNonWhitelisted: true,
       forbidUnknownValues: true,
+      exceptionFactory: (errors) =>
+        new RequestValidationError(mapValidationErrors(errors)),
     }),
   )
   const reflector = app.get(Reflector)
@@ -161,7 +169,11 @@ export async function createAuthTestHarness(
   app.useGlobalInterceptors(
     new AuthRequestInterceptor(reflector, requestContext),
   )
-  app.useGlobalFilters(new AuthHttpErrorMapper())
+  app.useGlobalFilters(
+    new ProblemExceptionFilter(app.get(HttpAdapterHost), httpRequestContext, {
+      write: jest.fn(),
+    }),
+  )
   app.setGlobalPrefix('v1')
   await app.init()
   await app.listen(0, '127.0.0.1')

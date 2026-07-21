@@ -3,6 +3,7 @@ import { RedisCacheClient } from '@/platform/redis/redis-cache.client'
 import { RedisCacheEvents } from '@/platform/redis/redis-cache.events'
 import { createJsonRedisCodec } from '@/platform/redis/redis-codec'
 import type { RedisConnectionRegistry } from '@/platform/redis/redis-connection.registry'
+import type { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
 
 interface CachedItem {
   readonly id: string
@@ -20,6 +21,7 @@ function createHarness(initial: unknown = null): {
   readonly cache: RedisCacheClient
   readonly sendCommand: jest.Mock<Promise<unknown>, [readonly string[]]>
   readonly eventTypes: string[]
+  readonly metrics: jest.Mocked<Pick<RuntimeMetrics, 'recordCache'>>
 } {
   const sendCommand = jest.fn<Promise<unknown>, [readonly string[]]>(() =>
     Promise.resolve(initial),
@@ -32,13 +34,15 @@ function createHarness(initial: unknown = null): {
       ) => operation({ sendCommand } as unknown as RedisManagedClient),
     }),
   } as unknown as RedisConnectionRegistry
-  const events = new RedisCacheEvents()
+  const metrics = { recordCache: jest.fn() }
+  const events = new RedisCacheEvents(metrics as unknown as RuntimeMetrics)
   const eventTypes: string[] = []
   events.subscribe((event) => eventTypes.push(event.type))
   return {
     cache: new RedisCacheClient(registry.executor('cache'), events, () => 0.5),
     sendCommand,
     eventTypes,
+    metrics,
   }
 }
 
@@ -50,6 +54,10 @@ describe('RedisCacheClient', () => {
       harness.cache.get('starter:v1:item:42', itemCodec),
     ).resolves.toEqual({ id: '42' })
     expect(harness.eventTypes).toEqual(['hit'])
+    expect(harness.metrics.recordCache).toHaveBeenCalledWith('hit')
+    expect(harness.metrics.recordCache).not.toHaveBeenCalledWith(
+      'starter:v1:item:42',
+    )
   })
 
   it('deletes an invalid payload and reports invalid followed by miss', async () => {
@@ -125,5 +133,17 @@ describe('RedisCacheClient', () => {
       'starter:v1:item:42',
     ])
     expect(harness.eventTypes).toEqual(['invalidate'])
+  })
+
+  it('isolates a throwing cache metric from cache behavior', async () => {
+    const harness = createHarness('{"id":"42"}')
+    harness.metrics.recordCache.mockImplementation(() => {
+      throw new Error('metric unavailable')
+    })
+
+    await expect(
+      harness.cache.get('starter:v1:item:42', itemCodec),
+    ).resolves.toEqual({ id: '42' })
+    expect(harness.eventTypes).toEqual(['hit'])
   })
 })

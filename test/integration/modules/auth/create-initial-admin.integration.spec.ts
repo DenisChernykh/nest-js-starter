@@ -1,12 +1,10 @@
-import { ConfigService } from '@nestjs/config'
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 
 import { CreateInitialAdminUseCase } from '@/modules/auth/application/create-initial-admin.use-case'
 import { Argon2PasswordHasher } from '@/modules/auth/infrastructure/argon2-password.hasher'
 import { PrismaAuthRepository } from '@/modules/auth/infrastructure/prisma-auth.repository'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
-import type { ValidatedRuntimeEnvironment } from '@/platform/config/runtime-config.types'
-import { validateRuntimeEnvironment } from '@/platform/config/runtime-environment'
+import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import { PrismaTransactionAdapter } from '@/platform/database/prisma-transaction.adapter'
 import { PrismaTransactionContext } from '@/platform/database/prisma-transaction.context'
@@ -26,7 +24,7 @@ describe('CreateInitialAdminUseCase', () => {
       databaseUrl,
     )
     if (migration.exitCode !== 0) throw new Error('Auth migration failed')
-    const environment = validateRuntimeEnvironment({
+    const environment = buildApiRuntimeConfig({
       DATABASE_URL: databaseUrl,
       REDIS_COORDINATION_URL: 'redis://127.0.0.1:6379',
       AUTH_SESSION_KEY_SECRET: Buffer.alloc(32, 1).toString('base64url'),
@@ -35,9 +33,7 @@ describe('CreateInitialAdminUseCase', () => {
       AUTH_NETWORK_METADATA_SECRET: Buffer.alloc(32, 4).toString('base64url'),
       AUTH_CSRF_ORIGINS: 'http://localhost:3000',
     })
-    const config = new RuntimeConfigService(
-      new ConfigService<ValidatedRuntimeEnvironment, true>(environment),
-    )
+    const config = new RuntimeConfigService(environment)
     const context = new PrismaTransactionContext()
     provider = new PrismaClientProvider(config, context)
     const transaction = new PrismaTransactionAdapter(provider, context, config)

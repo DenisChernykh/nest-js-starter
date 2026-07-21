@@ -1,10 +1,8 @@
-import { ConfigService } from '@nestjs/config'
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import type { Pool } from 'pg'
 
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
-import type { ValidatedRuntimeEnvironment } from '@/platform/config/runtime-config.types'
-import { validateRuntimeEnvironment } from '@/platform/config/runtime-environment'
+import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { DatabaseUnavailableError } from '@/platform/database/database.contracts'
 import { PrismaDatabaseLifecycle } from '@/platform/database/prisma-database.lifecycle'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
@@ -46,7 +44,7 @@ describe('Prisma PostgreSQL lifecycle', () => {
   function createProvider(
     overrides: Record<string, unknown> = {},
   ): PrismaClientProvider {
-    const environment = validateRuntimeEnvironment(
+    const environment = buildApiRuntimeConfig(
       requiredRuntimeEnvironment({
         DATABASE_URL: databaseUrl,
         DATABASE_CONNECTION_TIMEOUT_MS: '2000',
@@ -54,9 +52,7 @@ describe('Prisma PostgreSQL lifecycle', () => {
         ...overrides,
       }),
     )
-    const config = new RuntimeConfigService(
-      new ConfigService<ValidatedRuntimeEnvironment, true>(environment),
-    )
+    const config = new RuntimeConfigService(environment)
     return new PrismaClientProvider(config)
   }
 

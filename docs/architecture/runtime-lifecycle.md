@@ -44,15 +44,21 @@ The first `SIGTERM` or `SIGINT` synchronously latches `draining`. Shutdown then:
 2. closes the HTTP listener and idle keep-alive connections;
 3. waits for admitted HTTP and infrastructure operations within their bounds;
 4. closes registered participants in explicit order: Redis at 200, then Prisma
-   and its externally owned Pool at 300;
+   and its externally owned Pool at 300, then OpenTelemetry at 400;
 5. closes Nest and exits 0 only when every required step settles cleanly.
 
 Repeated signals share the same coordination promise. A process-level hard
 watchdog exits 1 when a non-settling operation outlives the grace window; this
 does not claim that an already running Prisma query was cancelled.
 
+OpenTelemetry SDK shutdown shares one promise and observes the same remaining
+cleanup deadline. A collector connection failure is not a health dependency and
+does not block requests, but a failed SDK flush makes the ordered cleanup
+unsuccessful and therefore produces exit 1. A deadline or process watchdog does
+not mean that an in-flight exporter request was cancelled.
+
 `StartupRegistry` and `ShutdownRegistry` are the extension points for later
-required resources and telemetry flushers. Participants declare stable names,
-order and bounded cleanup. Redis command deadlines destroy the socket but do not
-claim cancellation of already dispatched work. Migrations and down migrations
-are never part of API startup or shutdown.
+required resources. Participants declare stable names, order and bounded
+cleanup. Redis command deadlines destroy the socket but do not claim
+cancellation of already dispatched work. Migrations and down migrations are
+never part of API startup or shutdown.

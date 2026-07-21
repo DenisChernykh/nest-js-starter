@@ -7,6 +7,7 @@ import type {
 } from './redis-capability'
 import type { RedisClientFactory } from './redis-client.factory'
 import { RedisCommandExecutor } from './redis-command.executor'
+import { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
 
 /** URLs and deadline required by the capability registry. */
 export interface RedisConnectionRegistryConfig {
@@ -22,6 +23,7 @@ interface RegisteredConnection {
   readonly client: RedisManagedClient
   readonly executor: RedisCommandExecutor
   connectPromise: Promise<void> | undefined
+  connectAttempts: number
 }
 
 /** Owns one sealed set of capability-scoped Redis connections. */
@@ -37,6 +39,7 @@ export class RedisConnectionRegistry {
     private readonly factory: RedisClientFactory,
     private readonly operationTracker: ActiveOperationTracker,
     private readonly config: RedisConnectionRegistryConfig,
+    private readonly metrics: RuntimeMetrics = new RuntimeMetrics(),
   ) {}
 
   /** Registers one unique capability before the registry is sealed. */
@@ -122,7 +125,17 @@ export class RedisConnectionRegistry {
     if (connection.client.isReady) return
     if (signal.aborted) throw new Error('Redis connection aborted')
     if (connection.connectPromise === undefined) {
-      const driverAttempt = connection.client.connect().then(() => undefined)
+      const reconnect = connection.connectAttempts > 0
+      connection.connectAttempts += 1
+      const driverAttempt = connection.client.connect().then(
+        () => {
+          if (reconnect) this.recordReconnect('success')
+        },
+        (error: unknown) => {
+          if (reconnect) this.recordReconnect('error')
+          throw error
+        },
+      )
       const attempt = this.boundConnect(
         connection.client,
         driverAttempt,
@@ -237,10 +250,12 @@ export class RedisConnectionRegistry {
       required,
       client,
       connectPromise: undefined,
+      connectAttempts: 0,
       executor: new RedisCommandExecutor(
         client,
         this.operationTracker,
         this.config.commandTimeoutMs,
+        this.metrics,
       ),
     }
   }
@@ -255,5 +270,13 @@ export class RedisConnectionRegistry {
 
   private assertSealed(): void {
     if (!this.sealed) throw new Error('Redis connection registry is not sealed')
+  }
+
+  private recordReconnect(outcome: 'success' | 'error'): void {
+    try {
+      this.metrics.recordRedisReconnect(outcome)
+    } catch {
+      // Telemetry cannot replace the Redis connection settlement.
+    }
   }
 }

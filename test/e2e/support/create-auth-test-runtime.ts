@@ -8,6 +8,7 @@ import { createClient } from 'redis'
 import { Argon2PasswordHasher } from '@/modules/auth/infrastructure/argon2-password.hasher'
 import { reserveRuntimePort } from '@test/e2e/support/create-test-runtime'
 import {
+  captureChildOutput,
   spawnBuiltApi,
   waitForChildExit,
 } from '@test/e2e/support/spawn-built-api'
@@ -84,7 +85,6 @@ export async function createAuthTestRuntime(
   const instances: AuthApiInstance[] = []
   try {
     for (const baseUrl of baseUrls) {
-      let output = ''
       const child = spawnBuiltApi(
         authEnvironment(
           databaseUrl,
@@ -94,13 +94,7 @@ export async function createAuthTestRuntime(
           overrides,
         ),
       )
-      child.stdout.on('data', (chunk: Buffer) => {
-        output += chunk.toString()
-      })
-      child.stderr.on('data', (chunk: Buffer) => {
-        output += chunk.toString()
-      })
-      instances.push({ baseUrl, child, output: () => output })
+      instances.push({ baseUrl, child, output: captureChildOutput(child) })
     }
     await Promise.all(
       instances.map(({ baseUrl }) =>

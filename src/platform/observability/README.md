@@ -1,8 +1,11 @@
 # Observability platform
 
-Responsibility: future OpenTelemetry traces and metrics.
+Responsibility: early OpenTelemetry bootstrap, exporter-boundary span
+sanitization, application telemetry adapter and low-cardinality runtime metrics.
 
-Allowed dependencies: platform lifecycle and configuration.
+Allowed dependencies: platform lifecycle, logging and configuration plus the
+framework-free shared telemetry port.
 
-Add the first TypeScript file only when the owning slice introduces a real
-runtime contract; do not add sample business behavior to populate the folder.
+The collector is never registered as a health dependency. Exporter failures are
+diagnosed without changing request results; bounded SDK shutdown remains the
+last ordered cleanup participant.

@@ -1,11 +1,13 @@
 import { performance } from 'node:perf_hooks'
 
-import { Injectable, Optional } from '@nestjs/common'
+import { Inject, Injectable, Optional } from '@nestjs/common'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 
 import { PrismaClient, type Prisma } from '@/generated/prisma/client'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
+import type { DatabaseRuntimeConfig } from '@/platform/config/runtime-config.types'
+import { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
 
 import { runBoundedPostgresQuery } from './bounded-postgres-query'
 import { DatabaseUnavailableError } from './database.contracts'
@@ -86,17 +88,21 @@ export class PrismaClientProvider {
   private cleanupPromise: Promise<void> | undefined
   private readonly activeOperations = new Set<Promise<unknown>>()
   private errorListenerInstalled = true
+  private readonly metrics: RuntimeMetrics
   private readonly poolErrorHandler = (): void => {
     this.degraded = true
   }
 
   public constructor(
-    config: RuntimeConfigService,
+    @Inject(RuntimeConfigService)
+    config: { readonly database: DatabaseRuntimeConfig },
     @Optional() transactionContext?: PrismaTransactionContext,
+    @Optional() metrics?: RuntimeMetrics,
   ) {
     this.transactionContext =
       transactionContext ?? new PrismaTransactionContext()
     this.connectionTimeoutMs = config.database.connectionTimeoutMs
+    this.metrics = metrics ?? new RuntimeMetrics()
     this.pool = new Pool({
       connectionString: config.database.url,
       max: config.database.poolMax,
@@ -200,6 +206,7 @@ export class PrismaClientProvider {
     if (this.state !== 'connected' || !this.admissionOpen) {
       return Promise.reject(new DatabaseUnavailableError())
     }
+    const startedAt = performance.now()
     let result: Promise<T>
     try {
       result = Promise.resolve(
@@ -210,12 +217,37 @@ export class PrismaClientProvider {
         error instanceof Error ? error : new Error('Database operation failed'),
       )
     }
-    this.activeOperations.add(result)
-    void result.then(
-      () => this.activeOperations.delete(result),
-      () => this.activeOperations.delete(result),
+    const measured = result.then(
+      (value) => {
+        this.recordDatabaseOutcome('success', startedAt)
+        return value
+      },
+      (error: unknown) => {
+        this.recordDatabaseOutcome('error', startedAt)
+        throw error
+      },
     )
-    return result
+    this.activeOperations.add(measured)
+    void measured.then(
+      () => this.activeOperations.delete(measured),
+      () => this.activeOperations.delete(measured),
+    )
+    return measured
+  }
+
+  private recordDatabaseOutcome(
+    outcome: 'success' | 'error',
+    startedAt: number,
+  ): void {
+    try {
+      this.metrics.recordDependency(
+        'postgres',
+        outcome,
+        Math.max(0, performance.now() - startedAt),
+      )
+    } catch {
+      // Telemetry cannot replace the admitted database operation settlement.
+    }
   }
 
   /** Stops admission, waits admitted work and closes Prisma then Pool. */

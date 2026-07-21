@@ -4,6 +4,8 @@ import { NestFactory } from '@nestjs/core'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
+import type { ApplicationRuntimeConfig } from '@/platform/config/runtime-config.types'
+import { createApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import type {
   DatabaseLifecycle,
   DatabaseReadinessProbe,
@@ -26,6 +28,15 @@ import {
 import type { ShutdownParticipant } from '@/platform/lifecycle/shutdown-participant'
 import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
 import { ActiveRequestTracker } from '@/platform/http/bootstrap/active-request-tracker'
+import { RequestContext } from '@/platform/http/context/request-context'
+import { CorrelationFieldsProvider } from '@/platform/http/context/correlation-fields.provider'
+import { createHttpAccessLogMiddleware } from '@/platform/logging/http-access-log.middleware'
+import {
+  STRUCTURED_LOGGER,
+  type StructuredLogger,
+} from '@/platform/logging/logging.contracts'
+import { HttpMetrics } from '@/platform/observability/http-metrics'
+import type { ObservabilityRuntime } from '@/platform/observability/observability.runtime'
 
 import { ApiModule } from './api.module'
 
@@ -68,17 +79,31 @@ export interface ApiRuntimeResources {
   readonly shutdownGraceMs?: number
 }
 
-/** Creates, configures and initializes the API without opening its listener. */
-export async function configureApi(): Promise<ApiRuntimeResources> {
-  const app = await NestFactory.create<NestExpressApplication>(ApiModule, {
-    bodyParser: false,
-  })
+/**
+ * Creates, configures and initializes the API without opening its listener.
+ *
+ * @param runtimeConfig - Prevalidated config or process environment projection.
+ */
+export async function configureApi(
+  runtimeConfig: ApplicationRuntimeConfig = createApiRuntimeConfig(),
+  observability?: ObservabilityRuntime,
+): Promise<ApiRuntimeResources> {
+  const app = await NestFactory.create<NestExpressApplication>(
+    ApiModule.forRoot(runtimeConfig),
+    {
+      bodyParser: false,
+    },
+  )
   const config = app.get(RuntimeConfigService)
   const lifecycle = app.get(ApplicationLifecycleState)
   const registry = app.get(HealthRegistry)
   const probe = app.get<DatabaseReadinessProbe>(DATABASE_READINESS_PROBE)
   const database = app.get<DatabaseLifecycle>(DATABASE_LIFECYCLE)
   const requestTracker = app.get(ActiveRequestTracker)
+  const requestContext = app.get(RequestContext)
+  const correlation = app.get(CorrelationFieldsProvider)
+  const logger = app.get<StructuredLogger>(STRUCTURED_LOGGER)
+  const httpMetrics = app.get(HttpMetrics)
   const operationTracker = app.get(ActiveOperationTracker)
   const shutdownRegistry = app.get(ShutdownRegistry)
   const startupRegistry = app.get(StartupRegistry)
@@ -102,8 +127,20 @@ export async function configureApi(): Promise<ApiRuntimeResources> {
   startupRegistry.seal()
   shutdownRegistry.register(redis)
   shutdownRegistry.register(database as DatabaseLifecycle & ShutdownParticipant)
+  if (observability !== undefined) shutdownRegistry.register(observability)
   shutdownRegistry.seal()
-  configureHttpApplication(app, config, lifecycle, requestTracker)
+  configureHttpApplication(
+    app,
+    config,
+    lifecycle,
+    requestContext,
+    requestTracker,
+    createHttpAccessLogMiddleware({
+      logger,
+      metrics: httpMetrics,
+      correlation,
+    }),
+  )
   await app.init()
 
   return {

@@ -4,6 +4,7 @@ import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
 import { HealthModule } from '@/platform/http/health/health.module'
+import { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
 
 import { RedisClientFactory } from './redis-client.factory'
 import { RedisConnectionRegistry } from './redis-connection.registry'
@@ -34,16 +35,19 @@ import {
         RedisClientFactory,
         ActiveOperationTracker,
         RuntimeConfigService,
+        RuntimeMetrics,
       ],
       useFactory: (
         factory: RedisClientFactory,
         operationTracker: ActiveOperationTracker,
         config: RuntimeConfigService,
+        metrics: RuntimeMetrics,
       ): RedisConnectionRegistry => {
         const registry = new RedisConnectionRegistry(
           factory,
           operationTracker,
           config.redis,
+          metrics,
         )
         registry.register('coordination', true)
         registry.seal()

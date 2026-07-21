@@ -1,17 +1,18 @@
 import type { Server } from 'node:http'
 
-import { ConfigService } from '@nestjs/config'
 import type { INestApplication } from '@nestjs/common'
+import { HttpAdapterHost } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import request from 'supertest'
 
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
-import type { ValidatedRuntimeEnvironment } from '@/platform/config/runtime-config.types'
-import { validateRuntimeEnvironment } from '@/platform/config/runtime-environment'
+import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
 import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
+import { RequestContext } from '@/platform/http/context/request-context'
+import { ProblemExceptionFilter } from '@/platform/http/errors/problem-exception.filter'
 import { TestHttpModule } from '@test/e2e/fixtures/http/test-http.module'
 import { requiredRuntimeEnvironment } from '@test/support/required-runtime-environment'
 
@@ -29,7 +30,7 @@ describe('hardened HTTP bootstrap', () => {
     const expressApp = moduleRef.createNestApplication<NestExpressApplication>({
       bodyParser: false,
     })
-    const environment = validateRuntimeEnvironment(
+    const environment = buildApiRuntimeConfig(
       requiredRuntimeEnvironment({
         DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
         CORS_ORIGINS: 'https://allowed.example',
@@ -41,8 +42,14 @@ describe('hardened HTTP bootstrap', () => {
         HTTP_KEEP_ALIVE_TIMEOUT_MS: '5000',
       }),
     )
-    const config = new RuntimeConfigService(
-      new ConfigService<ValidatedRuntimeEnvironment, true>(environment),
+    const config = new RuntimeConfigService(environment)
+    const requestContext = new RequestContext()
+    expressApp.useGlobalFilters(
+      new ProblemExceptionFilter(
+        expressApp.get(HttpAdapterHost),
+        requestContext,
+        { write: jest.fn() },
+      ),
     )
     lifecycle = expressApp.get(ApplicationLifecycleState)
     const registry = expressApp.get(HealthRegistry)
@@ -53,7 +60,7 @@ describe('hardened HTTP bootstrap', () => {
       check: () => Promise.resolve('up'),
     })
     registry.seal()
-    configureHttpApplication(expressApp, config, lifecycle)
+    configureHttpApplication(expressApp, config, lifecycle, requestContext)
     await expressApp.init()
     await expressApp.listen(0, '127.0.0.1')
     app = expressApp
@@ -66,21 +73,20 @@ describe('hardened HTTP bootstrap', () => {
       trustedModuleRef.createNestApplication<NestExpressApplication>({
         bodyParser: false,
       })
-    const trustedEnvironment = validateRuntimeEnvironment(
+    const trustedEnvironment = buildApiRuntimeConfig(
       requiredRuntimeEnvironment({
         DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
         TRUST_PROXY_CIDRS: '127.0.0.1/32,::1/128',
       }),
     )
-    const trustedConfig = new RuntimeConfigService(
-      new ConfigService<ValidatedRuntimeEnvironment, true>(trustedEnvironment),
-    )
+    const trustedConfig = new RuntimeConfigService(trustedEnvironment)
     trustedExpress.get(HealthRegistry).seal()
     trustedExpress.get(ApplicationLifecycleState).markReady()
     configureHttpApplication(
       trustedExpress,
       trustedConfig,
       trustedExpress.get(ApplicationLifecycleState),
+      new RequestContext(),
     )
     await trustedExpress.init()
     await trustedExpress.listen(0, '127.0.0.1')
@@ -113,12 +119,12 @@ describe('hardened HTTP bootstrap', () => {
     await request(server)
       .post('/v1/technical/echo')
       .send({ value: 'ok', extra: true })
-      .expect(400)
-    await request(server).post('/v1/technical/echo').send({}).expect(400)
+      .expect(422)
+    await request(server).post('/v1/technical/echo').send({}).expect(422)
     await request(server)
       .post('/v1/technical/echo')
       .send({ value: 42 })
-      .expect(400)
+      .expect(422)
     await request(server)
       .post('/v1/technical/echo')
       .send({ value: 'x'.repeat(100) })

@@ -1,9 +1,11 @@
 import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
+import type { Span, Tracer } from '@opentelemetry/api'
 import type { RedisManagedClient } from '@/platform/redis/redis-capability'
 import {
   RedisCommandExecutor,
   RedisCommandTimeoutError,
 } from '@/platform/redis/redis-command.executor'
+import type { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
 
 function managedClient(): RedisManagedClient {
   return {
@@ -46,5 +48,100 @@ describe('RedisCommandExecutor', () => {
     const destroy = jest.mocked(client.destroy)
     expect(destroy).toHaveBeenCalledTimes(1)
     expect(tracker.activeCount).toBe(0)
+  })
+
+  it('records finite Redis outcomes and isolates metric failures', async () => {
+    const client = managedClient()
+    const metrics = {
+      recordDependency: jest.fn().mockImplementationOnce(() => {
+        throw new Error('metric unavailable')
+      }),
+    } as unknown as RuntimeMetrics
+    const executor = new RedisCommandExecutor(
+      client,
+      new ActiveOperationTracker(),
+      50,
+      metrics,
+    )
+
+    await expect(
+      executor.execute('private-operation-name', () =>
+        Promise.resolve('owned-result'),
+      ),
+    ).resolves.toBe('owned-result')
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(metrics.recordDependency).toHaveBeenCalledWith(
+      'redis',
+      'success',
+      expect.any(Number),
+    )
+  })
+
+  it('records a Redis error without changing the driver rejection', async () => {
+    const client = managedClient()
+    const metrics = {
+      recordDependency: jest.fn(),
+    } as unknown as RuntimeMetrics
+    const executor = new RedisCommandExecutor(
+      client,
+      new ActiveOperationTracker(),
+      50,
+      metrics,
+    )
+    const driverError = new Error('driver-owned')
+
+    await expect(
+      executor.execute('private-operation', () => Promise.reject(driverError)),
+    ).rejects.toBe(driverError)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(metrics.recordDependency).toHaveBeenCalledWith(
+      'redis',
+      'error',
+      expect.any(Number),
+    )
+  })
+
+  it('creates one fixed command span without the internal operation name', async () => {
+    const span = {
+      setStatus: jest.fn(),
+      end: jest.fn(),
+    } as unknown as Span
+    const tracer = {
+      startActiveSpan: jest.fn(
+        (_name: string, _options: unknown, work: (active: Span) => unknown) =>
+          work(span),
+      ),
+    } as unknown as Tracer
+    const executor = new RedisCommandExecutor(
+      managedClient(),
+      new ActiveOperationTracker(),
+      50,
+      undefined,
+      tracer,
+    )
+
+    await expect(
+      executor.execute('session-owner-read-private-id', () =>
+        Promise.resolve('owned'),
+      ),
+    ).resolves.toBe('owned')
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(tracer.startActiveSpan).toHaveBeenCalledWith(
+      'redis.command',
+      {
+        kind: 2,
+        attributes: {
+          'db.system.name': 'redis',
+          'db.operation.name': 'OTHER',
+          'db.query.text': 'OTHER',
+        },
+      },
+      expect.any(Function),
+    )
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const startActiveSpan = jest.mocked(tracer.startActiveSpan)
+    expect(JSON.stringify(startActiveSpan.mock.calls)).not.toContain(
+      'private-id',
+    )
   })
 })

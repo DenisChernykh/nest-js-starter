@@ -12,6 +12,7 @@ import {
 import { waitForCondition } from '@test/integration/support/wait-for-condition'
 
 const execFileAsync = promisify(execFile)
+const requestId = '019219c3-dc52-7cc1-9e70-f293ca14c198'
 
 async function loginResponse(
   baseUrl: string,
@@ -20,7 +21,11 @@ async function loginResponse(
 ): Promise<Response> {
   return fetch(`${baseUrl}/v1/auth/login`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', origin: baseUrl },
+    headers: {
+      'content-type': 'application/json',
+      origin: baseUrl,
+      'x-request-id': requestId,
+    },
     body: JSON.stringify({ email, password }),
   })
 }
@@ -88,12 +93,20 @@ describe('auth dependency failure policy', () => {
       3_000,
     )
     const response = await fetch(`${baseUrl}/v1/auth/me`, {
-      headers: { cookie },
+      headers: { cookie, 'x-request-id': requestId },
     })
     expect(response.status).toBe(503)
+    expect(response.headers.get('content-type')).toMatch(
+      /^application\/problem\+json/u,
+    )
     expect(await response.json()).toEqual({
-      code: 'AUTH_DEPENDENCY_UNAVAILABLE',
-      detail: 'Authentication dependency unavailable',
+      type: 'https://nest-js-starter.invalid/problems/dependency-unavailable',
+      title: 'Dependency unavailable',
+      status: 503,
+      detail: 'A required service is temporarily unavailable.',
+      instance: `urn:request:${requestId}`,
+      code: 'DEPENDENCY_UNAVAILABLE',
+      requestId,
     })
     await resumeRedis(runtime.redis)
     redisSuspended = false
@@ -134,7 +147,7 @@ describe('auth dependency failure policy', () => {
       3_000,
     )
     const response = await fetch(`${baseUrl}/v1/auth/me`, {
-      headers: { cookie },
+      headers: { cookie, 'x-request-id': requestId },
     })
     expect(response.status).toBe(503)
     const body = await response.text()
