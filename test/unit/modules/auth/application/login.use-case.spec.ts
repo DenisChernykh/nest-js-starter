@@ -3,6 +3,7 @@ import { LoginUseCase } from '@/modules/auth/application/login.use-case'
 import type { LoginRateLimiterPort } from '@/modules/auth/application/login-rate-limiter.port'
 import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
+import type { AuthAuditPort } from '@/modules/auth/application/auth-audit.port'
 
 interface LoginHarness {
   readonly useCase: LoginUseCase
@@ -10,6 +11,7 @@ interface LoginHarness {
   readonly passwords: PasswordHasherPort
   readonly limiter: LoginRateLimiterPort
   readonly sessions: SessionStorePort
+  readonly audit: jest.Mocked<AuthAuditPort>
 }
 
 describe('LoginUseCase', () => {
@@ -41,6 +43,7 @@ describe('LoginUseCase', () => {
         }),
       ),
     } as unknown as SessionStorePort
+    const audit = { emit: jest.fn() }
     return {
       useCase: new LoginUseCase(
         persistence,
@@ -48,11 +51,13 @@ describe('LoginUseCase', () => {
         limiter,
         sessions,
         '$argon2id$constant-dummy',
+        audit,
       ),
       persistence,
       passwords,
       limiter,
       sessions,
+      audit,
     }
   }
 
@@ -96,6 +101,13 @@ describe('LoginUseCase', () => {
       'unchanged password',
       missing ? '$argon2id$constant-dummy' : 'stored-hash',
     )
+    expect(target.audit.emit.mock.calls).toContainEqual([
+      {
+        action: 'login',
+        outcome: 'denied',
+        reasonCode: 'INVALID_CREDENTIALS',
+      },
+    ])
   })
 
   it('normalizes only email and issues from durable generation and epoch', async () => {
@@ -133,6 +145,17 @@ describe('LoginUseCase', () => {
         globalSessionEpoch: 5n,
       }),
     )
+    expect(target.audit.emit.mock.calls).toContainEqual([
+      {
+        action: 'login',
+        outcome: 'success',
+        reasonCode: 'LOGIN_SUCCEEDED',
+        actorId: 'user',
+        sessionId: 'public',
+        targetType: 'session',
+        targetId: 'public',
+      },
+    ])
   })
 
   it('denies before credential lookup when either distributed bucket is over limit', async () => {
@@ -159,6 +182,13 @@ describe('LoginUseCase', () => {
     // eslint-disable-next-line @typescript-eslint/unbound-method
     const findCredential = target.persistence.findCredentialByNormalizedEmail
     expect(findCredential).not.toHaveBeenCalled()
+    expect(target.audit.emit.mock.calls).toContainEqual([
+      {
+        action: 'login',
+        outcome: 'denied',
+        reasonCode: 'RATE_LIMITED',
+      },
+    ])
   })
 
   it('uses best-effort rehash CAS without rejecting a verified login conflict', async () => {

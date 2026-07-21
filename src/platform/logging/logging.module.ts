@@ -8,6 +8,7 @@ import { HttpMetrics } from '@/platform/observability/http-metrics'
 import { STRUCTURED_LOGGER } from './logging.contracts'
 import { NestLoggerAdapter } from './nest-logger.adapter'
 import { PinoLogSink } from './pino-log.sink'
+import { AuthAuditLogger } from './auth-audit.logger'
 
 /** Global composition boundary for the direct Pino and Nest logger adapters. */
 @Global()
@@ -33,6 +34,12 @@ export class LoggingModule {
             }),
         },
         { provide: STRUCTURED_LOGGER, useExisting: PinoLogSink },
+        {
+          provide: AuthAuditLogger,
+          inject: [STRUCTURED_LOGGER],
+          useFactory: (logger: PinoLogSink): AuthAuditLogger =>
+            new AuthAuditLogger(logger),
+        },
         NestLoggerAdapter,
       ],
       exports: [
@@ -42,6 +49,7 @@ export class LoggingModule {
         RequestContext,
         CorrelationFieldsProvider,
         HttpMetrics,
+        AuthAuditLogger,
       ],
     }
   }

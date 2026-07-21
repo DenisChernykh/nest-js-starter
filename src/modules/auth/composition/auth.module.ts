@@ -43,6 +43,7 @@ import {
   type TransactionPort,
 } from '@/shared/application/transaction.port'
 import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
+import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
 
 const dummyPasswordHash =
   '$argon2id$v=19$m=19456,p=1,t=2$AQEBAQEBAQEBAQEBAQEBAQ$89iZHLNRbRP/PDabySsV1BxlW1VfqedCPSqmvYANw2U'
@@ -116,12 +117,14 @@ const dummyPasswordHash =
         Argon2PasswordHasher,
         RedisLoginRateLimiter,
         RedisSessionStore,
+        AuthAuditLogger,
       ],
       useFactory: (
         persistence: PrismaAuthRepository,
         passwords: Argon2PasswordHasher,
         limiter: RedisLoginRateLimiter,
         sessions: RedisSessionStore,
+        audit: AuthAuditLogger,
       ): LoginUseCase =>
         new LoginUseCase(
           persistence,
@@ -129,6 +132,7 @@ const dummyPasswordHash =
           limiter,
           sessions,
           dummyPasswordHash,
+          audit,
         ),
     },
     {
@@ -143,9 +147,11 @@ const dummyPasswordHash =
     },
     {
       provide: LogoutUseCase,
-      inject: [RedisSessionStore],
-      useFactory: (sessions: RedisSessionStore): LogoutUseCase =>
-        new LogoutUseCase(sessions),
+      inject: [RedisSessionStore, AuthAuditLogger],
+      useFactory: (
+        sessions: RedisSessionStore,
+        audit: AuthAuditLogger,
+      ): LogoutUseCase => new LogoutUseCase(sessions, audit),
     },
     {
       provide: GetCsrfTokenQuery,
@@ -161,19 +167,33 @@ const dummyPasswordHash =
     },
     {
       provide: RevokeSessionUseCase,
-      inject: [RedisSessionStore],
-      useFactory: (sessions: RedisSessionStore): RevokeSessionUseCase =>
-        new RevokeSessionUseCase(sessions),
+      inject: [RedisSessionStore, AuthAuditLogger],
+      useFactory: (
+        sessions: RedisSessionStore,
+        audit: AuthAuditLogger,
+      ): RevokeSessionUseCase => new RevokeSessionUseCase(sessions, audit),
     },
     {
       provide: LogoutAllUseCase,
-      inject: [PrismaAuthRepository, TRANSACTION_PORT, RedisSessionStore],
+      inject: [
+        PrismaAuthRepository,
+        TRANSACTION_PORT,
+        RedisSessionStore,
+        AuthAuditLogger,
+      ],
       useFactory: (
         persistence: PrismaAuthRepository,
         transaction: TransactionPort,
         sessions: RedisSessionStore,
+        audit: AuthAuditLogger,
       ): LogoutAllUseCase =>
-        new LogoutAllUseCase(persistence, transaction, sessions),
+        new LogoutAllUseCase(
+          persistence,
+          transaction,
+          sessions,
+          undefined,
+          audit,
+        ),
     },
     {
       provide: ChangePasswordUseCase,
@@ -182,18 +202,22 @@ const dummyPasswordHash =
         Argon2PasswordHasher,
         TRANSACTION_PORT,
         RedisSessionStore,
+        AuthAuditLogger,
       ],
       useFactory: (
         persistence: PrismaAuthRepository,
         passwords: Argon2PasswordHasher,
         transaction: TransactionPort,
         sessions: RedisSessionStore,
+        audit: AuthAuditLogger,
       ): ChangePasswordUseCase =>
         new ChangePasswordUseCase(
           persistence,
           passwords,
           transaction,
           sessions,
+          undefined,
+          audit,
         ),
     },
     {

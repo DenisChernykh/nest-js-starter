@@ -12,6 +12,7 @@ import type {
 import type { PasswordHasherPort } from './password-hasher.port'
 import type { SessionStorePort } from './session-store.port'
 import type { TransactionPort } from '@/shared/application/transaction.port'
+import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
 
 /** Current/new password mutation fields bound to one authenticated identity. */
 export interface ChangePasswordInput {
@@ -29,6 +30,7 @@ export class ChangePasswordUseCase {
     private readonly transaction: TransactionPort,
     private readonly sessions: SessionStorePort,
     private readonly cleanupObserver?: AuthSessionCleanupObserver,
+    private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}
 
   public async execute(
@@ -57,13 +59,52 @@ export class ChangePasswordUseCase {
       })
       try {
         await this.sessions.revokeAll(input.userId)
+        this.audit.emit({
+          action: 'password_change',
+          outcome: 'success',
+          reasonCode: 'PASSWORD_CHANGED',
+          actorId: input.userId,
+          targetType: 'user',
+          targetId: input.userId,
+        })
         return { cleanupComplete: true }
       } catch {
         this.cleanupObserver?.cleanupIncomplete('change-password', input.userId)
+        this.audit.emit({
+          action: 'password_change',
+          outcome: 'partial',
+          reasonCode: 'CLEANUP_INCOMPLETE',
+          actorId: input.userId,
+          targetType: 'user',
+          targetId: input.userId,
+        })
         return { cleanupComplete: false }
       }
     } catch (error: unknown) {
-      if (error instanceof AuthError) throw error
+      if (error instanceof AuthError) {
+        this.audit.emit({
+          action: 'password_change',
+          outcome: error.code === 'AUTH_STATE_CONFLICT' ? 'conflict' : 'denied',
+          reasonCode:
+            error.code === 'AUTH_STATE_CONFLICT'
+              ? 'STATE_CONFLICT'
+              : error.code === 'AUTHENTICATION_FAILED'
+                ? 'INVALID_CURRENT_PASSWORD'
+                : 'DEPENDENCY_UNAVAILABLE',
+          actorId: input.userId,
+          targetType: 'user',
+          targetId: input.userId,
+        })
+        throw error
+      }
+      this.audit.emit({
+        action: 'password_change',
+        outcome: 'denied',
+        reasonCode: 'DEPENDENCY_UNAVAILABLE',
+        actorId: input.userId,
+        targetType: 'user',
+        targetId: input.userId,
+      })
       throw new AuthDependencyUnavailableError()
     }
   }

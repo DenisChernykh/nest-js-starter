@@ -50,11 +50,14 @@ describe('ChangePasswordUseCase', () => {
         return Promise.resolve(2)
       }),
     } as unknown as SessionStorePort
+    const audit = { emit: jest.fn(() => order.push('audit')) }
     const target = new ChangePasswordUseCase(
       persistence,
       passwords,
       transaction,
       sessions,
+      undefined,
+      audit,
     )
 
     await expect(
@@ -71,7 +74,15 @@ describe('ChangePasswordUseCase', () => {
       'replace',
       'generation',
       'cleanup',
+      'audit',
     ])
+    expect(audit.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'password_change',
+        outcome: 'success',
+        reasonCode: 'PASSWORD_CHANGED',
+      }),
+    )
   })
 
   it('returns durable success with incomplete cleanup after Redis failure', async () => {
@@ -100,11 +111,14 @@ describe('ChangePasswordUseCase', () => {
     const sessions = {
       revokeAll: jest.fn(() => Promise.reject(new Error('redis detail'))),
     } as unknown as SessionStorePort
+    const audit = { emit: jest.fn() }
     const target = new ChangePasswordUseCase(
       persistence,
       passwords,
       { run: (operation) => operation() },
       sessions,
+      undefined,
+      audit,
     )
 
     await expect(
@@ -115,6 +129,12 @@ describe('ChangePasswordUseCase', () => {
         newPassword: 'new',
       }),
     ).resolves.toEqual({ cleanupComplete: false })
+    expect(audit.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'partial',
+        reasonCode: 'CLEANUP_INCOMPLETE',
+      }),
+    )
   })
 
   it('rejects an incorrect current password before hashing or mutation', async () => {

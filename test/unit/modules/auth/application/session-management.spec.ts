@@ -113,20 +113,35 @@ describe('auth session management', () => {
     const observer = {
       cleanupIncomplete: jest.fn(() => order.push('event')),
     } satisfies AuthSessionCleanupObserver
+    const audit = { emit: jest.fn(() => order.push('audit')) }
     const target = new LogoutAllUseCase(
       persistence,
       transaction,
       sessions,
       observer,
+      audit,
     )
 
     await expect(target.execute('user')).resolves.toEqual({
       cleanupComplete: false,
     })
-    expect(order).toEqual(['transaction', 'generation', 'cleanup', 'event'])
+    expect(order).toEqual([
+      'transaction',
+      'generation',
+      'cleanup',
+      'event',
+      'audit',
+    ])
     expect(observer.cleanupIncomplete).toHaveBeenCalledWith(
       'logout-all',
       'user',
+    )
+    expect(audit.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'logout_all',
+        outcome: 'partial',
+        reasonCode: 'CLEANUP_INCOMPLETE',
+      }),
     )
   })
 
