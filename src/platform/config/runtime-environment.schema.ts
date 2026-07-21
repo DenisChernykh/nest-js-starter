@@ -77,7 +77,71 @@ function isPostgreSqlUrl(value: string): boolean {
   }
 }
 
+function normalizeRedisUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value.trim())
+    if (
+      !['redis:', 'rediss:'].includes(url.protocol) ||
+      url.hostname === '' ||
+      url.hash !== '' ||
+      url.search !== '' ||
+      ![
+        '',
+        '/',
+        ...Array.from({ length: 16 }, (_, index) => `/${index}`),
+      ].includes(url.pathname)
+    ) {
+      return undefined
+    }
+    return url.toString()
+  } catch {
+    return undefined
+  }
+}
+
+function decodeSecret(value: string): Uint8Array | undefined {
+  if (!/^[A-Za-z0-9_-]+$/u.test(value)) return undefined
+  const decoded = Buffer.from(value, 'base64url')
+  if (decoded.byteLength !== 32 || decoded.toString('base64url') !== value) {
+    return undefined
+  }
+  return new Uint8Array(decoded)
+}
+
+function byteArraysEqual(left: Uint8Array, right: Uint8Array): boolean {
+  return Buffer.from(left).equals(Buffer.from(right))
+}
+
+function sameStringSet(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length && left.every((value) => right.includes(value))
+  )
+}
+
+function usesLogicalRedisDatabase(value: string | undefined): boolean {
+  if (value === undefined) return false
+  const pathname = new URL(value).pathname
+  return pathname !== '' && pathname !== '/'
+}
+
 const positiveMilliseconds = Joi.number().integer().min(1).max(maximumTimeoutMs)
+const sessionMilliseconds = Joi.number().integer().min(1).max(7_776_000_000)
+const redisUrl = Joi.string()
+  .trim()
+  .custom(
+    (value: string, helpers) =>
+      normalizeRedisUrl(value) ?? helpers.error('any.invalid'),
+  )
+const secretBytes = Joi.string()
+  .trim()
+  .required()
+  .custom(
+    (value: string, helpers) =>
+      decodeSecret(value) ?? helpers.error('any.invalid'),
+  )
 
 /**
  * Validates and normalizes every environment key owned by the runtime slice.
@@ -135,8 +199,63 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     DATABASE_HEALTH_TIMEOUT_MS: positiveMilliseconds.default(2_000),
     DATABASE_TRANSACTION_MAX_WAIT_MS: positiveMilliseconds.default(5_000),
     DATABASE_TRANSACTION_TIMEOUT_MS: positiveMilliseconds.default(10_000),
+    REDIS_COORDINATION_URL: redisUrl.required(),
+    REDIS_CACHE_URL: redisUrl.empty('').optional(),
+    REDIS_CONNECT_TIMEOUT_MS: positiveMilliseconds.default(2_000),
+    REDIS_COMMAND_TIMEOUT_MS: positiveMilliseconds.default(2_000),
+    REDIS_HEALTH_TIMEOUT_MS: positiveMilliseconds.default(2_500),
+    REDIS_SHUTDOWN_TIMEOUT_MS: positiveMilliseconds.default(1_000),
+    REDIS_KEY_PREFIX: Joi.string()
+      .pattern(/^[a-z0-9](?:[a-z0-9-]{0,62})$/u)
+      .default('nest-js-starter'),
+    AUTH_SESSION_COOKIE_NAME: Joi.string().when('NODE_ENV', {
+      is: 'production',
+      then: Joi.valid('__Host-session').default('__Host-session'),
+      otherwise: Joi.string().trim().min(1).default('nest-js-starter-session'),
+    }),
+    AUTH_COOKIE_SECURE: Joi.boolean().when('NODE_ENV', {
+      is: 'production',
+      then: Joi.valid(true).default(true),
+      otherwise: Joi.boolean().default(false),
+    }),
+    AUTH_SESSION_IDLE_TIMEOUT_MS: sessionMilliseconds.default(604_800_000),
+    AUTH_SESSION_ABSOLUTE_TIMEOUT_MS:
+      sessionMilliseconds.default(2_592_000_000),
+    AUTH_SESSION_TOUCH_INTERVAL_MS: sessionMilliseconds.default(300_000),
+    AUTH_SESSION_KEY_SECRET: secretBytes,
+    AUTH_CSRF_SECRET: secretBytes,
+    AUTH_RATE_LIMIT_KEY_SECRET: secretBytes,
+    AUTH_NETWORK_METADATA_SECRET: secretBytes,
+    AUTH_CSRF_ORIGINS: Joi.any()
+      .custom((value: unknown, helpers) =>
+        typeof value === 'string'
+          ? (normalizeOriginList(value) ?? helpers.error('any.invalid'))
+          : helpers.error('any.invalid'),
+      )
+      .required(),
+    AUTH_LOGIN_IP_LIMIT: Joi.number().integer().min(1).max(10_000).default(20),
+    AUTH_LOGIN_ACCOUNT_LIMIT: Joi.number()
+      .integer()
+      .min(1)
+      .max(10_000)
+      .default(10),
+    AUTH_LOGIN_WINDOW_MS: positiveMilliseconds.default(900_000),
   },
 ).custom((value: ValidatedRuntimeEnvironment, helpers) => {
+  const authSecrets = [
+    value.AUTH_SESSION_KEY_SECRET,
+    value.AUTH_CSRF_SECRET,
+    value.AUTH_RATE_LIMIT_KEY_SECRET,
+    value.AUTH_NETWORK_METADATA_SECRET,
+  ]
+  const secretsAreDistinct = authSecrets.every((secret, index) =>
+    authSecrets
+      .slice(index + 1)
+      .every((otherSecret) => !byteArraysEqual(secret, otherSecret)),
+  )
+  const expectedCsrfOrigins = [
+    ...new Set([...value.CORS_ORIGINS, value.PUBLIC_API_URL]),
+  ]
   const failures =
     value.HTTP_HEADERS_TIMEOUT_MS > value.HTTP_REQUEST_TIMEOUT_MS ||
     value.HTTP_DRAIN_TIMEOUT_MS >= value.SHUTDOWN_GRACE_MS ||
@@ -144,10 +263,21 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     value.DATABASE_CONNECTION_TIMEOUT_MS > value.DATABASE_HEALTH_TIMEOUT_MS ||
     value.DATABASE_CONNECTION_TIMEOUT_MS >
       value.SHUTDOWN_GRACE_MS - value.HTTP_DRAIN_TIMEOUT_MS - 1_000 ||
+    value.REDIS_CONNECT_TIMEOUT_MS > value.REDIS_HEALTH_TIMEOUT_MS ||
+    value.REDIS_SHUTDOWN_TIMEOUT_MS >
+      value.SHUTDOWN_GRACE_MS - value.HTTP_DRAIN_TIMEOUT_MS ||
+    value.AUTH_SESSION_IDLE_TIMEOUT_MS >
+      value.AUTH_SESSION_ABSOLUTE_TIMEOUT_MS ||
+    value.AUTH_SESSION_TOUCH_INTERVAL_MS >=
+      value.AUTH_SESSION_IDLE_TIMEOUT_MS ||
+    !secretsAreDistinct ||
+    !sameStringSet(value.AUTH_CSRF_ORIGINS, expectedCsrfOrigins) ||
     (value.NODE_ENV === 'production' &&
       (!value.PUBLIC_API_URL.startsWith('https://') ||
         value.CORS_ORIGINS.some((origin) => !origin.startsWith('https://')) ||
-        value.TRUST_PROXY_CIDRS.length === 0))
+        value.TRUST_PROXY_CIDRS.length === 0 ||
+        usesLogicalRedisDatabase(value.REDIS_COORDINATION_URL) ||
+        usesLogicalRedisDatabase(value.REDIS_CACHE_URL)))
 
   return failures ? helpers.error('any.invalid') : value
 })
