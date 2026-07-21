@@ -3,6 +3,7 @@ import type { Server } from 'node:http'
 import { RequestMethod, ValidationPipe } from '@nestjs/common'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import type { Express } from 'express'
+import cookieParser from 'cookie-parser'
 import helmet from 'helmet'
 
 import type { RuntimeConfigService } from '@/platform/config/runtime-config.service'
@@ -29,6 +30,7 @@ export function configureHttpApplication(
   )
   app.use(createTrafficGateMiddleware(lifecycle))
   if (requestTracker !== undefined) app.use(requestTracker.middleware())
+  app.use(cookieParser())
   app.useBodyParser('json', { limit: config.http.jsonBodyLimitBytes })
   app.useBodyParser('urlencoded', {
     extended: false,

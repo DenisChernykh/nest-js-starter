@@ -4,19 +4,42 @@ import { validateRuntimeEnvironment } from '@/platform/config/runtime-environmen
 const databaseUrl =
   'postgresql://starter:local-password@localhost:5432/starter?schema=public'
 
-function productionEnvironment(): Record<string, unknown> {
+const secret = (byte: number): string =>
+  Buffer.alloc(32, byte).toString('base64url')
+
+function requiredEnvironment(): Record<string, unknown> {
   return {
     DATABASE_URL: databaseUrl,
+    REDIS_COORDINATION_URL:
+      'redis://default:local-redis-password@127.0.0.1:6379',
+    AUTH_SESSION_KEY_SECRET: secret(1),
+    AUTH_CSRF_SECRET: secret(2),
+    AUTH_RATE_LIMIT_KEY_SECRET: secret(3),
+    AUTH_NETWORK_METADATA_SECRET: secret(4),
+    AUTH_CSRF_ORIGINS: 'http://localhost:3000',
+  }
+}
+
+function validateEnvironment(
+  input: Record<string, unknown>,
+): ReturnType<typeof validateRuntimeEnvironment> {
+  return validateRuntimeEnvironment({ ...requiredEnvironment(), ...input })
+}
+
+function productionEnvironment(): Record<string, unknown> {
+  return {
+    ...requiredEnvironment(),
     NODE_ENV: 'production',
     PUBLIC_API_URL: 'https://api.example.com',
     CORS_ORIGINS: 'https://app.example.com',
+    AUTH_CSRF_ORIGINS: 'https://app.example.com,https://api.example.com',
     TRUST_PROXY_CIDRS: '10.0.0.0/8,2001:db8::/32',
   }
 }
 
 describe('validateRuntimeEnvironment', () => {
   it('applies the subject-neutral development defaults', () => {
-    const result = validateRuntimeEnvironment({ DATABASE_URL: databaseUrl })
+    const result = validateEnvironment({})
 
     expect(result).toEqual(
       expect.objectContaining({
@@ -27,19 +50,160 @@ describe('validateRuntimeEnvironment', () => {
         CORS_ORIGINS: ['http://localhost:3000'],
         TRUST_PROXY_CIDRS: [],
         DATABASE_URL: databaseUrl,
+        REDIS_COORDINATION_URL:
+          'redis://default:local-redis-password@127.0.0.1:6379',
+        AUTH_SESSION_COOKIE_NAME: 'nest-js-starter-session',
+        AUTH_COOKIE_SECURE: false,
       }),
     )
   })
 
   it('accepts an HTTPS production configuration with explicit proxies', () => {
-    expect(validateRuntimeEnvironment(productionEnvironment())).toEqual(
+    expect(validateEnvironment(productionEnvironment())).toEqual(
       expect.objectContaining({
         NODE_ENV: 'production',
         PUBLIC_API_URL: 'https://api.example.com',
         CORS_ORIGINS: ['https://app.example.com'],
         TRUST_PROXY_CIDRS: ['10.0.0.0/8', '2001:db8::/32'],
+        AUTH_SESSION_COOKIE_NAME: '__Host-session',
+        AUTH_COOKIE_SECURE: true,
       }),
     )
+  })
+
+  it('normalizes ACL Redis URLs and decodes independent auth secrets', () => {
+    const result = validateEnvironment({
+      REDIS_COORDINATION_URL:
+        'redis://coordination-user:coordination-password@redis.internal:6379',
+      REDIS_CACHE_URL: 'rediss://cache-user:cache-password@cache.internal:6380',
+    })
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        REDIS_COORDINATION_URL:
+          'redis://coordination-user:coordination-password@redis.internal:6379',
+        REDIS_CACHE_URL:
+          'rediss://cache-user:cache-password@cache.internal:6380',
+        REDIS_CONNECT_TIMEOUT_MS: 2_000,
+        REDIS_COMMAND_TIMEOUT_MS: 2_000,
+        REDIS_HEALTH_TIMEOUT_MS: 2_500,
+        REDIS_SHUTDOWN_TIMEOUT_MS: 1_000,
+        REDIS_KEY_PREFIX: 'nest-js-starter',
+        AUTH_SESSION_KEY_SECRET: new Uint8Array(Buffer.alloc(32, 1)),
+        AUTH_CSRF_SECRET: new Uint8Array(Buffer.alloc(32, 2)),
+        AUTH_RATE_LIMIT_KEY_SECRET: new Uint8Array(Buffer.alloc(32, 3)),
+        AUTH_NETWORK_METADATA_SECRET: new Uint8Array(Buffer.alloc(32, 4)),
+      }),
+    )
+  })
+
+  it('normalizes an empty optional cache URL to undefined', () => {
+    expect(validateEnvironment({ REDIS_CACHE_URL: '' }).REDIS_CACHE_URL).toBe(
+      undefined,
+    )
+  })
+
+  it.each([
+    ['missing coordination URL', { REDIS_COORDINATION_URL: undefined }],
+    ['HTTP coordination URL', { REDIS_COORDINATION_URL: 'http://redis:6379' }],
+    [
+      'coordination URL fragment',
+      { REDIS_COORDINATION_URL: 'redis://redis:6379#secret' },
+    ],
+  ])('rejects %s', (_name, input) => {
+    expect(() => validateEnvironment(input)).toThrow(RuntimeConfigurationError)
+  })
+
+  it('rejects Redis logical database numbers in production', () => {
+    expect(() =>
+      validateEnvironment({
+        ...productionEnvironment(),
+        REDIS_COORDINATION_URL:
+          'rediss://coordination-user:password@redis.internal:6380/1',
+      }),
+    ).toThrow(RuntimeConfigurationError)
+  })
+
+  it('requires four distinct 32-byte base64url auth secrets', () => {
+    expect(() =>
+      validateEnvironment({
+        AUTH_CSRF_SECRET: secret(1),
+      }),
+    ).toThrow(RuntimeConfigurationError)
+    expect(() =>
+      validateEnvironment({
+        AUTH_SESSION_KEY_SECRET: 'not-32-bytes',
+      }),
+    ).toThrow(RuntimeConfigurationError)
+  })
+
+  it('requires the CSRF origin set to equal CORS origins plus the API origin', () => {
+    expect(() =>
+      validateEnvironment({
+        PUBLIC_API_URL: 'http://api.local:3000',
+        CORS_ORIGINS: 'http://app.local:3001',
+        AUTH_CSRF_ORIGINS: 'http://app.local:3001',
+      }),
+    ).toThrow(RuntimeConfigurationError)
+    expect(() =>
+      validateEnvironment({
+        AUTH_CSRF_ORIGINS: 'http://localhost:3000,http://unexpected.local:3002',
+      }),
+    ).toThrow(RuntimeConfigurationError)
+  })
+
+  it.each([
+    ['non-host production cookie', { AUTH_SESSION_COOKIE_NAME: 'session' }],
+    ['insecure production cookie', { AUTH_COOKIE_SECURE: false }],
+    [
+      'idle timeout above absolute timeout',
+      {
+        AUTH_SESSION_IDLE_TIMEOUT_MS: 2_000,
+        AUTH_SESSION_ABSOLUTE_TIMEOUT_MS: 1_999,
+      },
+    ],
+    [
+      'touch interval at idle timeout',
+      {
+        AUTH_SESSION_TOUCH_INTERVAL_MS: 1_000,
+        AUTH_SESSION_IDLE_TIMEOUT_MS: 1_000,
+      },
+    ],
+    [
+      'Redis connect timeout above health timeout',
+      { REDIS_CONNECT_TIMEOUT_MS: 3_000, REDIS_HEALTH_TIMEOUT_MS: 2_999 },
+    ],
+    [
+      'Redis shutdown outside cleanup reserve',
+      {
+        HTTP_DRAIN_TIMEOUT_MS: 6_000,
+        SHUTDOWN_GRACE_MS: 10_000,
+        REDIS_SHUTDOWN_TIMEOUT_MS: 4_001,
+      },
+    ],
+  ])('rejects %s', (_name, input) => {
+    const environment = _name.includes('production')
+      ? { ...productionEnvironment(), ...input }
+      : input
+    expect(() => validateEnvironment(environment)).toThrow(
+      RuntimeConfigurationError,
+    )
+  })
+
+  it('never retains rejected Redis URLs or auth secrets in failures', () => {
+    const secretSentinel = 'DO_NOT_LEAK_AUTH_SECRET'
+
+    try {
+      validateEnvironment({
+        REDIS_COORDINATION_URL: `http://${secretSentinel}@redis.internal`,
+        AUTH_SESSION_KEY_SECRET: secretSentinel,
+      })
+      throw new Error('Expected validation to fail')
+    } catch (error: unknown) {
+      expect(String(error)).not.toContain(secretSentinel)
+      expect(JSON.stringify(error)).not.toContain(secretSentinel)
+      expect(error).toBeInstanceOf(RuntimeConfigurationError)
+    }
   })
 
   it.each([
@@ -61,9 +225,7 @@ describe('validateRuntimeEnvironment', () => {
       { DATABASE_URL: databaseUrl, HTTP_REQUEST_TIMEOUT_MS: 'Infinity' },
     ],
   ])('rejects %s', (_name, input) => {
-    expect(() => validateRuntimeEnvironment(input)).toThrow(
-      RuntimeConfigurationError,
-    )
+    expect(() => validateEnvironment(input)).toThrow(RuntimeConfigurationError)
   })
 
   it.each([
@@ -74,7 +236,7 @@ describe('validateRuntimeEnvironment', () => {
     'https://api.example.com#fragment',
   ])('rejects invalid public API origin %s', (publicApiUrl) => {
     expect(() =>
-      validateRuntimeEnvironment({
+      validateEnvironment({
         DATABASE_URL: databaseUrl,
         PUBLIC_API_URL: publicApiUrl,
       }),
@@ -83,7 +245,7 @@ describe('validateRuntimeEnvironment', () => {
 
   it('rejects HTTP public API origins in production', () => {
     expect(() =>
-      validateRuntimeEnvironment({
+      validateEnvironment({
         ...productionEnvironment(),
         PUBLIC_API_URL: 'http://api.example.com',
       }),
@@ -99,7 +261,7 @@ describe('validateRuntimeEnvironment', () => {
     'https://app.example.com,,https://admin.example.com',
   ])('rejects invalid CORS origin list %s', (corsOrigins) => {
     expect(() =>
-      validateRuntimeEnvironment({
+      validateEnvironment({
         DATABASE_URL: databaseUrl,
         CORS_ORIGINS: corsOrigins,
       }),
@@ -108,7 +270,7 @@ describe('validateRuntimeEnvironment', () => {
 
   it('rejects HTTP CORS origins in production', () => {
     expect(() =>
-      validateRuntimeEnvironment({
+      validateEnvironment({
         ...productionEnvironment(),
         CORS_ORIGINS: 'http://app.example.com',
       }),
@@ -116,10 +278,12 @@ describe('validateRuntimeEnvironment', () => {
   })
 
   it('normalizes origins and deduplicates CORS entries in input order', () => {
-    const result = validateRuntimeEnvironment({
+    const result = validateEnvironment({
       DATABASE_URL: databaseUrl,
       PUBLIC_API_URL: ' http://localhost:3000/ ',
       CORS_ORIGINS:
+        ' http://localhost:3000/, http://admin.local:3001/ ,http://localhost:3000 ',
+      AUTH_CSRF_ORIGINS:
         ' http://localhost:3000/, http://admin.local:3001/ ,http://localhost:3000 ',
     })
 
@@ -132,7 +296,7 @@ describe('validateRuntimeEnvironment', () => {
 
   it('allows an empty proxy allowlist outside production', () => {
     expect(
-      validateRuntimeEnvironment({
+      validateEnvironment({
         DATABASE_URL: databaseUrl,
         TRUST_PROXY_CIDRS: '  ',
       }).TRUST_PROXY_CIDRS,
@@ -141,7 +305,7 @@ describe('validateRuntimeEnvironment', () => {
 
   it('requires an explicit proxy allowlist in production', () => {
     expect(() =>
-      validateRuntimeEnvironment({
+      validateEnvironment({
         ...productionEnvironment(),
         TRUST_PROXY_CIDRS: '',
       }),
@@ -152,7 +316,7 @@ describe('validateRuntimeEnvironment', () => {
     'rejects invalid proxy address or CIDR %s',
     (trustedProxyCidrs) => {
       expect(() =>
-        validateRuntimeEnvironment({
+        validateEnvironment({
           DATABASE_URL: databaseUrl,
           TRUST_PROXY_CIDRS: trustedProxyCidrs,
         }),
@@ -162,7 +326,7 @@ describe('validateRuntimeEnvironment', () => {
 
   it('requires the headers timeout not to exceed request receive timeout', () => {
     expect(() =>
-      validateRuntimeEnvironment({
+      validateEnvironment({
         DATABASE_URL: databaseUrl,
         HTTP_REQUEST_TIMEOUT_MS: '1000',
         HTTP_HEADERS_TIMEOUT_MS: '1001',
@@ -175,7 +339,7 @@ describe('validateRuntimeEnvironment', () => {
     ['insufficient settle and cleanup reserve', '8001'],
   ])('rejects %s', (_name, drainTimeoutMs) => {
     expect(() =>
-      validateRuntimeEnvironment({
+      validateEnvironment({
         DATABASE_URL: databaseUrl,
         HTTP_DRAIN_TIMEOUT_MS: drainTimeoutMs,
         SHUTDOWN_GRACE_MS: '10000',
@@ -185,7 +349,7 @@ describe('validateRuntimeEnvironment', () => {
 
   it('requires the health deadline to include Pool connection timeout', () => {
     expect(() =>
-      validateRuntimeEnvironment({
+      validateEnvironment({
         DATABASE_URL: databaseUrl,
         DATABASE_CONNECTION_TIMEOUT_MS: '2000',
         DATABASE_HEALTH_TIMEOUT_MS: '1999',
@@ -195,7 +359,7 @@ describe('validateRuntimeEnvironment', () => {
 
   it('keeps Pool connection timeout inside the shutdown settle window', () => {
     expect(() =>
-      validateRuntimeEnvironment({
+      validateEnvironment({
         DATABASE_URL: databaseUrl,
         DATABASE_CONNECTION_TIMEOUT_MS: '3001',
         DATABASE_HEALTH_TIMEOUT_MS: '4000',
@@ -209,7 +373,7 @@ describe('validateRuntimeEnvironment', () => {
     const secretSentinel = 'DO_NOT_LEAK_DATABASE_SECRET'
 
     try {
-      validateRuntimeEnvironment({
+      validateEnvironment({
         DATABASE_URL: `mysql://root:${secretSentinel}@localhost/database`,
         API_PORT: secretSentinel,
       })
@@ -223,7 +387,7 @@ describe('validateRuntimeEnvironment', () => {
 
   it('ignores unrelated process environment keys', () => {
     expect(() =>
-      validateRuntimeEnvironment({
+      validateEnvironment({
         DATABASE_URL: databaseUrl,
         UNRELATED_OPERATING_SYSTEM_KEY: 'any-value',
       }),

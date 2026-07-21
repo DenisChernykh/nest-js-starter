@@ -9,6 +9,7 @@ import { PrismaTransactionContext } from '@/platform/database/prisma-transaction
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import { TransactionRollbackOnlyError } from '@/shared/application/transaction.port'
 import { startPostgresContainer } from '@test/integration/support/postgres-container'
+import { requiredRuntimeEnvironment } from '@test/support/required-runtime-environment'
 
 describe('Prisma transaction boundary', () => {
   let container: StartedPostgreSqlContainer
@@ -19,11 +20,13 @@ describe('Prisma transaction boundary', () => {
   beforeAll(async () => {
     container = await startPostgresContainer()
     process.env['DATABASE_URL'] = container.getConnectionUri()
-    const environment = validateRuntimeEnvironment({
-      DATABASE_URL: container.getConnectionUri(),
-      DATABASE_CONNECTION_TIMEOUT_MS: '2000',
-      DATABASE_HEALTH_TIMEOUT_MS: '2000',
-    })
+    const environment = validateRuntimeEnvironment(
+      requiredRuntimeEnvironment({
+        DATABASE_URL: container.getConnectionUri(),
+        DATABASE_CONNECTION_TIMEOUT_MS: '2000',
+        DATABASE_HEALTH_TIMEOUT_MS: '2000',
+      }),
+    )
     const config = new RuntimeConfigService(
       new ConfigService<ValidatedRuntimeEnvironment, true>(environment),
     )

@@ -2,8 +2,10 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 
 import type {
+  AuthRuntimeConfig,
   DatabaseRuntimeConfig,
   HttpRuntimeConfig,
+  RedisRuntimeConfig,
   RuntimeEnvironment,
   SafeRuntimeConfigSummary,
   ValidatedRuntimeEnvironment,
@@ -20,6 +22,8 @@ export class RuntimeConfigService {
   private readonly runtimeEnvironment: RuntimeEnvironment
   private readonly httpConfig: HttpRuntimeConfig
   private readonly databaseConfig: DatabaseRuntimeConfig
+  private readonly redisConfig: RedisRuntimeConfig
+  private readonly authConfig: AuthRuntimeConfig
   private readonly summary: SafeRuntimeConfigSummary
 
   public constructor(config: ConfigService<ValidatedRuntimeEnvironment, true>) {
@@ -74,6 +78,63 @@ export class RuntimeConfigService {
         { infer: true },
       ),
     })
+    const cacheUrl = config.get('REDIS_CACHE_URL', { infer: true })
+    this.redisConfig = Object.freeze({
+      coordinationUrl: config.getOrThrow('REDIS_COORDINATION_URL', {
+        infer: true,
+      }),
+      ...(cacheUrl === undefined ? {} : { cacheUrl }),
+      connectTimeoutMs: config.getOrThrow('REDIS_CONNECT_TIMEOUT_MS', {
+        infer: true,
+      }),
+      commandTimeoutMs: config.getOrThrow('REDIS_COMMAND_TIMEOUT_MS', {
+        infer: true,
+      }),
+      healthTimeoutMs: config.getOrThrow('REDIS_HEALTH_TIMEOUT_MS', {
+        infer: true,
+      }),
+      shutdownTimeoutMs: config.getOrThrow('REDIS_SHUTDOWN_TIMEOUT_MS', {
+        infer: true,
+      }),
+      keyPrefix: config.getOrThrow('REDIS_KEY_PREFIX', { infer: true }),
+    })
+    this.authConfig = Object.freeze({
+      sessionCookieName: config.getOrThrow('AUTH_SESSION_COOKIE_NAME', {
+        infer: true,
+      }),
+      secureCookie: config.getOrThrow('AUTH_COOKIE_SECURE', { infer: true }),
+      sessionIdleTimeoutMs: config.getOrThrow('AUTH_SESSION_IDLE_TIMEOUT_MS', {
+        infer: true,
+      }),
+      sessionAbsoluteTimeoutMs: config.getOrThrow(
+        'AUTH_SESSION_ABSOLUTE_TIMEOUT_MS',
+        { infer: true },
+      ),
+      sessionTouchIntervalMs: config.getOrThrow(
+        'AUTH_SESSION_TOUCH_INTERVAL_MS',
+        { infer: true },
+      ),
+      sessionKeySecret: new Uint8Array(
+        config.getOrThrow('AUTH_SESSION_KEY_SECRET', { infer: true }),
+      ),
+      csrfSecret: new Uint8Array(
+        config.getOrThrow('AUTH_CSRF_SECRET', { infer: true }),
+      ),
+      rateLimitKeySecret: new Uint8Array(
+        config.getOrThrow('AUTH_RATE_LIMIT_KEY_SECRET', { infer: true }),
+      ),
+      networkMetadataSecret: new Uint8Array(
+        config.getOrThrow('AUTH_NETWORK_METADATA_SECRET', { infer: true }),
+      ),
+      csrfOrigins: Object.freeze([
+        ...config.getOrThrow('AUTH_CSRF_ORIGINS', { infer: true }),
+      ]),
+      loginIpLimit: config.getOrThrow('AUTH_LOGIN_IP_LIMIT', { infer: true }),
+      loginAccountLimit: config.getOrThrow('AUTH_LOGIN_ACCOUNT_LIMIT', {
+        infer: true,
+      }),
+      loginWindowMs: config.getOrThrow('AUTH_LOGIN_WINDOW_MS', { infer: true }),
+    })
     this.summary = Object.freeze({
       environment: this.runtimeEnvironment,
       apiHost: this.httpConfig.host,
@@ -82,6 +143,9 @@ export class RuntimeConfigService {
       corsOriginCount: this.httpConfig.corsOrigins.length,
       trustedProxyCount: this.httpConfig.trustedProxyCidrs.length,
       databasePoolMax: this.databaseConfig.poolMax,
+      redisCoordinationConfigured: true,
+      redisCacheConfigured: this.redisConfig.cacheUrl !== undefined,
+      authCookieName: this.authConfig.sessionCookieName,
     })
   }
 
@@ -98,6 +162,24 @@ export class RuntimeConfigService {
   /** Returns immutable PostgreSQL settings, including its secret URL. */
   public get database(): DatabaseRuntimeConfig {
     return this.databaseConfig
+  }
+
+  /** Returns immutable Redis settings, including secret-bearing URLs. */
+  public get redis(): RedisRuntimeConfig {
+    return this.redisConfig
+  }
+
+  /** Returns immutable auth policy with defensive secret byte copies. */
+  public get auth(): AuthRuntimeConfig {
+    return Object.freeze({
+      ...this.authConfig,
+      sessionKeySecret: new Uint8Array(this.authConfig.sessionKeySecret),
+      csrfSecret: new Uint8Array(this.authConfig.csrfSecret),
+      rateLimitKeySecret: new Uint8Array(this.authConfig.rateLimitKeySecret),
+      networkMetadataSecret: new Uint8Array(
+        this.authConfig.networkMetadataSecret,
+      ),
+    })
   }
 
   /** Returns the immutable non-secret startup projection. */

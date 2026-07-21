@@ -1,0 +1,3 @@
+/** Digest-qualified Redis image shared by every real Redis test. */
+export const REDIS_IMAGE =
+  'redis:8.8.0-trixie@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b'

@@ -23,6 +23,10 @@ interface RuntimeHarness {
     readonly address: jest.Mock
   }
   readonly database: { readonly connect: jest.Mock; readonly close: jest.Mock }
+  readonly startupRegistry: {
+    readonly startAll: jest.Mock
+    readonly stopStarted: jest.Mock
+  }
   readonly lifecycle: {
     phase: 'starting' | 'ready' | 'draining'
     readonly markReady: jest.Mock
@@ -45,6 +49,10 @@ function harness(): RuntimeHarness {
     connect: jest.fn(() => connecting.promise),
     close: jest.fn(() => Promise.resolve()),
   }
+  const startupRegistry = {
+    startAll: jest.fn(() => connecting.promise),
+    stopStarted: jest.fn(() => Promise.resolve()),
+  }
   const application = {
     listen: jest.fn(() => Promise.resolve()),
     close: jest.fn(() => Promise.resolve()),
@@ -55,26 +63,28 @@ function harness(): RuntimeHarness {
     })),
   }
   const factory = jest.fn(() =>
-    Promise.resolve({ application, database, lifecycle }),
+    Promise.resolve({ application, database, startupRegistry, lifecycle }),
   )
   return {
     runtime: new ApiRuntime(factory),
     factory,
     application,
     database,
+    startupRegistry,
     lifecycle,
     connecting,
   }
 }
 
 describe('ApiRuntime', () => {
-  it('marks ready only after listener and database connection complete', async () => {
-    const { runtime, application, database, lifecycle, connecting } = harness()
+  it('marks ready only after listener and every startup participant complete', async () => {
+    const { runtime, application, startupRegistry, lifecycle, connecting } =
+      harness()
     const starting = runtime.start()
     await Promise.resolve()
     await Promise.resolve()
     expect(application.listen).toHaveBeenCalled()
-    expect(database.connect).toHaveBeenCalled()
+    expect(startupRegistry.startAll).toHaveBeenCalled()
     expect(lifecycle.markReady).not.toHaveBeenCalled()
     connecting.resolve()
     await expect(starting).resolves.toEqual({
@@ -100,28 +110,30 @@ describe('ApiRuntime', () => {
   })
 
   it('aborts deferred connect, prevents late ready and cleans partial handles', async () => {
-    const { runtime, application, database, lifecycle, connecting } = harness()
+    const { runtime, application, startupRegistry, lifecycle, connecting } =
+      harness()
     const starting = runtime.start()
     await Promise.resolve()
     await Promise.resolve()
     runtime.cancelStartup()
-    expect(database.connect).toHaveBeenCalledWith(
+    expect(startupRegistry.startAll).toHaveBeenCalledWith(
       expect.objectContaining({ aborted: true }),
     )
     connecting.resolve()
     await expect(starting).rejects.toThrow('API startup failed')
     expect(lifecycle.markReady).not.toHaveBeenCalled()
     expect(application.close).toHaveBeenCalledTimes(1)
-    expect(database.close).toHaveBeenCalledTimes(1)
+    expect(startupRegistry.stopStarted).toHaveBeenCalledTimes(1)
   })
 
   it('cleans partial handles when startup fails', async () => {
-    const { runtime, application, database, lifecycle, connecting } = harness()
+    const { runtime, application, startupRegistry, lifecycle, connecting } =
+      harness()
     const starting = runtime.start()
     connecting.reject(new Error('secret driver failure'))
     await expect(starting).rejects.toThrow('API startup failed')
     expect(lifecycle.markReady).not.toHaveBeenCalled()
     expect(application.close).toHaveBeenCalledTimes(1)
-    expect(database.close).toHaveBeenCalledTimes(1)
+    expect(startupRegistry.stopStarted).toHaveBeenCalledTimes(1)
   })
 })

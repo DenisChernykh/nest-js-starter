@@ -1,10 +1,12 @@
 import { createServer } from 'node:net'
 
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import type { StartedRedisContainer } from '@testcontainers/redis'
 
 import { GracefulShutdownCoordinator } from '@/bootstrap/api/graceful-shutdown'
 import { ApiRuntime } from '@/bootstrap/api/api-runtime'
 import { startPostgresContainer } from '@test/integration/support/postgres-container'
+import { startRedisContainer } from '@test/integration/support/redis-container'
 
 async function reserveShutdownPort(): Promise<number> {
   const server = createServer()
@@ -20,13 +22,21 @@ async function reserveShutdownPort(): Promise<number> {
 
 describe('graceful shutdown runtime', () => {
   let container: StartedPostgreSqlContainer
+  let redis: StartedRedisContainer
   let runtime: ApiRuntime
 
   afterAll(async () => {
     await runtime?.stop()
     await container?.stop()
+    await redis?.stop()
     for (const key of [
       'DATABASE_URL',
+      'REDIS_COORDINATION_URL',
+      'AUTH_SESSION_KEY_SECRET',
+      'AUTH_CSRF_SECRET',
+      'AUTH_RATE_LIMIT_KEY_SECRET',
+      'AUTH_NETWORK_METADATA_SECRET',
+      'AUTH_CSRF_ORIGINS',
       'API_HOST',
       'API_PORT',
       'PUBLIC_API_URL',
@@ -37,10 +47,25 @@ describe('graceful shutdown runtime', () => {
   })
 
   it('closes the database participant and stops accepting TCP', async () => {
-    container = await startPostgresContainer()
+    ;[container, redis] = await Promise.all([
+      startPostgresContainer(),
+      startRedisContainer(),
+    ])
     const port = await reserveShutdownPort()
     const baseUrl = `http://127.0.0.1:${port}`
     process.env['DATABASE_URL'] = container.getConnectionUri()
+    process.env['REDIS_COORDINATION_URL'] = redis.getConnectionUrl()
+    process.env['AUTH_SESSION_KEY_SECRET'] = Buffer.alloc(32, 1).toString(
+      'base64url',
+    )
+    process.env['AUTH_CSRF_SECRET'] = Buffer.alloc(32, 2).toString('base64url')
+    process.env['AUTH_RATE_LIMIT_KEY_SECRET'] = Buffer.alloc(32, 3).toString(
+      'base64url',
+    )
+    process.env['AUTH_NETWORK_METADATA_SECRET'] = Buffer.alloc(32, 4).toString(
+      'base64url',
+    )
+    process.env['AUTH_CSRF_ORIGINS'] = baseUrl
     process.env['API_HOST'] = '127.0.0.1'
     process.env['API_PORT'] = String(port)
     process.env['PUBLIC_API_URL'] = baseUrl

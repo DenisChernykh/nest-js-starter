@@ -34,12 +34,49 @@ export interface DatabaseRuntimeConfig {
 }
 
 /**
+ * Immutable Redis capability URLs and bounded lifecycle deadlines.
+ */
+export interface RedisRuntimeConfig {
+  readonly coordinationUrl: string
+  readonly cacheUrl?: string
+  readonly connectTimeoutMs: number
+  readonly commandTimeoutMs: number
+  readonly healthTimeoutMs: number
+  readonly shutdownTimeoutMs: number
+  readonly keyPrefix: string
+}
+
+/**
+ * Immutable browser-auth policy and owned cryptographic key material.
+ *
+ * @remarks Secret byte arrays returned by the config service are defensive
+ * copies. Mutating one caller's copy cannot alter later configuration reads.
+ */
+export interface AuthRuntimeConfig {
+  readonly sessionCookieName: string
+  readonly secureCookie: boolean
+  readonly sessionIdleTimeoutMs: number
+  readonly sessionAbsoluteTimeoutMs: number
+  readonly sessionTouchIntervalMs: number
+  readonly sessionKeySecret: Uint8Array
+  readonly csrfSecret: Uint8Array
+  readonly rateLimitKeySecret: Uint8Array
+  readonly networkMetadataSecret: Uint8Array
+  readonly csrfOrigins: readonly string[]
+  readonly loginIpLimit: number
+  readonly loginAccountLimit: number
+  readonly loginWindowMs: number
+}
+
+/**
  * Complete typed runtime configuration exposed to composition code.
  */
 export interface ApplicationRuntimeConfig {
   readonly environment: RuntimeEnvironment
   readonly http: HttpRuntimeConfig
   readonly database: DatabaseRuntimeConfig
+  readonly redis: RedisRuntimeConfig
+  readonly auth: AuthRuntimeConfig
 }
 
 /**
@@ -53,6 +90,9 @@ export interface SafeRuntimeConfigSummary {
   readonly corsOriginCount: number
   readonly trustedProxyCount: number
   readonly databasePoolMax: number
+  readonly redisCoordinationConfigured: boolean
+  readonly redisCacheConfigured: boolean
+  readonly authCookieName: string
 }
 
 /**
@@ -111,4 +151,24 @@ export interface ValidatedRuntimeEnvironment {
   readonly DATABASE_HEALTH_TIMEOUT_MS: number
   readonly DATABASE_TRANSACTION_MAX_WAIT_MS: number
   readonly DATABASE_TRANSACTION_TIMEOUT_MS: number
+  readonly REDIS_COORDINATION_URL: string
+  readonly REDIS_CACHE_URL?: string
+  readonly REDIS_CONNECT_TIMEOUT_MS: number
+  readonly REDIS_COMMAND_TIMEOUT_MS: number
+  readonly REDIS_HEALTH_TIMEOUT_MS: number
+  readonly REDIS_SHUTDOWN_TIMEOUT_MS: number
+  readonly REDIS_KEY_PREFIX: string
+  readonly AUTH_SESSION_COOKIE_NAME: string
+  readonly AUTH_COOKIE_SECURE: boolean
+  readonly AUTH_SESSION_IDLE_TIMEOUT_MS: number
+  readonly AUTH_SESSION_ABSOLUTE_TIMEOUT_MS: number
+  readonly AUTH_SESSION_TOUCH_INTERVAL_MS: number
+  readonly AUTH_SESSION_KEY_SECRET: Uint8Array
+  readonly AUTH_CSRF_SECRET: Uint8Array
+  readonly AUTH_RATE_LIMIT_KEY_SECRET: Uint8Array
+  readonly AUTH_NETWORK_METADATA_SECRET: Uint8Array
+  readonly AUTH_CSRF_ORIGINS: readonly string[]
+  readonly AUTH_LOGIN_IP_LIMIT: number
+  readonly AUTH_LOGIN_ACCOUNT_LIMIT: number
+  readonly AUTH_LOGIN_WINDOW_MS: number
 }

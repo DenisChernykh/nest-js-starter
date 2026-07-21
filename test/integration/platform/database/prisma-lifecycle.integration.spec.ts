@@ -10,6 +10,7 @@ import { PrismaDatabaseLifecycle } from '@/platform/database/prisma-database.lif
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import { PostgresReadinessProbe } from '@/platform/database/postgres-readiness.probe'
 import { startPostgresContainer } from '@test/integration/support/postgres-container'
+import { requiredRuntimeEnvironment } from '@test/support/required-runtime-environment'
 
 interface ProviderResources {
   readonly pool: Pool
@@ -45,12 +46,14 @@ describe('Prisma PostgreSQL lifecycle', () => {
   function createProvider(
     overrides: Record<string, unknown> = {},
   ): PrismaClientProvider {
-    const environment = validateRuntimeEnvironment({
-      DATABASE_URL: databaseUrl,
-      DATABASE_CONNECTION_TIMEOUT_MS: '2000',
-      DATABASE_HEALTH_TIMEOUT_MS: '2000',
-      ...overrides,
-    })
+    const environment = validateRuntimeEnvironment(
+      requiredRuntimeEnvironment({
+        DATABASE_URL: databaseUrl,
+        DATABASE_CONNECTION_TIMEOUT_MS: '2000',
+        DATABASE_HEALTH_TIMEOUT_MS: '2000',
+        ...overrides,
+      }),
+    )
     const config = new RuntimeConfigService(
       new ConfigService<ValidatedRuntimeEnvironment, true>(environment),
     )

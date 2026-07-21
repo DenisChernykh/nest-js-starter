@@ -13,6 +13,7 @@ import { configureHttpApplication } from '@/platform/http/bootstrap/configure-ht
 import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import { TestHttpModule } from '@test/e2e/fixtures/http/test-http.module'
+import { requiredRuntimeEnvironment } from '@test/support/required-runtime-environment'
 
 describe('hardened HTTP bootstrap', () => {
   let app: INestApplication
@@ -28,15 +29,18 @@ describe('hardened HTTP bootstrap', () => {
     const expressApp = moduleRef.createNestApplication<NestExpressApplication>({
       bodyParser: false,
     })
-    const environment = validateRuntimeEnvironment({
-      DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
-      CORS_ORIGINS: 'https://allowed.example',
-      TRUST_PROXY_CIDRS: '10.0.0.0/8',
-      HTTP_JSON_BODY_LIMIT_BYTES: '64',
-      HTTP_REQUEST_TIMEOUT_MS: '12345',
-      HTTP_HEADERS_TIMEOUT_MS: '10000',
-      HTTP_KEEP_ALIVE_TIMEOUT_MS: '5000',
-    })
+    const environment = validateRuntimeEnvironment(
+      requiredRuntimeEnvironment({
+        DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
+        CORS_ORIGINS: 'https://allowed.example',
+        AUTH_CSRF_ORIGINS: 'https://allowed.example,http://localhost:3000',
+        TRUST_PROXY_CIDRS: '10.0.0.0/8',
+        HTTP_JSON_BODY_LIMIT_BYTES: '64',
+        HTTP_REQUEST_TIMEOUT_MS: '12345',
+        HTTP_HEADERS_TIMEOUT_MS: '10000',
+        HTTP_KEEP_ALIVE_TIMEOUT_MS: '5000',
+      }),
+    )
     const config = new RuntimeConfigService(
       new ConfigService<ValidatedRuntimeEnvironment, true>(environment),
     )
@@ -62,10 +66,12 @@ describe('hardened HTTP bootstrap', () => {
       trustedModuleRef.createNestApplication<NestExpressApplication>({
         bodyParser: false,
       })
-    const trustedEnvironment = validateRuntimeEnvironment({
-      DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
-      TRUST_PROXY_CIDRS: '127.0.0.1/32,::1/128',
-    })
+    const trustedEnvironment = validateRuntimeEnvironment(
+      requiredRuntimeEnvironment({
+        DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
+        TRUST_PROXY_CIDRS: '127.0.0.1/32,::1/128',
+      }),
+    )
     const trustedConfig = new RuntimeConfigService(
       new ConfigService<ValidatedRuntimeEnvironment, true>(trustedEnvironment),
     )

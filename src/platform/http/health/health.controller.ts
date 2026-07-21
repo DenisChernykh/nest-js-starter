@@ -2,6 +2,7 @@ import { Controller, Get, Req, Res } from '@nestjs/common'
 import type { Request, Response } from 'express'
 
 import { SafeEndpoint } from '@/platform/http/policy/safe-endpoint.decorator'
+import { PublicEndpoint } from '@/platform/http/policy/public-endpoint.decorator'
 import { RequestOperationContext } from '@/platform/http/bootstrap/request-operation.context'
 
 import { HealthService } from './health.service'
@@ -14,6 +15,7 @@ import type {
 
 /** Serves stable health endpoints outside the application prefix. */
 @Controller('health')
+@PublicEndpoint()
 export class HealthController {
   public constructor(
     private readonly health: HealthService,

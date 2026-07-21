@@ -9,3 +9,51 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+model User {
+  id                String              @id @default(uuid()) @db.Uuid
+  email             String
+  normalizedEmail   String              @unique @map("normalized_email")
+  status            UserStatus          @default(ACTIVE)
+  sessionGeneration BigInt              @default(0) @map("session_generation")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  credential        PasswordCredential?
+  roles             UserRole[]
+
+  @@map("users")
+}
+
+model PasswordCredential {
+  userId       String   @id @map("user_id") @db.Uuid
+  passwordHash String   @map("password_hash")
+  version      Int      @default(0)
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_credentials")
+}
+
+model UserRole {
+  userId    String   @map("user_id") @db.Uuid
+  roleKey   String   @map("role_key")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleKey])
+  @@map("user_roles")
+}
+
+model AuthSecurityState {
+  id                        Int       @id
+  globalSessionEpoch        BigInt    @default(0) @map("global_session_epoch")
+  adminBootstrapCompletedAt DateTime? @map("admin_bootstrap_completed_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+
+  @@map("auth_security_state")
+}

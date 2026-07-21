@@ -16,6 +16,13 @@ import { configureHttpApplication } from '@/platform/http/bootstrap/configure-ht
 import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import { ShutdownRegistry } from '@/platform/lifecycle/shutdown-registry'
+import { StartupRegistry } from '@/platform/lifecycle/startup-registry'
+import type { RedisLifecycle } from '@/platform/redis/redis-lifecycle'
+import type { RedisReadinessIndicator } from '@/platform/redis/redis-readiness.indicator'
+import {
+  REDIS_LIFECYCLE,
+  REDIS_READINESS_INDICATOR,
+} from '@/platform/redis/redis.tokens'
 import type { ShutdownParticipant } from '@/platform/lifecycle/shutdown-participant'
 import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
 import { ActiveRequestTracker } from '@/platform/http/bootstrap/active-request-tracker'
@@ -42,6 +49,12 @@ export interface ApiLifecycleHandle {
   beginDrain(): boolean
 }
 
+/** Startup operations required by runtime orchestration without DI internals. */
+export interface ApiStartupHandle {
+  startAll(signal: AbortSignal): Promise<void>
+  stopStarted(signal: AbortSignal): Promise<void>
+}
+
 /** Resources created before the explicit database startup step. */
 export interface ApiRuntimeResources {
   readonly application: ApiApplicationHandle
@@ -50,6 +63,7 @@ export interface ApiRuntimeResources {
   readonly requestTracker?: ActiveRequestTracker
   readonly operationTracker?: ActiveOperationTracker
   readonly shutdownRegistry?: ShutdownRegistry
+  readonly startupRegistry?: ApiStartupHandle
   readonly httpDrainTimeoutMs?: number
   readonly shutdownGraceMs?: number
 }
@@ -67,8 +81,26 @@ export async function configureApi(): Promise<ApiRuntimeResources> {
   const requestTracker = app.get(ActiveRequestTracker)
   const operationTracker = app.get(ActiveOperationTracker)
   const shutdownRegistry = app.get(ShutdownRegistry)
+  const startupRegistry = app.get(StartupRegistry)
+  const redis = app.get<RedisLifecycle>(REDIS_LIFECYCLE)
+  const redisProbe = app.get<RedisReadinessIndicator>(REDIS_READINESS_INDICATOR)
   registry.register(probe)
+  registry.register(redisProbe)
   registry.seal()
+  startupRegistry.register({
+    name: 'database',
+    order: 100,
+    start: (signal) => database.connect(signal),
+    stop: (signal) => database.close(signal),
+  })
+  startupRegistry.register({
+    name: 'redis',
+    order: 200,
+    start: (signal) => redis.connect(signal),
+    stop: (signal) => redis.close(signal),
+  })
+  startupRegistry.seal()
+  shutdownRegistry.register(redis)
   shutdownRegistry.register(database as DatabaseLifecycle & ShutdownParticipant)
   shutdownRegistry.seal()
   configureHttpApplication(app, config, lifecycle, requestTracker)
@@ -80,6 +112,7 @@ export async function configureApi(): Promise<ApiRuntimeResources> {
     requestTracker,
     operationTracker,
     shutdownRegistry,
+    startupRegistry,
     httpDrainTimeoutMs: config.http.drainTimeoutMs,
     shutdownGraceMs: config.http.shutdownGraceMs,
     application: {
