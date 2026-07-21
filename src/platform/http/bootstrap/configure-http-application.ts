@@ -8,6 +8,8 @@ import helmet from 'helmet'
 
 import type { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import type { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
+import type { RequestContext } from '@/platform/http/context/request-context'
+import { createRequestContextMiddleware } from '@/platform/http/context/request-context.middleware'
 
 import { createCorsOptions } from './cors-options'
 import { createTrafficGateMiddleware } from './traffic-gate.middleware'
@@ -19,8 +21,10 @@ export function configureHttpApplication(
   app: NestExpressApplication,
   config: RuntimeConfigService,
   lifecycle: ApplicationLifecycleState,
+  requestContext: RequestContext,
   requestTracker?: ActiveRequestTracker,
 ): void {
+  app.use(createRequestContextMiddleware(requestContext))
   app.use(helmet())
   app.enableCors(createCorsOptions(config.http.corsOrigins))
   const expressApplication: Express = app.getHttpAdapter().getInstance()

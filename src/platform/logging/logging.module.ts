@@ -1,6 +1,8 @@
 import { Global, Module, type DynamicModule } from '@nestjs/common'
 
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
+import { CorrelationFieldsProvider } from '@/platform/http/context/correlation-fields.provider'
+import { RequestContext } from '@/platform/http/context/request-context'
 
 import { STRUCTURED_LOGGER } from './logging.contracts'
 import { NestLoggerAdapter } from './nest-logger.adapter'
@@ -15,16 +17,29 @@ export class LoggingModule {
     return {
       module: LoggingModule,
       providers: [
+        RequestContext,
+        CorrelationFieldsProvider,
         {
           provide: PinoLogSink,
-          inject: [RuntimeConfigService],
-          useFactory: (config: RuntimeConfigService): PinoLogSink =>
-            new PinoLogSink(config),
+          inject: [RuntimeConfigService, CorrelationFieldsProvider],
+          useFactory: (
+            config: RuntimeConfigService,
+            correlation: CorrelationFieldsProvider,
+          ): PinoLogSink =>
+            new PinoLogSink(config, {
+              correlationFields: () => correlation.getFields(),
+            }),
         },
         { provide: STRUCTURED_LOGGER, useExisting: PinoLogSink },
         NestLoggerAdapter,
       ],
-      exports: [STRUCTURED_LOGGER, PinoLogSink, NestLoggerAdapter],
+      exports: [
+        STRUCTURED_LOGGER,
+        PinoLogSink,
+        NestLoggerAdapter,
+        RequestContext,
+        CorrelationFieldsProvider,
+      ],
     }
   }
 }

@@ -9,6 +9,7 @@ import { RequestOperationInterceptor } from '@/platform/http/bootstrap/request-o
 import { LifecycleModule } from '@/platform/lifecycle/lifecycle.module'
 import { AuthModule } from '@/modules/auth/composition/auth.module'
 import { RedisModule } from '@/platform/redis/redis.module'
+import { LoggingModule } from '@/platform/logging/logging.module'
 
 /**
  * Определяет composition root API process без прямых driver imports.
@@ -26,6 +27,7 @@ export class ApiModule {
       module: ApiModule,
       imports: [
         RuntimeConfigModule.forRoot(config),
+        LoggingModule.forRoot(),
         DatabaseModule,
         RedisModule,
         LifecycleModule,

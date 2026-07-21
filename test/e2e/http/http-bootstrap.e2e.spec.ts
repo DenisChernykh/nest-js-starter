@@ -10,6 +10,7 @@ import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
 import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
+import { RequestContext } from '@/platform/http/context/request-context'
 import { TestHttpModule } from '@test/e2e/fixtures/http/test-http.module'
 import { requiredRuntimeEnvironment } from '@test/support/required-runtime-environment'
 
@@ -49,7 +50,12 @@ describe('hardened HTTP bootstrap', () => {
       check: () => Promise.resolve('up'),
     })
     registry.seal()
-    configureHttpApplication(expressApp, config, lifecycle)
+    configureHttpApplication(
+      expressApp,
+      config,
+      lifecycle,
+      new RequestContext(),
+    )
     await expressApp.init()
     await expressApp.listen(0, '127.0.0.1')
     app = expressApp
@@ -75,6 +81,7 @@ describe('hardened HTTP bootstrap', () => {
       trustedExpress,
       trustedConfig,
       trustedExpress.get(ApplicationLifecycleState),
+      new RequestContext(),
     )
     await trustedExpress.init()
     await trustedExpress.listen(0, '127.0.0.1')

@@ -28,6 +28,7 @@ import {
 import type { ShutdownParticipant } from '@/platform/lifecycle/shutdown-participant'
 import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
 import { ActiveRequestTracker } from '@/platform/http/bootstrap/active-request-tracker'
+import { RequestContext } from '@/platform/http/context/request-context'
 
 import { ApiModule } from './api.module'
 
@@ -90,6 +91,7 @@ export async function configureApi(
   const probe = app.get<DatabaseReadinessProbe>(DATABASE_READINESS_PROBE)
   const database = app.get<DatabaseLifecycle>(DATABASE_LIFECYCLE)
   const requestTracker = app.get(ActiveRequestTracker)
+  const requestContext = app.get(RequestContext)
   const operationTracker = app.get(ActiveOperationTracker)
   const shutdownRegistry = app.get(ShutdownRegistry)
   const startupRegistry = app.get(StartupRegistry)
@@ -114,7 +116,13 @@ export async function configureApi(
   shutdownRegistry.register(redis)
   shutdownRegistry.register(database as DatabaseLifecycle & ShutdownParticipant)
   shutdownRegistry.seal()
-  configureHttpApplication(app, config, lifecycle, requestTracker)
+  configureHttpApplication(
+    app,
+    config,
+    lifecycle,
+    requestContext,
+    requestTracker,
+  )
   await app.init()
 
   return {
