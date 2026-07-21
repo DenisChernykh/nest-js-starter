@@ -1,6 +1,7 @@
 import type { Server } from 'node:http'
 
 import type { INestApplication } from '@nestjs/common'
+import { HttpAdapterHost } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import request from 'supertest'
@@ -11,6 +12,7 @@ import { configureHttpApplication } from '@/platform/http/bootstrap/configure-ht
 import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import { RequestContext } from '@/platform/http/context/request-context'
+import { ProblemExceptionFilter } from '@/platform/http/errors/problem-exception.filter'
 import { TestHttpModule } from '@test/e2e/fixtures/http/test-http.module'
 import { requiredRuntimeEnvironment } from '@test/support/required-runtime-environment'
 
@@ -41,6 +43,14 @@ describe('hardened HTTP bootstrap', () => {
       }),
     )
     const config = new RuntimeConfigService(environment)
+    const requestContext = new RequestContext()
+    expressApp.useGlobalFilters(
+      new ProblemExceptionFilter(
+        expressApp.get(HttpAdapterHost),
+        requestContext,
+        { write: jest.fn() },
+      ),
+    )
     lifecycle = expressApp.get(ApplicationLifecycleState)
     const registry = expressApp.get(HealthRegistry)
     registry.register({
@@ -50,12 +60,7 @@ describe('hardened HTTP bootstrap', () => {
       check: () => Promise.resolve('up'),
     })
     registry.seal()
-    configureHttpApplication(
-      expressApp,
-      config,
-      lifecycle,
-      new RequestContext(),
-    )
+    configureHttpApplication(expressApp, config, lifecycle, requestContext)
     await expressApp.init()
     await expressApp.listen(0, '127.0.0.1')
     app = expressApp
@@ -114,12 +119,12 @@ describe('hardened HTTP bootstrap', () => {
     await request(server)
       .post('/v1/technical/echo')
       .send({ value: 'ok', extra: true })
-      .expect(400)
-    await request(server).post('/v1/technical/echo').send({}).expect(400)
+      .expect(422)
+    await request(server).post('/v1/technical/echo').send({}).expect(422)
     await request(server)
       .post('/v1/technical/echo')
       .send({ value: 42 })
-      .expect(400)
+      .expect(422)
     await request(server)
       .post('/v1/technical/echo')
       .send({ value: 'x'.repeat(100) })

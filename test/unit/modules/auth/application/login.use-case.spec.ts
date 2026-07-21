@@ -1,4 +1,5 @@
 import type { AuthPersistencePort } from '@/modules/auth/application/auth-persistence.port'
+import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
 import { LoginUseCase } from '@/modules/auth/application/login.use-case'
 import type { LoginRateLimiterPort } from '@/modules/auth/application/login-rate-limiter.port'
 import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
@@ -216,6 +217,67 @@ describe('LoginUseCase', () => {
     expect(target.telemetry.recordAuthOutcome).toHaveBeenCalledWith(
       'login',
       'rate_limited',
+    )
+  })
+
+  it('preserves a typed dependency failure and records its finite outcome', async () => {
+    const target = harness(undefined)
+    const dependencyError = new AuthDependencyUnavailableError()
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    jest.mocked(target.limiter.consume).mockRejectedValue(dependencyError)
+
+    await expect(
+      target.useCase.execute({
+        email: 'user@example.com',
+        password: 'password',
+        ipAddress: '192.0.2.1',
+        nowMs: 1_000,
+        deviceLabel: 'browser',
+        networkFingerprint: 'network',
+      }),
+    ).rejects.toBe(dependencyError)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(target.audit.emit).toHaveBeenCalledWith({
+      action: 'login',
+      outcome: 'denied',
+      reasonCode: 'DEPENDENCY_UNAVAILABLE',
+    })
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(target.telemetry.recordAuthOutcome).toHaveBeenCalledWith(
+      'login',
+      'dependency_error',
+    )
+  })
+
+  it('normalizes an unknown dependency failure without retaining its detail', async () => {
+    const target = harness(undefined)
+    jest
+      .mocked(target.limiter)
+      .consume.mockRejectedValue(new Error('private redis detail'))
+
+    await expect(
+      target.useCase.execute({
+        email: 'user@example.com',
+        password: 'password',
+        ipAddress: '192.0.2.1',
+        nowMs: 1_000,
+        deviceLabel: 'browser',
+        networkFingerprint: 'network',
+      }),
+    ).rejects.toMatchObject({
+      code: 'AUTH_DEPENDENCY_UNAVAILABLE',
+      message: 'Authentication dependency unavailable',
+    })
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(target.audit.emit).toHaveBeenCalledWith({
+      action: 'login',
+      outcome: 'denied',
+      reasonCode: 'DEPENDENCY_UNAVAILABLE',
+    })
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(target.telemetry.recordAuthOutcome).toHaveBeenCalledWith(
+      'login',
+      'dependency_error',
     )
   })
 
