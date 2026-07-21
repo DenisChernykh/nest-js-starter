@@ -71,6 +71,22 @@ export class AuthenticationRequiredError extends AuthError {
   }
 }
 
+/** Authenticated principal lacks one or more endpoint permissions. */
+export class AuthorizationDeniedError extends AuthError {
+  public constructor() {
+    super('AUTHORIZATION_DENIED', 'Authorization denied')
+    this.name = 'AuthorizationDeniedError'
+  }
+}
+
+/** Browser request failed the origin, content-type or session CSRF policy. */
+export class AuthCsrfRejectedError extends AuthError {
+  public constructor() {
+    super('AUTH_CSRF_REJECTED', 'Request rejected')
+    this.name = 'AuthCsrfRejectedError'
+  }
+}
+
 /** Stable optimistic-concurrency conflict for credential state. */
 export class AuthStateConflictError extends AuthError {
   public constructor() {
