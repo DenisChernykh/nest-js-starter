@@ -1,0 +1,169 @@
+import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+import ts from 'typescript'
+
+const EXPECTED_NATIVE_ALIAS = 'npm:typescript@7.0.2'
+const EXPECTED_COMPATIBILITY_ALIAS = 'npm:@typescript/typescript6@6.0.2'
+const STABLE_VERSION = /^\d+\.\d+\.\d+$/u
+const STABLE_ALIAS = /^npm:(?:@[^/]+\/)?[^@]+@\d+\.\d+\.\d+$/u
+const COMPATIBILITY_VERSION = /^6\.0\.\d+$/u
+
+/**
+ * Minimal root manifest fields inspected by the toolchain gate.
+ */
+export interface TypeScriptBridgeManifest {
+  readonly dependencies?: Readonly<Record<string, string>>
+  readonly devDependencies?: Readonly<Record<string, string>>
+}
+
+/**
+ * Version evidence produced by the two local compiler binaries and imported API.
+ */
+export interface TypeScriptBridgeEvidence {
+  readonly compatibilityApiVersion: string
+  readonly compatibilityCliVersion: string
+  readonly nativeCliVersion: string
+}
+
+function fail(details: readonly string[]): never {
+  throw new Error(`Invalid TypeScript toolchain bridge: ${details.join('; ')}`)
+}
+
+function normalizeCliVersion(output: string): string {
+  return output.trim().replace(/^Version\s+/u, '')
+}
+
+/**
+ * Verifies exact stable version specs for every direct dependency.
+ *
+ * @param manifest - Package manifest dependency sections to inspect.
+ * @throws Error when a direct dependency uses a range, tag, URL or prerelease.
+ */
+export function assertExactStableDirectDependencies(
+  manifest: TypeScriptBridgeManifest,
+): void {
+  const invalidSpecs = [
+    ...Object.entries(manifest.dependencies ?? {}),
+    ...Object.entries(manifest.devDependencies ?? {}),
+  ].filter(([, spec]) => !STABLE_VERSION.test(spec) && !STABLE_ALIAS.test(spec))
+
+  if (invalidSpecs.length > 0) {
+    throw new Error(
+      `Direct dependencies must use exact stable versions: ${invalidSpecs
+        .map(([name, spec]) => `${name}=${spec}`)
+        .join(', ')}`,
+    )
+  }
+}
+
+/**
+ * Verifies the native production compiler and compatibility API wiring.
+ *
+ * @param manifest - Manifest containing the two reviewed npm aliases.
+ * @param evidence - Normalized or raw CLI/API version evidence.
+ * @throws Error when aliases are missing/swapped or versions diverge.
+ */
+export function assertTypeScriptBridge(
+  manifest: TypeScriptBridgeManifest,
+  evidence: TypeScriptBridgeEvidence,
+): void {
+  const nativeAlias = manifest.devDependencies?.['@typescript/native']
+  const compatibilityAlias = manifest.devDependencies?.typescript
+  const nativeVersion = normalizeCliVersion(evidence.nativeCliVersion)
+  const compatibilityCliVersion = normalizeCliVersion(
+    evidence.compatibilityCliVersion,
+  )
+  const compatibilityApiVersion = normalizeCliVersion(
+    evidence.compatibilityApiVersion,
+  )
+  const failures: string[] = []
+
+  if (nativeAlias !== EXPECTED_NATIVE_ALIAS) {
+    failures.push(`@typescript/native must equal ${EXPECTED_NATIVE_ALIAS}`)
+  }
+  if (compatibilityAlias !== EXPECTED_COMPATIBILITY_ALIAS) {
+    failures.push(`typescript must equal ${EXPECTED_COMPATIBILITY_ALIAS}`)
+  }
+  if (nativeVersion !== '7.0.2') {
+    failures.push('native tsc must be 7.0.2')
+  }
+  if (!COMPATIBILITY_VERSION.test(compatibilityCliVersion)) {
+    failures.push('tsc6 must resolve a 6.0.x version')
+  }
+  if (compatibilityApiVersion !== compatibilityCliVersion) {
+    failures.push('imported TypeScript API must match tsc6')
+  }
+
+  if (failures.length > 0) {
+    fail(failures)
+  }
+}
+
+function readJson(path: string): unknown {
+  return JSON.parse(readFileSync(path, 'utf8')) as unknown
+}
+
+function isManifest(value: unknown): value is TypeScriptBridgeManifest {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function readPackageVersion(path: string): string {
+  const value = readJson(path)
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    !('version' in value) ||
+    typeof value.version !== 'string'
+  ) {
+    throw new Error(`Package metadata has no version: ${path}`)
+  }
+  return value.version
+}
+
+function runVersion(binaryPath: string): string {
+  return execFileSync(binaryPath, ['--version'], {
+    encoding: 'utf8',
+    shell: false,
+  })
+}
+
+function main(): void {
+  const projectRoot = process.cwd()
+  const manifestValue = readJson(join(projectRoot, 'package.json'))
+  if (!isManifest(manifestValue)) {
+    throw new Error('Root package manifest must be an object')
+  }
+
+  const nativePackageVersion = readPackageVersion(
+    join(projectRoot, 'node_modules/@typescript/native/package.json'),
+  )
+  const evidence = {
+    compatibilityApiVersion: ts.version,
+    compatibilityCliVersion: runVersion(
+      join(projectRoot, 'node_modules/.bin/tsc6'),
+    ),
+    nativeCliVersion: runVersion(join(projectRoot, 'node_modules/.bin/tsc')),
+  }
+
+  assertExactStableDirectDependencies(manifestValue)
+  assertTypeScriptBridge(manifestValue, evidence)
+  if (nativePackageVersion !== '7.0.2') {
+    fail(['@typescript/native package metadata must be 7.0.2'])
+  }
+
+  process.stdout.write(
+    `TypeScript native=${normalizeCliVersion(evidence.nativeCliVersion)} compatibility-cli=${normalizeCliVersion(evidence.compatibilityCliVersion)} compatibility-api=${evidence.compatibilityApiVersion}\n`,
+  )
+}
+
+if (require.main === module) {
+  try {
+    main()
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    process.stderr.write(`${message}\n`)
+    process.exitCode = 1
+  }
+}

@@ -1,29 +1,29 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "declaration": true,
     "emitDecoratorMetadata": true,
     "esModuleInterop": true,
     "exactOptionalPropertyTypes": true,
     "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
-    "lib": ["ES2023"],
-    "module": "commonjs",
-    "moduleResolution": "node",
+    "lib": ["ES2024"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,
     "noUncheckedIndexedAccess": true,
+    "noUncheckedSideEffectImports": true,
     "paths": {
-      "@/*": ["src/*"],
-      "@scripts/*": ["scripts/*"],
-      "@test/*": ["test/*"]
+      "@/*": ["./src/*"],
+      "@scripts/*": ["./scripts/*"],
+      "@test/*": ["./test/*"]
     },
     "removeComments": true,
     "skipLibCheck": true,
     "sourceMap": true,
     "strict": true,
-    "target": "ES2023",
+    "target": "ES2024",
     "useUnknownInCatchVariables": true
   }
 }
