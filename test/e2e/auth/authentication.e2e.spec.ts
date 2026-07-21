@@ -9,6 +9,7 @@ import {
 describe('browser authentication contract', () => {
   let development: AuthTestHarness
   let production: AuthTestHarness
+  const requestId = '019219c3-dc52-7cc1-9e70-f293ca14c198'
 
   beforeAll(async () => {
     ;[development, production] = await Promise.all([
@@ -54,16 +55,33 @@ describe('browser authentication contract', () => {
     expect(cookie).not.toContain('Domain=')
   })
 
-  it('rejects unknown DTO fields', async () => {
-    await request(development.server)
+  it('rejects unknown DTO fields with value-free validation problems', async () => {
+    const response = await request(development.server)
       .post('/v1/auth/login')
       .set('Origin', 'https://app.example.com')
+      .set('X-Request-ID', requestId)
       .send({
         email: 'user@example.com',
         password: 'correct password',
         admin: true,
       })
-      .expect(400)
+      .expect(422)
+    expect(response.body).toMatchObject({
+      status: 422,
+      code: 'VALIDATION_FAILED',
+      requestId,
+      instance: `urn:request:${requestId}`,
+      errors: [
+        {
+          pointer: '/admin',
+          code: 'unknown_field',
+          detail: 'Field is not allowed.',
+        },
+      ],
+    })
+    expect(response.headers['content-type']).toMatch(
+      /^application\/problem\+json/u,
+    )
   })
 
   it('returns the same generic failure body for unknown and wrong credentials', async () => {
@@ -73,6 +91,7 @@ describe('browser authentication contract', () => {
     const unknown = await request(development.server)
       .post('/v1/auth/login')
       .set('Origin', 'https://app.example.com')
+      .set('X-Request-ID', requestId)
       .send({ email: 'missing@example.com', password: 'wrong password' })
       .expect(401)
     development.doubles.login.execute.mockRejectedValueOnce(
@@ -81,12 +100,21 @@ describe('browser authentication contract', () => {
     const wrong = await request(development.server)
       .post('/v1/auth/login')
       .set('Origin', 'https://app.example.com')
+      .set('X-Request-ID', requestId)
       .send({ email: 'user@example.com', password: 'wrong password' })
       .expect(401)
     expect(unknown.body).toEqual(wrong.body)
     expect(unknown.body).toEqual({
-      code: 'AUTHENTICATION_FAILED',
-      detail: 'Authentication failed',
+      type: 'https://nest-js-starter.invalid/problems/authentication-required',
+      title: 'Authentication required',
+      status: 401,
+      detail: 'Valid authentication is required for this request.',
+      instance: `urn:request:${requestId}`,
+      code: 'AUTHENTICATION_REQUIRED',
+      requestId,
     })
+    expect(unknown.headers['content-type']).toMatch(
+      /^application\/problem\+json/u,
+    )
   })
 })

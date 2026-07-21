@@ -8,6 +8,7 @@ import {
 describe('browser CSRF contract', () => {
   let harness: AuthTestHarness
   let cookie: string
+  const requestId = '019219c3-dc52-7cc1-9e70-f293ca14c198'
 
   beforeAll(async () => {
     harness = await createAuthTestHarness()
@@ -24,19 +25,35 @@ describe('browser CSRF contract', () => {
   })
 
   it('rejects missing and wrong CSRF values on unsafe authenticated requests', async () => {
-    await request(harness.server)
+    const missing = await request(harness.server)
       .post('/v1/auth/logout')
       .set('Cookie', cookie)
       .set('Origin', 'https://app.example.com')
       .set('Content-Type', 'application/json')
-      .expect(403, { code: 'AUTH_CSRF_REJECTED', detail: 'Request rejected' })
-    await request(harness.server)
+      .set('X-Request-ID', requestId)
+      .expect(403)
+    const wrong = await request(harness.server)
       .post('/v1/auth/logout')
       .set('Cookie', cookie)
       .set('Origin', 'https://app.example.com')
       .set('Content-Type', 'application/json')
       .set('X-CSRF-Token', 'wrong')
-      .expect(403, { code: 'AUTH_CSRF_REJECTED', detail: 'Request rejected' })
+      .set('X-Request-ID', requestId)
+      .expect(403)
+    const problem = {
+      type: 'https://nest-js-starter.invalid/problems/authorization-denied',
+      title: 'Authorization denied',
+      status: 403,
+      detail: 'The authenticated principal cannot perform this request.',
+      instance: `urn:request:${requestId}`,
+      code: 'AUTHORIZATION_DENIED',
+      requestId,
+    }
+    expect(missing.body).toEqual(problem)
+    expect(wrong.body).toEqual(problem)
+    expect(missing.headers['content-type']).toMatch(
+      /^application\/problem\+json/u,
+    )
   })
 
   it('does not exempt login from exact origin and JSON policy', async () => {

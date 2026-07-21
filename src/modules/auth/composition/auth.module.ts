@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common'
-import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core'
+import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core'
 
 import { AuthenticateSessionUseCase } from '../application/authenticate-session.use-case'
 import { ChangePasswordUseCase } from '../application/change-password.use-case'
@@ -20,7 +20,6 @@ import { PrismaAuthRepository } from '../infrastructure/prisma-auth.repository'
 import { RedisLoginRateLimiter } from '../infrastructure/redis-login-rate-limiter'
 import { RedisSessionStore } from '../infrastructure/redis-session.store'
 import { AuthCookieAdapter } from '../presentation/auth-cookie.adapter'
-import { AuthHttpErrorMapper } from '../presentation/auth-http-error.mapper'
 import {
   AUTH_LOGIN_METADATA_FACTORY,
   AuthController,
@@ -43,13 +42,14 @@ import {
   TRANSACTION_PORT,
   type TransactionPort,
 } from '@/shared/application/transaction.port'
+import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
 
 const dummyPasswordHash =
   '$argon2id$v=19$m=19456,p=1,t=2$AQEBAQEBAQEBAQEBAQEBAQ$89iZHLNRbRP/PDabySsV1BxlW1VfqedCPSqmvYANw2U'
 
 /** Composes durable identity, Redis sessions and ordered browser policy. */
 @Module({
-  imports: [RuntimeConfigModule, DatabaseModule, RedisModule],
+  imports: [RuntimeConfigModule, DatabaseModule, RedisModule, HttpErrorsModule],
   controllers: [AuthController],
   providers: [
     AuthRequestContext,
@@ -262,13 +262,11 @@ const dummyPasswordHash =
     },
     PermissionGuard,
     AuthRequestInterceptor,
-    AuthHttpErrorMapper,
     { provide: APP_GUARD, useExisting: AuthenticationGuard },
     { provide: APP_GUARD, useExisting: BrowserOriginGuard },
     { provide: APP_GUARD, useExisting: SessionCsrfGuard },
     { provide: APP_GUARD, useExisting: PermissionGuard },
     { provide: APP_INTERCEPTOR, useExisting: AuthRequestInterceptor },
-    { provide: APP_FILTER, useExisting: AuthHttpErrorMapper },
   ],
   exports: [PrismaAuthRepository, Argon2PasswordHasher],
 })
