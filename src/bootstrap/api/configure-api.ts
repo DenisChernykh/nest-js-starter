@@ -96,7 +96,9 @@ export async function configureApi(): Promise<ApiRuntimeResources> {
             (error as NodeJS.ErrnoException).code !== 'ERR_SERVER_NOT_RUNNING'
           ) {
             return Promise.reject(
-              error instanceof Error ? error : new Error('Listener close failed'),
+              error instanceof Error
+                ? error
+                : new Error('Listener close failed'),
             )
           }
         }

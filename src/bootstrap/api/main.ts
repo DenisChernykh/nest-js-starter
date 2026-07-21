@@ -6,8 +6,16 @@ import { installProcessSignalHandlers } from './process-signals'
 export async function main(): Promise<void> {
   const runtime = new ApiRuntime()
   const coordinator = new GracefulShutdownCoordinator(runtime)
-  installProcessSignalHandlers(coordinator, 10_000)
-  await runtime.start()
+  const uninstallSignalHandlers = installProcessSignalHandlers(
+    coordinator,
+    10_000,
+  )
+  try {
+    await runtime.start()
+  } catch (error: unknown) {
+    uninstallSignalHandlers()
+    throw error
+  }
 }
 
 void main().catch(() => {

@@ -51,6 +51,7 @@ describe('hardened HTTP bootstrap', () => {
     registry.seal()
     configureHttpApplication(expressApp, config, lifecycle)
     await expressApp.init()
+    await expressApp.listen(0, '127.0.0.1')
     app = expressApp
     server = app.getHttpServer() as Server
 
@@ -76,6 +77,7 @@ describe('hardened HTTP bootstrap', () => {
       trustedExpress.get(ApplicationLifecycleState),
     )
     await trustedExpress.init()
+    await trustedExpress.listen(0, '127.0.0.1')
     trustedApp = trustedExpress
     trustedServer = trustedApp.getHttpServer() as Server
   })

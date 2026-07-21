@@ -1,0 +1,51 @@
+import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+
+import {
+  clearTestRuntimeEnvironment,
+  startTestRuntime,
+} from '@test/e2e/support/create-test-runtime'
+import {
+  assertPostgresSignalSupport,
+  resumePostgres,
+  suspendPostgres,
+} from '@test/integration/support/postgres-outage'
+import { startPostgresContainer } from '@test/integration/support/postgres-container'
+import { waitForCondition } from '@test/integration/support/wait-for-condition'
+
+describe('PostgreSQL outage readiness', () => {
+  let container: StartedPostgreSqlContainer
+  let suspended = false
+
+  it('transitions ready green to red to green while startup stays latched', async () => {
+    container = await startPostgresContainer()
+    const { runtime, baseUrl } = await startTestRuntime(container, {
+      DATABASE_HEALTH_TIMEOUT_MS: '250',
+      DATABASE_CONNECTION_TIMEOUT_MS: '250',
+    })
+    try {
+      await assertPostgresSignalSupport(container)
+      expect((await fetch(`${baseUrl}/health/live`)).status).toBe(200)
+      expect((await fetch(`${baseUrl}/health/startup`)).status).toBe(200)
+      expect((await fetch(`${baseUrl}/health/ready`)).status).toBe(200)
+      await suspendPostgres(container)
+      suspended = true
+      await waitForCondition(
+        async () => (await fetch(`${baseUrl}/health/ready`)).status === 503,
+        2_000,
+      )
+      expect((await fetch(`${baseUrl}/health/live`)).status).toBe(200)
+      expect((await fetch(`${baseUrl}/health/startup`)).status).toBe(200)
+      await resumePostgres(container)
+      suspended = false
+      await waitForCondition(
+        async () => (await fetch(`${baseUrl}/health/ready`)).status === 200,
+        3_000,
+      )
+    } finally {
+      if (suspended) await resumePostgres(container)
+      await runtime.stop()
+      await container.stop()
+      clearTestRuntimeEnvironment()
+    }
+  })
+})
