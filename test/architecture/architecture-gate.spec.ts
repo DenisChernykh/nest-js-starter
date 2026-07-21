@@ -1,6 +1,9 @@
 import { join } from 'node:path'
 
-import { findModuleImportViolations } from '@scripts/architecture/module-import-policy'
+import {
+  findModuleImportViolations,
+  findRuntimeConfigAccessViolations,
+} from '@scripts/architecture/module-import-policy'
 import { runArchitectureCommand } from '@test/architecture/architecture-command'
 
 const fixturesRoot = join('test', 'architecture', 'fixtures')
@@ -148,5 +151,32 @@ describe('cross-module import policy', () => {
         specifier: '<non-application-statement>',
       },
     ])
+  })
+})
+
+describe('runtime configuration ownership policy', () => {
+  it.each([
+    ['runtime-config-access-direct', 'raw-config-service-import'],
+    ['runtime-config-access-computed', 'process-environment-access'],
+    ['runtime-config-access-destructured', 'process-environment-access'],
+    ['runtime-config-access-aliased', 'process-environment-access'],
+  ])('rejects %s with reason %s', async (fixtureName, reason) => {
+    const violations = await findRuntimeConfigAccessViolations(
+      join(process.cwd(), fixturesRoot, fixtureName),
+    )
+
+    expect(violations).toEqual([
+      expect.objectContaining({
+        reason,
+      }),
+    ])
+  })
+
+  it('allows raw environment ownership inside platform config', async () => {
+    const violations = await findRuntimeConfigAccessViolations(
+      join(process.cwd(), fixturesRoot, 'runtime-config-access-valid'),
+    )
+
+    expect(violations).toEqual([])
   })
 })

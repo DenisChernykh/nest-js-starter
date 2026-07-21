@@ -1,10 +1,17 @@
 import { resolve } from 'node:path'
 
-import { findModuleImportViolations } from './module-import-policy'
+import {
+  findModuleImportViolations,
+  findRuntimeConfigAccessViolations,
+} from './module-import-policy'
 
 async function main(): Promise<void> {
   const sourceRoot = resolve(process.argv[2] ?? 'src')
-  const violations = await findModuleImportViolations(sourceRoot)
+  const [moduleViolations, runtimeConfigViolations] = await Promise.all([
+    findModuleImportViolations(sourceRoot),
+    findRuntimeConfigAccessViolations(sourceRoot),
+  ])
+  const violations = [...moduleViolations, ...runtimeConfigViolations]
 
   if (violations.length > 0) {
     for (const violation of violations) {

@@ -76,6 +76,33 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/**/*.ts'],
+    ignores: ['src/platform/config/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "ImportDeclaration[source.value='@nestjs/config'] ImportSpecifier[imported.name='ConfigService']",
+          message:
+            'Runtime code must use RuntimeConfigService instead of raw ConfigService.',
+        },
+        {
+          selector:
+            "MemberExpression[object.name='process'][computed=false][property.name='env']",
+          message:
+            'Runtime environment access is owned by src/platform/config.',
+        },
+        {
+          selector:
+            "MemberExpression[object.name='process'][computed=true][property.value='env']",
+          message:
+            'Runtime environment access is owned by src/platform/config.',
+        },
+      ],
+    },
+  },
+  {
     files: ['test/**/*.ts'],
     rules: {
       'jsdoc/require-jsdoc': 'off',
