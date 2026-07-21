@@ -14,3 +14,8 @@ explicit IP/CIDR allowlist; production rejects an empty list and HTTP origins.
 Capabilities introduced by later starter slices add configuration keys only
 when their behavior is enabled. This slice intentionally has no auth, Redis,
 logging, observability or API documentation settings.
+
+`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_PORT` in
+`.env.example` belong only to local Compose. Runtime validation ignores them;
+stage and production credentials must use separately managed `DATABASE_URL`
+values and must not reuse the example password.

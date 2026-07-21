@@ -14,3 +14,9 @@ Every production Nest `@Get()` or `@Head()` method must also carry
 `@SafeEndpoint()`. The architecture gate recognizes named, aliased and
 namespace imports and treats the marker as a mandatory review checkpoint, not
 as automatic proof that a handler is side-effect free.
+
+The listener is intentionally observable during startup: live is `200`, while
+startup/readiness and `/v1` traffic remain `503` until PostgreSQL connects. A
+later PostgreSQL outage changes only readiness. Drain changes readiness before
+the listener closes; an external new connection may then be refused instead of
+receiving an HTTP response.

@@ -28,3 +28,8 @@ return this.client.order.findUnique({ where })
 Nested transaction runs join the outer interactive transaction. Any nested
 failure marks that context rollback-only, even when the outer callback catches
 the original error.
+
+Schema changes are committed under `prisma/migrations` and deployed only by the
+explicit `start:migrate` one-shot role. `start:api` opens no migration lock and
+performs no schema mutation. Local setup and reset procedures live in
+`docs/runbooks/local-postgres.md`.
