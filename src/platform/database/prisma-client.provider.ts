@@ -96,8 +96,12 @@ export class PrismaClientProvider {
   public constructor(
     @Inject(RuntimeConfigService)
     config: { readonly database: DatabaseRuntimeConfig },
-    @Optional() transactionContext?: PrismaTransactionContext,
-    @Optional() metrics?: RuntimeMetrics,
+    @Inject(PrismaTransactionContext)
+    @Optional()
+    transactionContext?: PrismaTransactionContext,
+    @Inject(RuntimeMetrics)
+    @Optional()
+    metrics?: RuntimeMetrics,
   ) {
     this.transactionContext =
       transactionContext ?? new PrismaTransactionContext()

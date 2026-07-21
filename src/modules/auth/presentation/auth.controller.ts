@@ -68,15 +68,25 @@ export type LoginRequestMetadataFactory = (input: {
 @ApiTags('auth')
 export class AuthController {
   public constructor(
+    @Inject(LoginUseCase)
     private readonly loginUseCase: LoginUseCase,
+    @Inject(LogoutUseCase)
     private readonly logoutUseCase: LogoutUseCase,
+    @Inject(GetMeQuery)
     private readonly getMeQuery: GetMeQuery,
+    @Inject(GetCsrfTokenQuery)
     private readonly getCsrfTokenQuery: GetCsrfTokenQuery,
+    @Inject(ChangePasswordUseCase)
     private readonly changePasswordUseCase: ChangePasswordUseCase,
+    @Inject(ListSessionsQuery)
     private readonly listSessionsQuery: ListSessionsQuery,
+    @Inject(RevokeSessionUseCase)
     private readonly revokeSessionUseCase: RevokeSessionUseCase,
+    @Inject(LogoutAllUseCase)
     private readonly logoutAllUseCase: LogoutAllUseCase,
+    @Inject(AuthRequestContext)
     private readonly requestContext: AuthRequestContext,
+    @Inject(AuthCookieAdapter)
     private readonly cookies: AuthCookieAdapter,
     @Inject(AUTH_LOGIN_METADATA_FACTORY)
     private readonly loginMetadata: LoginRequestMetadataFactory,
