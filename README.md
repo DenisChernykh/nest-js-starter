@@ -3,18 +3,19 @@
 Production-oriented NestJS backend foundation with a runnable HTTP process,
 typed configuration, PostgreSQL/Prisma, capability-scoped Redis, opaque browser
 sessions, explicit migrations, three health contracts and bounded graceful
-shutdown. Repository architecture and the exact toolchain are enforced by
-executable gates.
+shutdown, RFC 9457 errors, structured Pino JSON logs and an explicit
+OpenTelemetry pipeline. Repository architecture and the exact toolchain are
+enforced by executable gates.
 
 Included: HTTP runtime, typed config, PostgreSQL/Prisma, migrations, transaction
 boundary, required coordination Redis, Argon2id credentials, server-side
 sessions, session-bound CSRF, code-owned RBAC, health, graceful shutdown and
-architecture/toolchain foundation.
+architecture/toolchain foundation, request correlation, normalized problems,
+security audit events, traces and low-cardinality runtime metrics.
 
 Not included yet: registration/recovery/account administration, JWT/OAuth,
-RFC 9457 errors, Pino/OTel, OpenAPI/Swagger, Docker application image, CI/GHCR,
-Dokploy and recipes. The starter deliberately contains no fake CRUD or business
-model.
+OpenAPI/Swagger, Docker application image, CI/GHCR, Dokploy and recipes. The
+starter deliberately contains no fake CRUD or business model.
 
 ## Prerequisites
 
@@ -44,6 +45,15 @@ The long-running `start:api`/`dev:api` role never migrates. Run the one-shot
 verification, failure paths and cleanup. Generate four independent 32-byte
 base64url auth secrets for every deployed environment; `.env.example` values
 are development-only.
+
+Production logs are newline-delimited Pino JSON on stdout. Every HTTP response
+has a validated/generated `X-Request-ID`; RFC 9457 problem bodies carry the same
+identifier. OpenTelemetry is enabled by default and uses OTLP HTTP/protobuf.
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` (or signal-specific endpoints), or explicitly
+set `OTEL_SDK_DISABLED=true` when telemetry must be disabled. Collector health
+is intentionally absent from liveness/readiness. See
+`docs/architecture/errors-logging-observability.md` and
+`docs/runbooks/telemetry-collector-loss.md`.
 
 Health endpoints are outside the `/v1` application prefix:
 

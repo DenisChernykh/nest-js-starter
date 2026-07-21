@@ -1,8 +1,7 @@
 # Logging platform
 
-Responsibility: direct Pino JSON sink, central redaction and framework logging
-adapters. HTTP access and security audit records are added by their owning
-follow-up tasks in this slice.
+Responsibility: direct Pino JSON sink, central redaction, framework logging
+adapters, one final HTTP access record and finite security audit records.
 
 Allowed dependencies: request context and platform configuration.
 
