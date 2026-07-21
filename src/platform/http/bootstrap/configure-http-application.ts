@@ -10,6 +10,8 @@ import type { RuntimeConfigService } from '@/platform/config/runtime-config.serv
 import type { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import type { RequestContext } from '@/platform/http/context/request-context'
 import { createRequestContextMiddleware } from '@/platform/http/context/request-context.middleware'
+import { RequestValidationError } from '@/platform/http/errors/request-validation.error'
+import { mapValidationErrors } from '@/platform/http/errors/validation-error.mapper'
 
 import { createCorsOptions } from './cors-options'
 import { createTrafficGateMiddleware } from './traffic-gate.middleware'
@@ -47,6 +49,8 @@ export function configureHttpApplication(
       whitelist: true,
       forbidNonWhitelisted: true,
       forbidUnknownValues: true,
+      exceptionFactory: (errors) =>
+        new RequestValidationError(mapValidationErrors(errors)),
     }),
   )
   app.setGlobalPrefix('v1', {
