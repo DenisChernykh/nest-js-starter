@@ -18,7 +18,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     await container.stop()
   })
 
-  it('applies exactly the no-op baseline without business tables', async () => {
+  it('applies baseline plus auth core and creates its singleton', async () => {
     const result = runPrismaCommand(
       ['migrate', 'deploy', '--config', 'prisma.config.ts'],
       container.getConnectionUri(),
@@ -30,13 +30,29 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     )
     expect(migrations.rows).toEqual([
       { migration_name: '20260720000000_baseline' },
+      { migration_name: '20260721090000_auth_core' },
     ])
     const tables = await pool.query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables
        WHERE table_schema = 'public' AND table_name <> '_prisma_migrations'
        ORDER BY table_name`,
     )
-    expect(tables.rows).toEqual([])
+    expect(tables.rows).toEqual([
+      { table_name: 'auth_security_state' },
+      { table_name: 'password_credentials' },
+      { table_name: 'user_roles' },
+      { table_name: 'users' },
+    ])
+    const securityState = await pool.query<{
+      id: number
+      global_session_epoch: string
+    }>('SELECT id, global_session_epoch FROM auth_security_state ORDER BY id')
+    expect(securityState.rows).toEqual([{ id: 1, global_session_epoch: '0' }])
+    await expect(
+      pool.query(
+        'INSERT INTO auth_security_state (id, updated_at) VALUES (2, CURRENT_TIMESTAMP)',
+      ),
+    ).rejects.toThrow()
   })
 
   it('is idempotent on a second migrate deploy', async () => {
@@ -49,6 +65,6 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     const migrations = await pool.query<{ count: string }>(
       'SELECT count(*) FROM _prisma_migrations',
     )
-    expect(migrations.rows[0]?.count).toBe('1')
+    expect(migrations.rows[0]?.count).toBe('2')
   })
 })
