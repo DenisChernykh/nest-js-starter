@@ -1,0 +1,2 @@
+-- Establishes the migration history for a subject-neutral starter schema.
+-- Business modules own every future application table.

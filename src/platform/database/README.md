@@ -1,8 +1,13 @@
 # Database platform
 
-Responsibility: future Prisma lifecycle and transaction adapters.
+`DatabaseModule` owns exactly one external `pg.Pool`, one Prisma PostgreSQL
+adapter and one generated Prisma Client. Construction has no network side
+effect; the explicit lifecycle performs bounded startup and cleanup.
 
-Allowed dependencies: no presentation or business policy.
+Health probes use a dedicated Pool client that can be destroyed on timeout or
+abort. Ordinary Prisma operations are admitted through `withClient()` and are
+tracked for shutdown, but are not described as cancellable after they start.
 
-Add the first TypeScript file only when the owning slice introduces a real
-runtime contract; do not add sample business behavior to populate the folder.
+Business modules may use the callback-based provider from infrastructure or the
+framework-free transaction port introduced by the next slice. Application,
+presentation and bootstrap code never import Prisma or `pg` directly.

@@ -29,6 +29,20 @@ export interface RuntimeConfigAccessViolation {
   readonly specifier: string
 }
 
+/**
+ * Describes a database implementation dependency crossing an approved edge.
+ */
+export interface DatabaseBoundaryViolation {
+  readonly file: string
+  readonly reason:
+    | 'application-imports-database-internal'
+    | 'bootstrap-imports-database-driver'
+    | 'platform-non-database-imports-driver'
+    | 'presentation-imports-database-driver'
+    | 'shared-application-imports-platform-database'
+  readonly specifier: string
+}
+
 async function listTypeScriptFiles(
   directory: string,
 ): Promise<readonly string[]> {
@@ -441,6 +455,76 @@ export async function findRuntimeConfigAccessViolations(
       ts.forEachChild(node, visit)
     }
     visit(sourceFile)
+  }
+
+  return violations.sort((left, right) =>
+    `${left.file}:${left.reason}:${left.specifier}`.localeCompare(
+      `${right.file}:${right.reason}:${right.specifier}`,
+    ),
+  )
+}
+
+function isDatabaseDriverSpecifier(specifier: string): boolean {
+  return (
+    specifier === 'pg' ||
+    specifier.startsWith('pg/') ||
+    specifier.startsWith('@prisma/') ||
+    specifier.startsWith('@/generated/prisma')
+  )
+}
+
+/**
+ * Finds Prisma/pg imports outside the database platform ownership boundary.
+ *
+ * @param sourceRoot - Root containing production-like TypeScript sources.
+ * @returns Stable violations while ignoring generated Prisma implementation files.
+ */
+export async function findDatabaseBoundaryViolations(
+  sourceRoot: string,
+): Promise<readonly DatabaseBoundaryViolation[]> {
+  const files = await listTypeScriptFiles(sourceRoot)
+  const violations: DatabaseBoundaryViolation[] = []
+
+  for (const file of files) {
+    const fileRelative = normalizedRelative(sourceRoot, file)
+    if (fileRelative.startsWith('generated/prisma/')) {
+      continue
+    }
+    const sourceText = await readFile(file, 'utf8')
+    for (const specifier of collectSpecifiers(sourceText, file)) {
+      let reason: DatabaseBoundaryViolation['reason'] | undefined
+      if (
+        fileRelative.startsWith('bootstrap/') &&
+        isDatabaseDriverSpecifier(specifier)
+      ) {
+        reason = 'bootstrap-imports-database-driver'
+      } else if (
+        fileRelative.includes('/application/') &&
+        isDatabaseDriverSpecifier(specifier)
+      ) {
+        reason = 'application-imports-database-internal'
+      } else if (
+        fileRelative.includes('/presentation/') &&
+        isDatabaseDriverSpecifier(specifier)
+      ) {
+        reason = 'presentation-imports-database-driver'
+      } else if (
+        fileRelative.startsWith('platform/') &&
+        !fileRelative.startsWith('platform/database/') &&
+        isDatabaseDriverSpecifier(specifier)
+      ) {
+        reason = 'platform-non-database-imports-driver'
+      } else if (
+        fileRelative.startsWith('shared/application/') &&
+        specifier.startsWith('@/platform/database')
+      ) {
+        reason = 'shared-application-imports-platform-database'
+      }
+
+      if (reason !== undefined) {
+        violations.push({ file: fileRelative, reason, specifier })
+      }
+    }
   }
 
   return violations.sort((left, right) =>

@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 
 import {
+  findDatabaseBoundaryViolations,
   findModuleImportViolations,
   findRuntimeConfigAccessViolations,
 } from '@scripts/architecture/module-import-policy'
@@ -175,6 +176,42 @@ describe('runtime configuration ownership policy', () => {
   it('allows raw environment ownership inside platform config', async () => {
     const violations = await findRuntimeConfigAccessViolations(
       join(process.cwd(), fixturesRoot, 'runtime-config-access-valid'),
+    )
+
+    expect(violations).toEqual([])
+  })
+})
+
+describe('database ownership policy', () => {
+  it.each([
+    ['database-bootstrap-imports-prisma', 'bootstrap-imports-database-driver'],
+    [
+      'database-application-imports-generated',
+      'application-imports-database-internal',
+    ],
+    [
+      'database-presentation-imports-adapter',
+      'presentation-imports-database-driver',
+    ],
+    [
+      'database-platform-http-imports-pg',
+      'platform-non-database-imports-driver',
+    ],
+    [
+      'database-shared-imports-platform',
+      'shared-application-imports-platform-database',
+    ],
+  ])('rejects %s with reason %s', async (fixtureName, reason) => {
+    const violations = await findDatabaseBoundaryViolations(
+      join(process.cwd(), fixturesRoot, fixtureName),
+    )
+
+    expect(violations).toEqual([expect.objectContaining({ reason })])
+  })
+
+  it('allows database drivers only at approved composition edges', async () => {
+    const violations = await findDatabaseBoundaryViolations(
+      join(process.cwd(), fixturesRoot, 'database-boundary-valid'),
     )
 
     expect(violations).toEqual([])

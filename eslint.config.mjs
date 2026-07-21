@@ -11,6 +11,7 @@ export default tseslint.config(
       'coverage/**',
       'dist/**',
       'node_modules/**',
+      'src/generated/prisma/**',
       'test/architecture/fixtures/**',
       'test/fixtures/**',
     ],
@@ -26,7 +27,12 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/**/*.ts', 'scripts/**/*.ts', 'test/**/*.ts'],
+    files: [
+      'prisma.config.ts',
+      'src/**/*.ts',
+      'scripts/**/*.ts',
+      'test/**/*.ts',
+    ],
     languageOptions: {
       globals: globals.node,
       parserOptions: {
