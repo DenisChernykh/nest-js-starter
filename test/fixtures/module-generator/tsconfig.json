@@ -1,0 +1,13 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "noEmit": true,
+    "paths": {
+      "@/*": ["expected/src/*"],
+      "@scripts/*": ["../../../scripts/*"]
+    },
+    "types": ["jest", "node"]
+  },
+  "include": ["expected/src/**/*.ts", "expected/test/**/*.ts"]
+}

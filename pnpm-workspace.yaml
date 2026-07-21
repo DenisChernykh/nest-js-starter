@@ -1,0 +1,7 @@
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true
+autoInstallPeers: false
+engineStrict: true
+saveExact: true
+strictPeerDependencies: true
