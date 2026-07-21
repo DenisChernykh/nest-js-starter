@@ -1,6 +1,6 @@
 import { performance } from 'node:perf_hooks'
 
-import { Injectable } from '@nestjs/common'
+import { Injectable, Optional } from '@nestjs/common'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 
@@ -76,6 +76,7 @@ async function waitForSettledWithin<T>(
 export class PrismaClientProvider {
   private readonly pool: Pool
   private readonly prisma: PrismaClient
+  private readonly transactionContext: PrismaTransactionContext
   private readonly connectionTimeoutMs: number
   private state: DatabaseState = 'idle'
   private admissionOpen = false
@@ -91,8 +92,10 @@ export class PrismaClientProvider {
 
   public constructor(
     config: RuntimeConfigService,
-    private readonly transactionContext = new PrismaTransactionContext(),
+    @Optional() transactionContext?: PrismaTransactionContext,
   ) {
+    this.transactionContext =
+      transactionContext ?? new PrismaTransactionContext()
     this.connectionTimeoutMs = config.database.connectionTimeoutMs
     this.pool = new Pool({
       connectionString: config.database.url,

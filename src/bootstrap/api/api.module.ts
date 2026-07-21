@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common'
 
+import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
+import { DatabaseModule } from '@/platform/database/database.module'
+import { HealthModule } from '@/platform/http/health/health.module'
+import { LifecycleModule } from '@/platform/lifecycle/lifecycle.module'
+
 /**
- * Определяет compile-only composition root будущего API process.
- *
- * @remarks
- * Foundation slice намеренно не содержит controllers, providers или runtime
- * bootstrap. Они добавляются следующими independently verified slices.
+ * Определяет composition root API process без прямых driver imports.
  */
-@Module({})
+@Module({
+  imports: [RuntimeConfigModule, DatabaseModule, LifecycleModule, HealthModule],
+})
 export class ApiModule {}
