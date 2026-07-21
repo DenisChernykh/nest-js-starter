@@ -160,7 +160,10 @@ export class PinoLogSink implements StructuredLogger {
 
     const payload = {
       ...sanitizeAttributes(record.attributes),
-      ...safeCorrelation(this.correlationFields()),
+      ...safeCorrelation({
+        ...this.correlationFields(),
+        ...record.correlation,
+      }),
       event: record.event,
       module: record.module,
       ...(record.error === undefined ? {} : { error: record.error }),

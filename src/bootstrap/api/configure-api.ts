@@ -29,6 +29,13 @@ import type { ShutdownParticipant } from '@/platform/lifecycle/shutdown-particip
 import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
 import { ActiveRequestTracker } from '@/platform/http/bootstrap/active-request-tracker'
 import { RequestContext } from '@/platform/http/context/request-context'
+import { CorrelationFieldsProvider } from '@/platform/http/context/correlation-fields.provider'
+import { createHttpAccessLogMiddleware } from '@/platform/logging/http-access-log.middleware'
+import {
+  STRUCTURED_LOGGER,
+  type StructuredLogger,
+} from '@/platform/logging/logging.contracts'
+import { HttpMetrics } from '@/platform/observability/http-metrics'
 
 import { ApiModule } from './api.module'
 
@@ -92,6 +99,9 @@ export async function configureApi(
   const database = app.get<DatabaseLifecycle>(DATABASE_LIFECYCLE)
   const requestTracker = app.get(ActiveRequestTracker)
   const requestContext = app.get(RequestContext)
+  const correlation = app.get(CorrelationFieldsProvider)
+  const logger = app.get<StructuredLogger>(STRUCTURED_LOGGER)
+  const httpMetrics = app.get(HttpMetrics)
   const operationTracker = app.get(ActiveOperationTracker)
   const shutdownRegistry = app.get(ShutdownRegistry)
   const startupRegistry = app.get(StartupRegistry)
@@ -122,6 +132,11 @@ export async function configureApi(
     lifecycle,
     requestContext,
     requestTracker,
+    createHttpAccessLogMiddleware({
+      logger,
+      metrics: httpMetrics,
+      correlation,
+    }),
   )
   await app.init()
 

@@ -17,6 +17,7 @@ export interface StructuredLogRecord {
   readonly event: string
   readonly module: string
   readonly attributes?: Readonly<Record<string, StructuredLogAttribute>>
+  readonly correlation?: CorrelationFields
   readonly error?: unknown
 }
 

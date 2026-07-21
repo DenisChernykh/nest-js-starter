@@ -3,6 +3,7 @@ import type { Server } from 'node:http'
 import { RequestMethod, ValidationPipe } from '@nestjs/common'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 import type { Express } from 'express'
+import type { RequestHandler } from 'express'
 import cookieParser from 'cookie-parser'
 import helmet from 'helmet'
 
@@ -25,8 +26,10 @@ export function configureHttpApplication(
   lifecycle: ApplicationLifecycleState,
   requestContext: RequestContext,
   requestTracker?: ActiveRequestTracker,
+  accessLogMiddleware?: RequestHandler,
 ): void {
   app.use(createRequestContextMiddleware(requestContext))
+  if (accessLogMiddleware !== undefined) app.use(accessLogMiddleware)
   app.use(helmet())
   app.enableCors(createCorsOptions(config.http.corsOrigins))
   const expressApplication: Express = app.getHttpAdapter().getInstance()
