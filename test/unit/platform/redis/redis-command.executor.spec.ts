@@ -1,4 +1,5 @@
 import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
+import type { Span, Tracer } from '@opentelemetry/api'
 import type { RedisManagedClient } from '@/platform/redis/redis-capability'
 import {
   RedisCommandExecutor,
@@ -97,6 +98,50 @@ describe('RedisCommandExecutor', () => {
       'redis',
       'error',
       expect.any(Number),
+    )
+  })
+
+  it('creates one fixed command span without the internal operation name', async () => {
+    const span = {
+      setStatus: jest.fn(),
+      end: jest.fn(),
+    } as unknown as Span
+    const tracer = {
+      startActiveSpan: jest.fn(
+        (_name: string, _options: unknown, work: (active: Span) => unknown) =>
+          work(span),
+      ),
+    } as unknown as Tracer
+    const executor = new RedisCommandExecutor(
+      managedClient(),
+      new ActiveOperationTracker(),
+      50,
+      undefined,
+      tracer,
+    )
+
+    await expect(
+      executor.execute('session-owner-read-private-id', () =>
+        Promise.resolve('owned'),
+      ),
+    ).resolves.toBe('owned')
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(tracer.startActiveSpan).toHaveBeenCalledWith(
+      'redis.command',
+      {
+        kind: 2,
+        attributes: {
+          'db.system.name': 'redis',
+          'db.operation.name': 'OTHER',
+          'db.query.text': 'OTHER',
+        },
+      },
+      expect.any(Function),
+    )
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const startActiveSpan = jest.mocked(tracer.startActiveSpan)
+    expect(JSON.stringify(startActiveSpan.mock.calls)).not.toContain(
+      'private-id',
     )
   })
 })

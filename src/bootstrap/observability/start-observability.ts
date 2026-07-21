@@ -8,7 +8,7 @@ import { resourceFromAttributes } from '@opentelemetry/resources'
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics'
 import { NodeSDK } from '@opentelemetry/sdk-node'
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { ClientRequest, IncomingMessage } from 'node:http'
 import type { Request } from 'express'
 
 import type { ApplicationRuntimeConfig } from '@/platform/config/runtime-config.types'
@@ -61,7 +61,9 @@ export function startObservability(
       }),
     ],
     instrumentations: [
-      new HttpInstrumentation({ responseHook: updateHttpServerSpan }),
+      new HttpInstrumentation({
+        applyCustomAttributesOnSpan: updateHttpServerSpan,
+      }),
       new PgInstrumentation({ enhancedDatabaseReporting: false }),
       new RedisInstrumentation({
         dbStatementSerializer: (commandName) => commandName.toUpperCase(),
@@ -72,12 +74,12 @@ export function startObservability(
   return { runtime: new ObservabilityRuntime(sdk), enabled: true }
 }
 
-function updateHttpServerSpan(
+/** Applies the same bounded route template to an ending HTTP server span. */
+export function updateHttpServerSpan(
   span: Span,
-  response: IncomingMessage | ServerResponse,
+  request: ClientRequest | IncomingMessage,
 ): void {
-  const request = 'req' in response ? response.req : undefined
-  if (request === undefined || !('route' in request)) return
+  if (!('route' in request)) return
   const route = resolveHttpRouteTemplate(request as unknown as Request)
   span.setAttribute('http.route', route)
   span.updateName(`${request.method ?? 'HTTP'} ${route}`)

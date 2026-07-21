@@ -1,5 +1,12 @@
 import { performance } from 'node:perf_hooks'
 
+import {
+  SpanKind,
+  SpanStatusCode,
+  trace,
+  type Tracer,
+} from '@opentelemetry/api'
+
 import type { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
 import { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
 
@@ -20,6 +27,9 @@ export class RedisCommandExecutor {
     private readonly operationTracker: ActiveOperationTracker,
     private readonly timeoutMs: number,
     private readonly metrics: RuntimeMetrics = new RuntimeMetrics(),
+    private readonly tracer: Tracer = trace.getTracer(
+      'nest-js-starter.redis-runtime',
+    ),
   ) {}
 
   /**
@@ -33,7 +43,16 @@ export class RedisCommandExecutor {
     operation: (client: RedisManagedClient) => Promise<T>,
     signal?: AbortSignal,
   ): Promise<T> {
-    void operationName
+    const command = redisCommand(operationName)
+    return this.runCommandSpan(command, () =>
+      this.executeTracked(operation, signal),
+    )
+  }
+
+  private async executeTracked<T>(
+    operation: (client: RedisManagedClient) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T> {
     const startedAt = performance.now()
     const lease = this.operationTracker.begin()
     try {
@@ -45,6 +64,48 @@ export class RedisCommandExecutor {
       throw error
     } finally {
       lease.complete()
+    }
+  }
+
+  private async runCommandSpan<T>(
+    command: string,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    let callbackStarted = false
+    try {
+      return await this.tracer.startActiveSpan(
+        'redis.command',
+        {
+          kind: SpanKind.CLIENT,
+          attributes: {
+            'db.system.name': 'redis',
+            'db.operation.name': command,
+            'db.query.text': command,
+          },
+        },
+        async (span) => {
+          callbackStarted = true
+          try {
+            return await work()
+          } catch (error: unknown) {
+            try {
+              span.setStatus({ code: SpanStatusCode.ERROR })
+            } catch {
+              // Span mutation cannot replace the Redis command rejection.
+            }
+            throw error
+          } finally {
+            try {
+              span.end()
+            } catch {
+              // Span export cannot replace the Redis command settlement.
+            }
+          }
+        },
+      )
+    } catch (error: unknown) {
+      if (callbackStarted) throw error
+      return work()
     }
   }
 
@@ -103,4 +164,24 @@ export class RedisCommandExecutor {
       )
     })
   }
+}
+
+function redisCommand(operationName: string): string {
+  if (operationName.startsWith('script-load:')) return 'SCRIPT'
+  if (operationName.startsWith('script:')) return 'EVALSHA'
+  const commands: Readonly<Record<string, string>> = {
+    'readiness-ping': 'PING',
+    ping: 'PING',
+    'cache-get': 'GET',
+    'cache-delete-invalid': 'DEL',
+    'cache-set': 'SET',
+    'cache-invalidate': 'DEL',
+    'session-list-record': 'GET',
+    'session-revoke-lookup': 'HGET',
+    'session-owner-read': 'GET',
+    'session-delete-invalid': 'DEL',
+    'session-index-public-ids': 'HKEYS',
+    'session-index-digests': 'HMGET',
+  }
+  return commands[operationName] ?? 'OTHER'
 }

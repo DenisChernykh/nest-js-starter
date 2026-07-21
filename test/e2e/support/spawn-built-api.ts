@@ -12,6 +12,20 @@ export function spawnBuiltApi(
   })
 }
 
+/** Captures UTF-8 stdout and stderr from one spawned API process. */
+export function captureChildOutput(
+  child: ChildProcessWithoutNullStreams,
+): () => string {
+  let output = ''
+  child.stdout.on('data', (chunk: Buffer) => {
+    output += chunk.toString()
+  })
+  child.stderr.on('data', (chunk: Buffer) => {
+    output += chunk.toString()
+  })
+  return () => output
+}
+
 /** Waits for process exit and also observes a process that already exited. */
 export function waitForChildExit(
   child: ChildProcessWithoutNullStreams,

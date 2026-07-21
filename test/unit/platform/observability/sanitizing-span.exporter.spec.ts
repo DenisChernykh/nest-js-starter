@@ -52,4 +52,42 @@ describe('SanitizingSpanExporter', () => {
     expect(exported?.spanContext()).toEqual(span.spanContext())
     expect(JSON.stringify(exported)).not.toContain('secret')
   })
+
+  it('keeps only command-only Redis statements and removes their arguments', () => {
+    const batches: ReadableSpan[][] = []
+    const delegate = {
+      export: jest.fn((spans: ReadableSpan[]) => batches.push(spans)),
+      shutdown: jest.fn(() => Promise.resolve()),
+    }
+    const exporter = new SanitizingSpanExporter(delegate)
+    const redis = {
+      attributes: {
+        'db.system': 'redis',
+        'db.statement': 'GET',
+        'db.query.text': 'GET',
+      },
+      events: [],
+      links: [],
+      status: { code: 0 },
+    } as unknown as ReadableSpan
+    const unsafe = {
+      attributes: {
+        'db.system': 'redis',
+        'db.statement': 'GET private:key',
+        'db.query.text': 'SELECT secret FROM users',
+      },
+      events: [],
+      links: [],
+      status: { code: 0 },
+    } as unknown as ReadableSpan
+
+    exporter.export([redis, unsafe], jest.fn())
+
+    expect(batches[0]?.[0]?.attributes).toEqual({
+      'db.system': 'redis',
+      'db.statement': 'GET',
+      'db.query.text': 'GET',
+    })
+    expect(batches[0]?.[1]?.attributes).toEqual({ 'db.system': 'redis' })
+  })
 })

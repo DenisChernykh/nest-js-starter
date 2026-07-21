@@ -39,8 +39,8 @@ function sanitizeSpan(span: ReadableSpan): ReadableSpan {
   const clone = Object.create(span) as ReadableSpan
   const attributes = Object.freeze(
     Object.fromEntries(
-      Object.entries(span.attributes).filter(([key]) =>
-        allowedAttributes.has(key),
+      Object.entries(span.attributes).filter(([key, value]) =>
+        safeAttribute(span.attributes, key, value),
       ),
     ),
   )
@@ -54,4 +54,19 @@ function sanitizeSpan(span: ReadableSpan): ReadableSpan {
     },
   })
   return Object.freeze(clone)
+}
+
+function safeAttribute(
+  attributes: ReadableSpan['attributes'],
+  key: string,
+  value: unknown,
+): boolean {
+  if (allowedAttributes.has(key)) return true
+  if (key !== 'db.statement' && key !== 'db.query.text') return false
+  const databaseSystem = attributes['db.system.name'] ?? attributes['db.system']
+  return (
+    databaseSystem === 'redis' &&
+    typeof value === 'string' &&
+    /^[A-Z][A-Z0-9_]{0,31}$/u.test(value)
+  )
 }
