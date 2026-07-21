@@ -63,12 +63,7 @@ async function generateClient(output: string): Promise<void> {
 function compileGeneratedConsumer(): void {
   const result = spawnSync(
     resolve('node_modules/.bin/tsc'),
-    [
-      '--project',
-      consumerTsConfigPath,
-      '--pretty',
-      'false',
-    ],
+    ['--project', consumerTsConfigPath, '--pretty', 'false'],
     {
       cwd: process.cwd(),
       encoding: 'utf8',
