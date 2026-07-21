@@ -20,6 +20,36 @@ export interface ModuleImportViolation {
   readonly specifier: string
 }
 
+/**
+ * Describes raw runtime configuration access outside its platform owner.
+ */
+export interface RuntimeConfigAccessViolation {
+  readonly file: string
+  readonly reason: 'process-environment-access' | 'raw-config-service-import'
+  readonly specifier: string
+}
+
+/**
+ * Describes a database implementation dependency crossing an approved edge.
+ */
+export interface DatabaseBoundaryViolation {
+  readonly file: string
+  readonly reason:
+    | 'application-imports-database-internal'
+    | 'bootstrap-imports-database-driver'
+    | 'platform-non-database-imports-driver'
+    | 'presentation-imports-database-driver'
+    | 'shared-application-imports-platform-database'
+  readonly specifier: string
+}
+
+/** Describes a read endpoint missing its explicit safety review marker. */
+export interface UnsafeEndpointViolation {
+  readonly file: string
+  readonly reason: 'missing-safe-endpoint'
+  readonly specifier: string
+}
+
 async function listTypeScriptFiles(
   directory: string,
 ): Promise<readonly string[]> {
@@ -133,6 +163,134 @@ function collectModulePublicApiViolationSpecifiers(
 
 function normalizedRelative(root: string, path: string): string {
   return relative(root, path).split(sep).join('/')
+}
+
+function decoratorCallee(decorator: ts.Decorator): ts.Expression {
+  return ts.isCallExpression(decorator.expression)
+    ? decorator.expression.expression
+    : decorator.expression
+}
+
+function matchesDecorator(
+  expression: ts.Expression,
+  identifiers: ReadonlySet<string>,
+  namespaces: ReadonlySet<string>,
+  propertyNames: ReadonlySet<string>,
+): boolean {
+  return (
+    (ts.isIdentifier(expression) && identifiers.has(expression.text)) ||
+    (ts.isPropertyAccessExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      namespaces.has(expression.expression.text) &&
+      propertyNames.has(expression.name.text))
+  )
+}
+
+function importedDecoratorNames(sourceFile: ts.SourceFile): {
+  readonly nestReads: ReadonlySet<string>
+  readonly nestNamespaces: ReadonlySet<string>
+  readonly safeMarkers: ReadonlySet<string>
+  readonly safeNamespaces: ReadonlySet<string>
+} {
+  const nestReads = new Set<string>()
+  const nestNamespaces = new Set<string>()
+  const safeMarkers = new Set<string>()
+  const safeNamespaces = new Set<string>()
+
+  for (const statement of sourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.importClause === undefined
+    ) {
+      continue
+    }
+    const source = statement.moduleSpecifier.text
+    const bindings = statement.importClause.namedBindings
+    if (bindings === undefined) continue
+    if (ts.isNamespaceImport(bindings)) {
+      if (source === '@nestjs/common') nestNamespaces.add(bindings.name.text)
+      if (source.endsWith('/safe-endpoint.decorator')) {
+        safeNamespaces.add(bindings.name.text)
+      }
+      continue
+    }
+    for (const element of bindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text
+      if (
+        source === '@nestjs/common' &&
+        (importedName === 'Get' || importedName === 'Head')
+      ) {
+        nestReads.add(element.name.text)
+      }
+      if (
+        source.endsWith('/safe-endpoint.decorator') &&
+        importedName === 'SafeEndpoint'
+      ) {
+        safeMarkers.add(element.name.text)
+      }
+    }
+  }
+  return { nestReads, nestNamespaces, safeMarkers, safeNamespaces }
+}
+
+/**
+ * Finds production GET/HEAD handlers without the explicit safe marker.
+ *
+ * @param sourceRoot - Root containing TypeScript production or fixture files.
+ * @returns Stable file-sorted endpoint violations.
+ */
+export async function findUnsafeEndpointViolations(
+  sourceRoot: string,
+): Promise<readonly UnsafeEndpointViolation[]> {
+  const files = await listTypeScriptFiles(sourceRoot)
+  const violations: UnsafeEndpointViolation[] = []
+  const readProperties = new Set(['Get', 'Head'])
+  const safeProperties = new Set(['SafeEndpoint'])
+
+  for (const file of files) {
+    const sourceText = await readFile(file, 'utf8')
+    const sourceFile = ts.createSourceFile(
+      file,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const imports = importedDecoratorNames(sourceFile)
+    function visit(node: ts.Node): void {
+      if (ts.isMethodDeclaration(node)) {
+        const decorators = ts.canHaveDecorators(node)
+          ? (ts.getDecorators(node) ?? [])
+          : []
+        const isRead = decorators.some((decorator) =>
+          matchesDecorator(
+            decoratorCallee(decorator),
+            imports.nestReads,
+            imports.nestNamespaces,
+            readProperties,
+          ),
+        )
+        const isSafe = decorators.some((decorator) =>
+          matchesDecorator(
+            decoratorCallee(decorator),
+            imports.safeMarkers,
+            imports.safeNamespaces,
+            safeProperties,
+          ),
+        )
+        if (isRead && !isSafe) {
+          violations.push({
+            file: normalizedRelative(sourceRoot, file),
+            reason: 'missing-safe-endpoint',
+            specifier: node.name.getText(sourceFile),
+          })
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+  }
+  return violations
 }
 
 function moduleFromPath(root: string, path: string): string | undefined {
@@ -251,6 +409,262 @@ export async function findModuleImportViolations(
   return violations.sort((left, right) =>
     `${left.file}:${left.specifier}`.localeCompare(
       `${right.file}:${right.specifier}`,
+    ),
+  )
+}
+
+function propertyNameText(node: ts.PropertyName): string | undefined {
+  if (
+    ts.isIdentifier(node) ||
+    ts.isStringLiteral(node) ||
+    ts.isNumericLiteral(node)
+  ) {
+    return node.text
+  }
+  return undefined
+}
+
+function isEnvironmentAccess(
+  node: ts.Node,
+  processAliases: ReadonlySet<string>,
+): boolean {
+  if (
+    ts.isPropertyAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    processAliases.has(node.expression.text)
+  ) {
+    return node.name.text === 'env'
+  }
+  if (
+    ts.isElementAccessExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    processAliases.has(node.expression.text) &&
+    node.argumentExpression !== undefined &&
+    ts.isStringLiteralLike(node.argumentExpression)
+  ) {
+    return node.argumentExpression.text === 'env'
+  }
+  return false
+}
+
+function collectVariableDeclarations(
+  sourceFile: ts.SourceFile,
+): ts.VariableDeclaration[] {
+  const declarations: ts.VariableDeclaration[] = []
+  function visit(node: ts.Node): void {
+    if (ts.isVariableDeclaration(node)) {
+      declarations.push(node)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return declarations
+}
+
+function collectRuntimeAliases(sourceFile: ts.SourceFile): {
+  readonly environmentAliases: ReadonlySet<string>
+  readonly processAliases: ReadonlySet<string>
+} {
+  const processAliases = new Set(['process'])
+  const environmentAliases = new Set<string>()
+  const declarations = collectVariableDeclarations(sourceFile)
+
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const declaration of declarations) {
+      const initializer = declaration.initializer
+      if (initializer === undefined) {
+        continue
+      }
+      if (
+        ts.isIdentifier(declaration.name) &&
+        ts.isIdentifier(initializer) &&
+        processAliases.has(initializer.text) &&
+        !processAliases.has(declaration.name.text)
+      ) {
+        processAliases.add(declaration.name.text)
+        changed = true
+      }
+      if (
+        ts.isIdentifier(declaration.name) &&
+        isEnvironmentAccess(initializer, processAliases) &&
+        !environmentAliases.has(declaration.name.text)
+      ) {
+        environmentAliases.add(declaration.name.text)
+        changed = true
+      }
+      if (
+        ts.isObjectBindingPattern(declaration.name) &&
+        ts.isIdentifier(initializer) &&
+        processAliases.has(initializer.text)
+      ) {
+        for (const element of declaration.name.elements) {
+          if (!ts.isIdentifier(element.name)) {
+            continue
+          }
+          const sourceName =
+            element.propertyName === undefined
+              ? element.name.text
+              : propertyNameText(element.propertyName)
+          if (
+            sourceName === 'env' &&
+            !environmentAliases.has(element.name.text)
+          ) {
+            environmentAliases.add(element.name.text)
+            changed = true
+          }
+        }
+      }
+    }
+  }
+
+  return { environmentAliases, processAliases }
+}
+
+/**
+ * Finds raw Nest or process environment access outside `platform/config`.
+ *
+ * @remarks The scan follows simple process aliases and destructured `env`
+ * bindings so computed spelling cannot bypass the production ownership rule.
+ * @param sourceRoot - Root containing production-like TypeScript sources.
+ * @returns Stable file/reason-sorted violations.
+ */
+export async function findRuntimeConfigAccessViolations(
+  sourceRoot: string,
+): Promise<readonly RuntimeConfigAccessViolation[]> {
+  const files = await listTypeScriptFiles(sourceRoot)
+  const violations: RuntimeConfigAccessViolation[] = []
+
+  for (const file of files) {
+    const fileRelative = normalizedRelative(sourceRoot, file)
+    if (fileRelative.startsWith('platform/config/')) {
+      continue
+    }
+    const sourceText = await readFile(file, 'utf8')
+    const sourceFile = ts.createSourceFile(
+      file,
+      sourceText,
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const { environmentAliases, processAliases } =
+      collectRuntimeAliases(sourceFile)
+
+    function visit(node: ts.Node): void {
+      if (
+        ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text === '@nestjs/config' &&
+        node.importClause?.namedBindings !== undefined &&
+        ts.isNamedImports(node.importClause.namedBindings) &&
+        node.importClause.namedBindings.elements.some(
+          (element) =>
+            (element.propertyName ?? element.name).text === 'ConfigService',
+        )
+      ) {
+        violations.push({
+          file: fileRelative,
+          reason: 'raw-config-service-import',
+          specifier: '@nestjs/config#ConfigService',
+        })
+      }
+      if (isEnvironmentAccess(node, processAliases)) {
+        violations.push({
+          file: fileRelative,
+          reason: 'process-environment-access',
+          specifier: 'process.env',
+        })
+      } else if (
+        (ts.isPropertyAccessExpression(node) ||
+          ts.isElementAccessExpression(node)) &&
+        ts.isIdentifier(node.expression) &&
+        environmentAliases.has(node.expression.text)
+      ) {
+        violations.push({
+          file: fileRelative,
+          reason: 'process-environment-access',
+          specifier: `${node.expression.text}.*`,
+        })
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+  }
+
+  return violations.sort((left, right) =>
+    `${left.file}:${left.reason}:${left.specifier}`.localeCompare(
+      `${right.file}:${right.reason}:${right.specifier}`,
+    ),
+  )
+}
+
+function isDatabaseDriverSpecifier(specifier: string): boolean {
+  return (
+    specifier === 'pg' ||
+    specifier.startsWith('pg/') ||
+    specifier.startsWith('@prisma/') ||
+    specifier.startsWith('@/generated/prisma')
+  )
+}
+
+/**
+ * Finds Prisma/pg imports outside the database platform ownership boundary.
+ *
+ * @param sourceRoot - Root containing production-like TypeScript sources.
+ * @returns Stable violations while ignoring generated Prisma implementation files.
+ */
+export async function findDatabaseBoundaryViolations(
+  sourceRoot: string,
+): Promise<readonly DatabaseBoundaryViolation[]> {
+  const files = await listTypeScriptFiles(sourceRoot)
+  const violations: DatabaseBoundaryViolation[] = []
+
+  for (const file of files) {
+    const fileRelative = normalizedRelative(sourceRoot, file)
+    if (fileRelative.startsWith('generated/prisma/')) {
+      continue
+    }
+    const sourceText = await readFile(file, 'utf8')
+    for (const specifier of collectSpecifiers(sourceText, file)) {
+      let reason: DatabaseBoundaryViolation['reason'] | undefined
+      if (
+        fileRelative.startsWith('bootstrap/') &&
+        isDatabaseDriverSpecifier(specifier)
+      ) {
+        reason = 'bootstrap-imports-database-driver'
+      } else if (
+        fileRelative.includes('/application/') &&
+        isDatabaseDriverSpecifier(specifier)
+      ) {
+        reason = 'application-imports-database-internal'
+      } else if (
+        fileRelative.includes('/presentation/') &&
+        isDatabaseDriverSpecifier(specifier)
+      ) {
+        reason = 'presentation-imports-database-driver'
+      } else if (
+        fileRelative.startsWith('platform/') &&
+        !fileRelative.startsWith('platform/database/') &&
+        isDatabaseDriverSpecifier(specifier)
+      ) {
+        reason = 'platform-non-database-imports-driver'
+      } else if (
+        fileRelative.startsWith('shared/application/') &&
+        specifier.startsWith('@/platform/database')
+      ) {
+        reason = 'shared-application-imports-platform-database'
+      }
+
+      if (reason !== undefined) {
+        violations.push({ file: fileRelative, reason, specifier })
+      }
+    }
+  }
+
+  return violations.sort((left, right) =>
+    `${left.file}:${left.reason}:${left.specifier}`.localeCompare(
+      `${right.file}:${right.reason}:${right.specifier}`,
     ),
   )
 }

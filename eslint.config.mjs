@@ -11,6 +11,7 @@ export default tseslint.config(
       'coverage/**',
       'dist/**',
       'node_modules/**',
+      'src/generated/prisma/**',
       'test/architecture/fixtures/**',
       'test/fixtures/**',
     ],
@@ -26,7 +27,12 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/**/*.ts', 'scripts/**/*.ts', 'test/**/*.ts'],
+    files: [
+      'prisma.config.ts',
+      'src/**/*.ts',
+      'scripts/**/*.ts',
+      'test/**/*.ts',
+    ],
     languageOptions: {
       globals: globals.node,
       parserOptions: {
@@ -76,6 +82,33 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/**/*.ts'],
+    ignores: ['src/platform/config/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "ImportDeclaration[source.value='@nestjs/config'] ImportSpecifier[imported.name='ConfigService']",
+          message:
+            'Runtime code must use RuntimeConfigService instead of raw ConfigService.',
+        },
+        {
+          selector:
+            "MemberExpression[object.name='process'][computed=false][property.name='env']",
+          message:
+            'Runtime environment access is owned by src/platform/config.',
+        },
+        {
+          selector:
+            "MemberExpression[object.name='process'][computed=true][property.value='env']",
+          message:
+            'Runtime environment access is owned by src/platform/config.',
+        },
+      ],
+    },
+  },
+  {
     files: ['test/**/*.ts'],
     rules: {
       'jsdoc/require-jsdoc': 'off',
@@ -89,7 +122,7 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            '@test/**',
+            { group: ['@test/**'] },
             {
               group: [
                 '@nestjs/**',
@@ -128,7 +161,7 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            '@test/**',
+            { group: ['@test/**'] },
             {
               group: [
                 '@nestjs/**',
@@ -168,7 +201,7 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            '@test/**',
+            { group: ['@test/**'] },
             {
               group: [
                 '@prisma/**',
@@ -196,7 +229,7 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            '@test/**',
+            { group: ['@test/**'] },
             {
               group: [
                 '@/bootstrap',
@@ -221,7 +254,7 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            '@test/**',
+            { group: ['@test/**'] },
             {
               group: ['@/bootstrap', '@/bootstrap/**'],
               message:

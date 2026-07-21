@@ -1,10 +1,10 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "baseUrl": ".",
+    "isolatedModules": true,
     "noEmit": true,
     "paths": {
-      "@/*": ["expected/src/*"],
+      "@/*": ["./expected/src/*"],
       "@scripts/*": ["../../../scripts/*"]
     },
     "types": ["jest", "node"]

@@ -2,6 +2,34 @@
 module.exports = {
   forbidden: [
     {
+      name: 'bootstrap-must-not-import-database-drivers',
+      severity: 'error',
+      from: { path: '(^|/)bootstrap(/|$)' },
+      to: {
+        path: '(^|/)(node_modules/)?(@prisma/|pg(/|$))|(^|/)generated/prisma(/|$)',
+      },
+    },
+    {
+      name: 'application-must-not-import-generated-prisma',
+      severity: 'error',
+      from: { path: '(^|/)application(/|$)' },
+      to: { path: '(^|/)generated/prisma(/|$)' },
+    },
+    {
+      name: 'platform-non-database-must-not-import-database-drivers',
+      severity: 'error',
+      from: { path: '(^|/)platform/(?!database(/|$))' },
+      to: {
+        path: '(^|/)(node_modules/)?(@prisma/|pg(/|$))|(^|/)generated/prisma(/|$)',
+      },
+    },
+    {
+      name: 'shared-application-must-not-import-platform-database',
+      severity: 'error',
+      from: { path: '(^|/)shared/application(/|$)' },
+      to: { path: '(^|/)platform/database(/|$)' },
+    },
+    {
       name: 'no-unresolvable-imports',
       severity: 'error',
       from: {},
@@ -10,7 +38,7 @@ module.exports = {
     {
       name: 'no-circular-dependencies',
       severity: 'error',
-      from: {},
+      from: { pathNot: '(^|/)generated/prisma(/|$)' },
       to: { circular: true },
     },
     {
