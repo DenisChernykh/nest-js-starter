@@ -54,3 +54,35 @@ export class AuthDependencyUnavailableError extends AuthError {
     this.name = 'AuthDependencyUnavailableError'
   }
 }
+
+/** Generic credential failure shared by missing, wrong and disabled accounts. */
+export class AuthenticationFailedError extends AuthError {
+  public constructor() {
+    super('AUTHENTICATION_FAILED', 'Authentication failed')
+    this.name = 'AuthenticationFailedError'
+  }
+}
+
+/** Missing, expired or durably stale browser authentication state. */
+export class AuthenticationRequiredError extends AuthError {
+  public constructor() {
+    super('AUTHENTICATION_REQUIRED', 'Authentication required')
+    this.name = 'AuthenticationRequiredError'
+  }
+}
+
+/** Stable optimistic-concurrency conflict for credential state. */
+export class AuthStateConflictError extends AuthError {
+  public constructor() {
+    super('AUTH_STATE_CONFLICT', 'Authentication state changed')
+    this.name = 'AuthStateConflictError'
+  }
+}
+
+/** Atomic login limiter denial with bounded retry metadata. */
+export class AuthRateLimitedError extends AuthError {
+  public constructor(public readonly retryAfterMs: number) {
+    super('AUTH_RATE_LIMITED', 'Too many authentication attempts')
+    this.name = 'AuthRateLimitedError'
+  }
+}
