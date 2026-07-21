@@ -28,7 +28,8 @@ function createNodeRedisDriver(
 ): RedisManagedClient {
   const socketOptions = {
     connectTimeout: options.connectTimeoutMs,
-    reconnectStrategy: (retries: number) => Math.min(50 * 2 ** retries, 1_000),
+    reconnectStrategy: (retries: number) =>
+      retries >= 5 ? false : Math.min(50 * 2 ** retries, 1_000),
   }
   const client = createClient({
     url: options.url,
@@ -52,7 +53,9 @@ function createNodeRedisDriver(
     sendCommand: <T>(command: readonly string[]) =>
       driver.sendCommand<T>([...command]),
     close: () => driver.close(),
-    destroy: () => driver.destroy(),
+    destroy: () => {
+      if (driver.isOpen) driver.destroy()
+    },
     duplicate: () => wrap(driver.duplicate()),
     onError: (listener) => {
       driver.on('error', listener)

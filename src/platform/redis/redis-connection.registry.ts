@@ -12,6 +12,7 @@ import { RedisCommandExecutor } from './redis-command.executor'
 export interface RedisConnectionRegistryConfig {
   readonly coordinationUrl: string
   readonly cacheUrl?: string
+  readonly connectTimeoutMs?: number
   readonly commandTimeoutMs: number
 }
 
@@ -117,7 +118,12 @@ export class RedisConnectionRegistry {
     if (connection.client.isReady) return
     if (signal.aborted) throw new Error('Redis connection aborted')
     if (connection.connectPromise === undefined) {
-      const attempt = connection.client.connect().then(() => undefined)
+      const driverAttempt = connection.client.connect().then(() => undefined)
+      const attempt = this.boundConnect(
+        connection.client,
+        driverAttempt,
+        signal,
+      )
       connection.connectPromise = attempt
       const clearAttempt = (): void => {
         if (connection.connectPromise === attempt)
@@ -128,13 +134,62 @@ export class RedisConnectionRegistry {
     await connection.connectPromise
   }
 
+  private boundConnect(
+    client: RedisManagedClient,
+    driverAttempt: Promise<void>,
+    signal: AbortSignal,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let settled = false
+      const finish = (callback: () => void): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        signal.removeEventListener('abort', abort)
+        callback()
+      }
+      const abort = (): void => {
+        try {
+          client.destroy()
+        } catch {
+          // A concurrent close may already own the socket transition.
+        }
+        finish(() => reject(new Error('Redis connection deadline exceeded')))
+      }
+      const timer = setTimeout(
+        abort,
+        this.config.connectTimeoutMs ?? this.config.commandTimeoutMs,
+      )
+      if (signal.aborted) {
+        abort()
+        return
+      }
+      signal.addEventListener('abort', abort, { once: true })
+      void driverAttempt.then(
+        () => finish(resolve),
+        (error: unknown) =>
+          finish(() =>
+            reject(
+              error instanceof Error
+                ? error
+                : new Error('Redis connection failed without an Error cause'),
+            ),
+          ),
+      )
+    })
+  }
+
   private close(
     client: RedisManagedClient,
     signal: AbortSignal,
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const aborted = (): void => {
-        client.destroy()
+        try {
+          client.destroy()
+        } catch {
+          // Idempotent cleanup still reports the missed graceful deadline.
+        }
         reject(new Error('Redis close aborted'))
       }
       if (signal.aborted) return aborted()
@@ -146,7 +201,11 @@ export class RedisConnectionRegistry {
         },
         (error: unknown) => {
           signal.removeEventListener('abort', aborted)
-          client.destroy()
+          try {
+            client.destroy()
+          } catch {
+            // The failed close may already have closed the socket.
+          }
           reject(
             error instanceof Error
               ? error

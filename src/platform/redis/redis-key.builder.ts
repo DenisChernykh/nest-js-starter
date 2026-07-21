@@ -8,12 +8,19 @@ function assertSafeSegment(segment: string): void {
 
 /** Builds collision-resistant Redis keys from validated literal segments. */
 export class RedisKeyBuilder {
+  private readonly namespace: readonly string[]
+
   public constructor(
-    private readonly namespace: string,
+    namespace: string | readonly string[],
     private readonly schema: string,
   ) {
-    assertSafeSegment(namespace)
+    const namespaceSegments =
+      typeof namespace === 'string' ? [namespace] : [...namespace]
+    if (namespaceSegments.length === 0)
+      throw new Error('Redis key namespace cannot be empty')
+    for (const segment of namespaceSegments) assertSafeSegment(segment)
     assertSafeSegment(schema)
+    this.namespace = Object.freeze(namespaceSegments)
   }
 
   /**
@@ -24,6 +31,6 @@ export class RedisKeyBuilder {
   public build(resource: string, ...segments: readonly string[]): string {
     assertSafeSegment(resource)
     for (const segment of segments) assertSafeSegment(segment)
-    return [this.namespace, this.schema, resource, ...segments].join(':')
+    return [...this.namespace, this.schema, resource, ...segments].join(':')
   }
 }

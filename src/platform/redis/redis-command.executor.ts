@@ -53,7 +53,11 @@ export class RedisCommandExecutor {
         callback()
       }
       const abort = (): void => {
-        this.client.destroy()
+        try {
+          this.client.destroy()
+        } catch {
+          // A concurrent close may already own the socket transition.
+        }
         finish(() => reject(new RedisCommandTimeoutError()))
       }
       const timer = setTimeout(abort, this.timeoutMs)

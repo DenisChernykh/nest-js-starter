@@ -43,3 +43,14 @@ export class PasswordHashingError extends AuthError {
     this.name = 'PasswordHashingError'
   }
 }
+
+/** Redacted failure for required PostgreSQL or Redis auth state. */
+export class AuthDependencyUnavailableError extends AuthError {
+  public constructor() {
+    super(
+      'AUTH_DEPENDENCY_UNAVAILABLE',
+      'Authentication dependency unavailable',
+    )
+    this.name = 'AuthDependencyUnavailableError'
+  }
+}
