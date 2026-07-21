@@ -5,7 +5,12 @@
     "noEmit": true,
     "types": ["jest", "node"]
   },
-  "include": ["prisma.config.ts", "scripts/**/*.ts", "test/**/*.ts"],
+  "include": [
+    "openapi-ts.config.ts",
+    "prisma.config.ts",
+    "scripts/**/*.ts",
+    "test/**/*.ts"
+  ],
   "exclude": [
     "node_modules",
     "dist",

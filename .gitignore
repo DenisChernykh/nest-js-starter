@@ -2,6 +2,7 @@ node_modules/
 dist/
 src/generated/prisma/
 coverage/
+test/fixtures/openapi-client/.generated/
 .env
 .env.*
 !.env.example

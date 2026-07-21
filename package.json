@@ -29,6 +29,7 @@
     "manifest:check": "tsx scripts/manifest/check-starter-manifest.ts",
     "openapi:drift": "tsx scripts/openapi/check-openapi-drift.ts",
     "openapi:breaking": "tsx scripts/openapi/check-breaking-openapi.ts",
+    "openapi:client:check": "tsx scripts/openapi/check-generated-client.ts",
     "openapi:generate": "tsx scripts/openapi/write-openapi.ts --output docs/api/openapi.json",
     "openapi:lint": "redocly lint docs/api/openapi.json",
     "openapi:operations": "tsx scripts/openapi/check-openapi-operations.ts",
