@@ -11,12 +11,14 @@ import type { ApplicationLifecycleState } from '@/platform/lifecycle/application
 import { createCorsOptions } from './cors-options'
 import { createTrafficGateMiddleware } from './traffic-gate.middleware'
 import { trustedProxySetting } from './trusted-proxy'
+import type { ActiveRequestTracker } from './active-request-tracker'
 
 /** Applies security-sensitive HTTP policy before application initialization. */
 export function configureHttpApplication(
   app: NestExpressApplication,
   config: RuntimeConfigService,
   lifecycle: ApplicationLifecycleState,
+  requestTracker?: ActiveRequestTracker,
 ): void {
   app.use(helmet())
   app.enableCors(createCorsOptions(config.http.corsOrigins))
@@ -26,6 +28,7 @@ export function configureHttpApplication(
     trustedProxySetting(config.http.trustedProxyCidrs),
   )
   app.use(createTrafficGateMiddleware(lifecycle))
+  if (requestTracker !== undefined) app.use(requestTracker.middleware())
   app.useBodyParser('json', { limit: config.http.jsonBodyLimitBytes })
   app.useBodyParser('urlencoded', {
     extended: false,

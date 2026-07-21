@@ -38,6 +38,16 @@ export class ApiRuntime {
     this.startupController?.abort()
   }
 
+  /** Returns handles published so far for explicit shutdown coordination. */
+  public get currentResources(): ApiRuntimeResources | undefined {
+    return this.resources
+  }
+
+  /** Returns the shared startup promise when startup has begun. */
+  public get startup(): Promise<AddressInfo | string | null> | undefined {
+    return this.startPromise
+  }
+
   /** Cancels startup if needed and closes every published partial handle. */
   public async stop(): Promise<void> {
     this.cancelStartup()

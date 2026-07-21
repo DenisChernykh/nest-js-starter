@@ -2,6 +2,7 @@ import { Controller, Get, Req, Res } from '@nestjs/common'
 import type { Request, Response } from 'express'
 
 import { SafeEndpoint } from '@/platform/http/policy/safe-endpoint.decorator'
+import { RequestOperationContext } from '@/platform/http/bootstrap/request-operation.context'
 
 import { HealthService } from './health.service'
 import type {
@@ -14,7 +15,10 @@ import type {
 /** Serves stable health endpoints outside the application prefix. */
 @Controller('health')
 export class HealthController {
-  public constructor(private readonly health: HealthService) {}
+  public constructor(
+    private readonly health: HealthService,
+    private readonly operationContext: RequestOperationContext,
+  ) {}
 
   /** Serves unconditional process liveness. */
   @Get('live')
@@ -46,7 +50,10 @@ export class HealthController {
     request.once('aborted', abort)
     response.once('close', abort)
     try {
-      return this.write(response, await this.health.ready(parent.signal))
+      return this.write(
+        response,
+        await this.health.ready(this.operationContext.signal ?? parent.signal),
+      )
     } finally {
       request.off('aborted', abort)
       response.off('close', abort)
