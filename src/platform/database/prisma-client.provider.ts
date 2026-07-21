@@ -4,11 +4,12 @@ import { Injectable } from '@nestjs/common'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 
-import { PrismaClient } from '@/generated/prisma/client'
+import { PrismaClient, type Prisma } from '@/generated/prisma/client'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 
 import { runBoundedPostgresQuery } from './bounded-postgres-query'
 import { DatabaseUnavailableError } from './database.contracts'
+import { PrismaTransactionContext } from './prisma-transaction.context'
 
 type DatabaseState = 'idle' | 'connecting' | 'connected' | 'closing' | 'closed'
 
@@ -88,7 +89,10 @@ export class PrismaClientProvider {
     this.degraded = true
   }
 
-  public constructor(config: RuntimeConfigService) {
+  public constructor(
+    config: RuntimeConfigService,
+    private readonly transactionContext = new PrismaTransactionContext(),
+  ) {
     this.connectionTimeoutMs = config.database.connectionTimeoutMs
     this.pool = new Pool({
       connectionString: config.database.url,
@@ -188,14 +192,16 @@ export class PrismaClientProvider {
    * @throws DatabaseUnavailableError before callback invocation when admission is closed.
    */
   public withClient<T>(
-    operation: (client: PrismaClient) => Promise<T>,
+    operation: (client: PrismaClient | Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
     if (this.state !== 'connected' || !this.admissionOpen) {
       return Promise.reject(new DatabaseUnavailableError())
     }
     let result: Promise<T>
     try {
-      result = Promise.resolve(operation(this.prisma))
+      result = Promise.resolve(
+        this.transactionContext.withClient(this.prisma, operation),
+      )
     } catch (error: unknown) {
       result = Promise.reject(
         error instanceof Error ? error : new Error('Database operation failed'),

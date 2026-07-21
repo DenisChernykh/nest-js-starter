@@ -122,7 +122,7 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            '@test/**',
+            { group: ['@test/**'] },
             {
               group: [
                 '@nestjs/**',
@@ -161,7 +161,7 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            '@test/**',
+            { group: ['@test/**'] },
             {
               group: [
                 '@nestjs/**',
@@ -201,7 +201,7 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            '@test/**',
+            { group: ['@test/**'] },
             {
               group: [
                 '@prisma/**',
@@ -229,7 +229,7 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            '@test/**',
+            { group: ['@test/**'] },
             {
               group: [
                 '@/bootstrap',
@@ -254,7 +254,7 @@ export default tseslint.config(
         'error',
         {
           patterns: [
-            '@test/**',
+            { group: ['@test/**'] },
             {
               group: ['@/bootstrap', '@/bootstrap/**'],
               message:

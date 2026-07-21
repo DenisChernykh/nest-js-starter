@@ -3,6 +3,7 @@ const config = {
   clearMocks: true,
   moduleFileExtensions: ['js', 'json', 'ts'],
   moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@scripts/(.*)$': '<rootDir>/scripts/$1',
     '^@test/(.*)$': '<rootDir>/test/$1',
