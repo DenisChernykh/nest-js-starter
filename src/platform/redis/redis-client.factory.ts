@@ -28,8 +28,7 @@ function createNodeRedisDriver(
 ): RedisManagedClient {
   const socketOptions = {
     connectTimeout: options.connectTimeoutMs,
-    reconnectStrategy: (retries: number) =>
-      Math.min(50 * 2 ** retries, 1_000),
+    reconnectStrategy: (retries: number) => Math.min(50 * 2 ** retries, 1_000),
   }
   const client = createClient({
     url: options.url,
