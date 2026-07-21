@@ -74,7 +74,11 @@ export class ApiRuntime {
       this.ensureStartupAllowed(signal)
       await this.resources.application.listen()
       this.ensureStartupAllowed(signal)
-      await this.resources.database.connect(signal)
+      if (this.resources.startupRegistry !== undefined) {
+        await this.resources.startupRegistry.startAll(signal)
+      } else {
+        await this.resources.database.connect(signal)
+      }
       this.ensureStartupAllowed(signal)
       this.resources.lifecycle.markReady()
       return this.resources.application.address()
@@ -93,7 +97,8 @@ export class ApiRuntime {
       const cleanupSignal = new AbortController().signal
       await Promise.allSettled([
         resources.application.close(),
-        resources.database.close(cleanupSignal),
+        resources.startupRegistry?.stopStarted(cleanupSignal) ??
+          resources.database.close(cleanupSignal),
       ])
     })()
     await this.cleanupPromise

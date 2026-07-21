@@ -3,8 +3,8 @@ import type { RedisConnectionRegistry } from '@/platform/redis/redis-connection.
 import { RedisReadinessIndicator } from '@/platform/redis/redis-readiness.indicator'
 
 describe('RedisReadinessIndicator', () => {
-  it('returns down without PING when the coordination client is not ready', async () => {
-    const execute = jest.fn()
+  it('attempts bounded reconnect when the coordination client is not ready', async () => {
+    const execute = jest.fn(() => Promise.resolve('PONG'))
     const registry = {
       client: () => ({ isReady: false }) as RedisManagedClient,
       executor: () => ({ execute }),
@@ -12,9 +12,9 @@ describe('RedisReadinessIndicator', () => {
     const indicator = new RedisReadinessIndicator(registry, 25)
 
     await expect(indicator.check(new AbortController().signal)).resolves.toBe(
-      'down',
+      'up',
     )
-    expect(execute).not.toHaveBeenCalled()
+    expect(execute).toHaveBeenCalledTimes(1)
   })
 
   it('requires a successful bounded PING after isReady', async () => {

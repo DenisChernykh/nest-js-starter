@@ -13,6 +13,7 @@ describe('health HTTP contract', () => {
   let server: Server
   let lifecycle: ApplicationLifecycleState
   let databaseStatus: 'up' | 'down'
+  let redisStatus: 'up' | 'down'
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -21,11 +22,18 @@ describe('health HTTP contract', () => {
     app = moduleRef.createNestApplication()
     const registry = app.get(HealthRegistry)
     databaseStatus = 'up'
+    redisStatus = 'up'
     registry.register({
       name: 'postgresql',
       required: true,
       timeoutMs: 100,
       check: () => Promise.resolve(databaseStatus),
+    })
+    registry.register({
+      name: 'redis-coordination',
+      required: true,
+      timeoutMs: 100,
+      check: () => Promise.resolve(redisStatus),
     })
     registry.seal()
     lifecycle = app.get(ApplicationLifecycleState)
@@ -51,7 +59,12 @@ describe('health HTTP contract', () => {
       .get('/health/ready')
       .expect(503, {
         status: 'unavailable',
-        checks: { draining: 'up', postgresql: 'skipped', startup: 'down' },
+        checks: {
+          draining: 'up',
+          postgresql: 'skipped',
+          'redis-coordination': 'skipped',
+          startup: 'down',
+        },
       })
   })
 
@@ -64,14 +77,24 @@ describe('health HTTP contract', () => {
       .get('/health/ready')
       .expect(200, {
         status: 'ok',
-        checks: { draining: 'up', postgresql: 'up', startup: 'up' },
+        checks: {
+          draining: 'up',
+          postgresql: 'up',
+          'redis-coordination': 'up',
+          startup: 'up',
+        },
       })
     databaseStatus = 'down'
     await request(server)
       .get('/health/ready')
       .expect(503, {
         status: 'unavailable',
-        checks: { draining: 'up', postgresql: 'down', startup: 'up' },
+        checks: {
+          draining: 'up',
+          postgresql: 'down',
+          'redis-coordination': 'up',
+          startup: 'up',
+        },
       })
   })
 
@@ -84,7 +107,12 @@ describe('health HTTP contract', () => {
       .get('/health/ready')
       .expect(503, {
         status: 'unavailable',
-        checks: { draining: 'down', postgresql: 'skipped', startup: 'up' },
+        checks: {
+          draining: 'down',
+          postgresql: 'skipped',
+          'redis-coordination': 'skipped',
+          startup: 'up',
+        },
       })
     await request(server).get('/v1/health/ready').expect(404)
   })

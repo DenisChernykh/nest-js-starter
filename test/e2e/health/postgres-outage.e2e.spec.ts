@@ -1,4 +1,5 @@
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import type { StartedRedisContainer } from '@testcontainers/redis'
 
 import {
   clearTestRuntimeEnvironment,
@@ -11,14 +12,17 @@ import {
 } from '@test/integration/support/postgres-outage'
 import { startPostgresContainer } from '@test/integration/support/postgres-container'
 import { waitForCondition } from '@test/integration/support/wait-for-condition'
+import { startRedisContainer } from '@test/integration/support/redis-container'
 
 describe('PostgreSQL outage readiness', () => {
   let container: StartedPostgreSqlContainer
+  let redis: StartedRedisContainer
   let suspended = false
 
   it('transitions ready green to red to green while startup stays latched', async () => {
     container = await startPostgresContainer()
-    const { runtime, baseUrl } = await startTestRuntime(container, {
+    redis = await startRedisContainer()
+    const { runtime, baseUrl } = await startTestRuntime(container, redis, {
       DATABASE_HEALTH_TIMEOUT_MS: '250',
       DATABASE_CONNECTION_TIMEOUT_MS: '250',
     })
@@ -45,6 +49,7 @@ describe('PostgreSQL outage readiness', () => {
       if (suspended) await resumePostgres(container)
       await runtime.stop()
       await container.stop()
+      await redis.stop()
       clearTestRuntimeEnvironment()
     }
   })

@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import type { StartedRedisContainer } from '@testcontainers/redis'
 
 import { reserveRuntimePort } from '@test/e2e/support/create-test-runtime'
 import {
@@ -9,23 +10,35 @@ import {
 } from '@test/e2e/support/spawn-built-api'
 import { startPostgresContainer } from '@test/integration/support/postgres-container'
 import { waitForCondition } from '@test/integration/support/wait-for-condition'
+import { startRedisContainer } from '@test/integration/support/redis-container'
 
 describe('compiled API process SIGTERM', () => {
   let container: StartedPostgreSqlContainer
+  let redis: StartedRedisContainer
   let child: ChildProcessWithoutNullStreams | undefined
 
   afterAll(async () => {
     if (child?.exitCode === null) child.kill('SIGKILL')
     await container?.stop()
+    await redis?.stop()
   })
 
   it('drains and exits zero after a real SIGTERM', async () => {
-    container = await startPostgresContainer()
+    ;[container, redis] = await Promise.all([
+      startPostgresContainer(),
+      startRedisContainer(),
+    ])
     const port = await reserveRuntimePort()
     const baseUrl = `http://127.0.0.1:${port}`
     child = spawnBuiltApi({
       ...process.env,
       DATABASE_URL: container.getConnectionUri(),
+      REDIS_COORDINATION_URL: redis.getConnectionUrl(),
+      AUTH_SESSION_KEY_SECRET: Buffer.alloc(32, 1).toString('base64url'),
+      AUTH_CSRF_SECRET: Buffer.alloc(32, 2).toString('base64url'),
+      AUTH_RATE_LIMIT_KEY_SECRET: Buffer.alloc(32, 3).toString('base64url'),
+      AUTH_NETWORK_METADATA_SECRET: Buffer.alloc(32, 4).toString('base64url'),
+      AUTH_CSRF_ORIGINS: baseUrl,
       API_HOST: '127.0.0.1',
       API_PORT: String(port),
       PUBLIC_API_URL: baseUrl,

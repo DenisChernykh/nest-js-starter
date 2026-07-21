@@ -13,8 +13,6 @@ export class RedisReadinessIndicator implements ReadinessIndicator {
   ) {}
 
   public async check(signal: AbortSignal): Promise<'up' | 'down'> {
-    if (!this.registry.client('coordination').isReady) return 'down'
-
     try {
       const response = await this.registry
         .executor('coordination')

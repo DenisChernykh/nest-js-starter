@@ -4,7 +4,7 @@ import { Reflector } from '@nestjs/core'
 
 import { AuthorizationDeniedError } from '../application/auth-errors'
 import type { PermissionKey } from '../application/permission'
-import type { AuthRequestContext } from './auth-request.context'
+import { AuthRequestContext } from './auth-request.context'
 import { REQUIRE_PERMISSION_METADATA } from './require-permission.decorator'
 
 /** Enforces an all-of permission policy against the freshly loaded principal. */

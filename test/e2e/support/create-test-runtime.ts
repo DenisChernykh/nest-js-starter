@@ -1,6 +1,7 @@
 import { createServer } from 'node:net'
 
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import type { StartedRedisContainer } from '@testcontainers/redis'
 
 import { ApiRuntime } from '@/bootstrap/api/api-runtime'
 
@@ -19,13 +20,20 @@ export async function reserveRuntimePort(): Promise<number> {
 
 /** Starts an in-process API runtime connected to the supplied PostgreSQL container. */
 export async function startTestRuntime(
-  container: StartedPostgreSqlContainer,
+  postgres: StartedPostgreSqlContainer,
+  redis: StartedRedisContainer,
   overrides: Record<string, string> = {},
 ): Promise<{ readonly runtime: ApiRuntime; readonly baseUrl: string }> {
   const port = await reserveRuntimePort()
   const baseUrl = `http://127.0.0.1:${port}`
   Object.assign(process.env, {
-    DATABASE_URL: container.getConnectionUri(),
+    DATABASE_URL: postgres.getConnectionUri(),
+    REDIS_COORDINATION_URL: redis.getConnectionUrl(),
+    AUTH_SESSION_KEY_SECRET: Buffer.alloc(32, 1).toString('base64url'),
+    AUTH_CSRF_SECRET: Buffer.alloc(32, 2).toString('base64url'),
+    AUTH_RATE_LIMIT_KEY_SECRET: Buffer.alloc(32, 3).toString('base64url'),
+    AUTH_NETWORK_METADATA_SECRET: Buffer.alloc(32, 4).toString('base64url'),
+    AUTH_CSRF_ORIGINS: baseUrl,
     API_HOST: '127.0.0.1',
     API_PORT: String(port),
     PUBLIC_API_URL: baseUrl,
@@ -41,6 +49,12 @@ export async function startTestRuntime(
 export function clearTestRuntimeEnvironment(): void {
   for (const key of [
     'DATABASE_URL',
+    'REDIS_COORDINATION_URL',
+    'AUTH_SESSION_KEY_SECRET',
+    'AUTH_CSRF_SECRET',
+    'AUTH_RATE_LIMIT_KEY_SECRET',
+    'AUTH_NETWORK_METADATA_SECRET',
+    'AUTH_CSRF_ORIGINS',
     'API_HOST',
     'API_PORT',
     'PUBLIC_API_URL',

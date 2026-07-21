@@ -46,8 +46,6 @@ import {
           config.redis,
         )
         registry.register('coordination', true)
-        if (config.redis.cacheUrl !== undefined)
-          registry.register('cache', false)
         registry.seal()
         return registry
       },
