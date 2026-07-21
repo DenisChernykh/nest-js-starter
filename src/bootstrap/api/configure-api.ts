@@ -36,6 +36,7 @@ import {
   type StructuredLogger,
 } from '@/platform/logging/logging.contracts'
 import { HttpMetrics } from '@/platform/observability/http-metrics'
+import type { ObservabilityRuntime } from '@/platform/observability/observability.runtime'
 
 import { ApiModule } from './api.module'
 
@@ -85,6 +86,7 @@ export interface ApiRuntimeResources {
  */
 export async function configureApi(
   runtimeConfig: ApplicationRuntimeConfig = createApiRuntimeConfig(),
+  observability?: ObservabilityRuntime,
 ): Promise<ApiRuntimeResources> {
   const app = await NestFactory.create<NestExpressApplication>(
     ApiModule.forRoot(runtimeConfig),
@@ -125,6 +127,7 @@ export async function configureApi(
   startupRegistry.seal()
   shutdownRegistry.register(redis)
   shutdownRegistry.register(database as DatabaseLifecycle & ShutdownParticipant)
+  if (observability !== undefined) shutdownRegistry.register(observability)
   shutdownRegistry.seal()
   configureHttpApplication(
     app,

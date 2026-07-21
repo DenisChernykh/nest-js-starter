@@ -20,6 +20,14 @@ describe('ShutdownRegistry', () => {
         return Promise.reject(new Error('failed'))
       },
     })
+    registry.register({
+      name: 'opentelemetry',
+      order: 400,
+      close: () => {
+        calls.push('opentelemetry')
+        return Promise.resolve()
+      },
+    })
     expect(() =>
       registry.register({
         name: 'redis',
@@ -39,11 +47,11 @@ describe('ShutdownRegistry', () => {
     const first = registry.closeAll(signal)
     expect(registry.closeAll(signal)).toBe(first)
     await expect(first).resolves.toEqual({
-      completed: ['database'],
+      completed: ['database', 'opentelemetry'],
       failed: ['redis'],
       timedOut: false,
     })
-    expect(calls).toEqual(['redis', 'database'])
+    expect(calls).toEqual(['redis', 'database', 'opentelemetry'])
   })
 
   it('reports a shared aborted deadline', async () => {
