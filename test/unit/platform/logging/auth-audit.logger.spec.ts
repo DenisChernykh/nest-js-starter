@@ -18,6 +18,9 @@ describe('AuthAuditLogger', () => {
     ['initial_admin_create', 'success', 'INITIAL_ADMIN_CREATED'],
     ['initial_admin_create', 'conflict', 'ALREADY_EXISTS'],
     ['initial_admin_create', 'denied', 'DEPENDENCY_UNAVAILABLE'],
+    ['docs_access', 'denied', 'AUTHENTICATION_REQUIRED'],
+    ['docs_access', 'denied', 'AUTHORIZATION_DENIED'],
+    ['docs_access', 'denied', 'DEPENDENCY_UNAVAILABLE'],
   ] as const)('accepts %s/%s/%s', (action, outcome, reasonCode) => {
     const sink = { write: jest.fn() }
     const logger = new AuthAuditLogger(sink)
