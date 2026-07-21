@@ -3,10 +3,26 @@ import { join } from 'node:path'
 
 import {
   assertExactStableDirectDependencies,
+  assertObservabilityDependencyFamily,
   assertTypeScriptBridge,
   type TypeScriptBridgeEvidence,
   type TypeScriptBridgeManifest,
 } from '@scripts/toolchain/check-typescript-bridge'
+
+const OBSERVABILITY_DEPENDENCY_FAMILY = {
+  '@opentelemetry/api': '1.9.1',
+  '@opentelemetry/exporter-metrics-otlp-http': '0.220.0',
+  '@opentelemetry/exporter-trace-otlp-http': '0.220.0',
+  '@opentelemetry/instrumentation-http': '0.220.0',
+  '@opentelemetry/instrumentation-pg': '0.72.0',
+  '@opentelemetry/instrumentation-redis': '0.68.0',
+  '@opentelemetry/resources': '2.9.0',
+  '@opentelemetry/sdk-metrics': '2.9.0',
+  '@opentelemetry/sdk-node': '0.220.0',
+  '@opentelemetry/sdk-trace-base': '2.9.0',
+  '@opentelemetry/semantic-conventions': '1.43.0',
+  pino: '10.3.1',
+} as const
 
 describe('TypeScript toolchain bridge', () => {
   const packageManifest = JSON.parse(
@@ -72,5 +88,59 @@ describe('TypeScript toolchain bridge', () => {
     expect(() =>
       assertExactStableDirectDependencies(packageManifest),
     ).not.toThrow()
+  })
+
+  it('keeps the committed observability dependency family exact and coherent', () => {
+    expect(() =>
+      assertObservabilityDependencyFamily(
+        packageManifest,
+        OBSERVABILITY_DEPENDENCY_FAMILY,
+      ),
+    ).not.toThrow()
+  })
+
+  it.each([
+    ['a ranged Pino version', { pino: '^10.3.1' }],
+    [
+      'a mismatched experimental exporter',
+      { '@opentelemetry/exporter-trace-otlp-http': '0.219.0' },
+    ],
+    [
+      'a mismatched stable SDK package',
+      { '@opentelemetry/sdk-metrics': '2.8.0' },
+    ],
+    ['an incompatible API package', { '@opentelemetry/api': '1.8.0' }],
+  ])('rejects %s', (_name, replacement) => {
+    expect(() =>
+      assertObservabilityDependencyFamily(
+        {
+          dependencies: {
+            ...OBSERVABILITY_DEPENDENCY_FAMILY,
+            ...replacement,
+          },
+        },
+        OBSERVABILITY_DEPENDENCY_FAMILY,
+      ),
+    ).toThrow('Invalid observability dependency family')
+  })
+
+  it.each([
+    'nestjs-pino',
+    'pino-http',
+    'pino-pretty',
+    '@opentelemetry/auto-instrumentations-node',
+    '@opentelemetry/instrumentation-express',
+  ])('rejects forbidden direct package %s', (forbiddenPackage) => {
+    expect(() =>
+      assertObservabilityDependencyFamily(
+        {
+          dependencies: {
+            ...OBSERVABILITY_DEPENDENCY_FAMILY,
+            [forbiddenPackage]: '1.2.3',
+          },
+        },
+        OBSERVABILITY_DEPENDENCY_FAMILY,
+      ),
+    ).toThrow('Invalid observability dependency family')
   })
 })
