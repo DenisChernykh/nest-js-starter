@@ -23,6 +23,7 @@ export function createOpenApiDocument(
     .setDescription('Reusable production NestJS backend starter contract.')
     .setVersion('0.1.0')
     .setOpenAPIVersion('3.0.3')
+    .addServer('/', 'Current API origin.')
     .addTag('health', 'Process lifecycle and dependency health probes.')
     .addTag('auth', 'Hardened browser-session authentication endpoints.')
     .addCookieAuth(

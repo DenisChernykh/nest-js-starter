@@ -2,6 +2,7 @@ node_modules
 dist
 src/generated/prisma
 coverage
+docs/api/openapi.json
 pnpm-lock.yaml
 test/architecture/fixtures
 test/fixtures
