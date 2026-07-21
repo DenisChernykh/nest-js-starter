@@ -97,4 +97,29 @@ describe('RedisConnectionRegistry', () => {
     expect(duplicate).toHaveBeenCalledTimes(1)
     expect(create).toHaveBeenCalledTimes(1)
   })
+
+  it('never reconnects a capability after lifecycle close begins', async () => {
+    const coordination = managedClient()
+    const registry = new RedisConnectionRegistry(
+      {
+        create: jest.fn(() => coordination),
+      } as unknown as RedisClientFactory,
+      new ActiveOperationTracker(),
+      {
+        coordinationUrl: 'redis://coordination:6379',
+        commandTimeoutMs: 50,
+      },
+    )
+    registry.register('coordination', true)
+    registry.seal()
+
+    await registry.closeAll(new AbortController().signal)
+    await expect(
+      registry
+        .executor('coordination')
+        .execute('ping-after-close', (client) => client.ping()),
+    ).rejects.toThrow('Redis connection admission is closed')
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(coordination.connect).not.toHaveBeenCalled()
+  })
 })

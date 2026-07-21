@@ -31,6 +31,7 @@ export class RedisConnectionRegistry {
     RegisteredConnection
   >()
   private sealed = false
+  private connectionAdmissionOpen = true
 
   public constructor(
     private readonly factory: RedisClientFactory,
@@ -99,6 +100,7 @@ export class RedisConnectionRegistry {
 
   /** Closes all opened clients and destroys them when cooperative close fails. */
   public async closeAll(signal: AbortSignal): Promise<void> {
+    this.connectionAdmissionOpen = false
     const failures: unknown[] = []
     for (const connection of [...this.connections.values()].reverse()) {
       if (!connection.client.isOpen) continue
@@ -115,6 +117,8 @@ export class RedisConnectionRegistry {
     connection: RegisteredConnection,
     signal: AbortSignal,
   ): Promise<void> {
+    if (!this.connectionAdmissionOpen)
+      throw new Error('Redis connection admission is closed')
     if (connection.client.isReady) return
     if (signal.aborted) throw new Error('Redis connection aborted')
     if (connection.connectPromise === undefined) {

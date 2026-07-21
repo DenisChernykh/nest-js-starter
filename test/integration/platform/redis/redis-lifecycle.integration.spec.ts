@@ -29,6 +29,7 @@ describe('Redis lifecycle', () => {
       new ActiveOperationTracker(),
       {
         coordinationUrl: container.getConnectionUrl(),
+        connectTimeoutMs: 1_000,
         commandTimeoutMs,
       },
     )
