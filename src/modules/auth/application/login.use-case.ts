@@ -12,6 +12,11 @@ import type {
   SessionStorePort,
 } from './session-store.port'
 import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
+import {
+  NOOP_TELEMETRY,
+  type AuthTelemetryOutcome,
+  type TelemetryPort,
+} from '@/shared/application/telemetry.port'
 
 /** Untrusted login fields plus safe request metadata. */
 export interface LoginInput {
@@ -32,9 +37,16 @@ export class LoginUseCase {
     private readonly sessions: SessionStorePort,
     private readonly dummyPasswordHash: string,
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
+    private readonly telemetry: TelemetryPort = NOOP_TELEMETRY,
   ) {}
 
   public async execute(input: LoginInput): Promise<IssuedBrowserSession> {
+    return this.telemetry.runAuthOperation('login', () =>
+      this.performLogin(input),
+    )
+  }
+
+  private async performLogin(input: LoginInput): Promise<IssuedBrowserSession> {
     const normalizedEmail = input.email.trim().toLowerCase()
     try {
       const decision = await this.limiter.consume({
@@ -82,6 +94,7 @@ export class LoginUseCase {
         targetType: 'session',
         targetId: session.publicId,
       })
+      this.telemetry.recordAuthOutcome('login', 'success')
       return session
     } catch (error: unknown) {
       if (error instanceof AuthError) {
@@ -95,6 +108,7 @@ export class LoginUseCase {
                 ? 'INVALID_CREDENTIALS'
                 : 'DEPENDENCY_UNAVAILABLE',
         })
+        this.telemetry.recordAuthOutcome('login', this.authErrorOutcome(error))
         throw error
       }
       this.audit.emit({
@@ -102,7 +116,14 @@ export class LoginUseCase {
         outcome: 'denied',
         reasonCode: 'DEPENDENCY_UNAVAILABLE',
       })
+      this.telemetry.recordAuthOutcome('login', 'dependency_error')
       throw new AuthDependencyUnavailableError()
     }
+  }
+
+  private authErrorOutcome(error: AuthError): AuthTelemetryOutcome {
+    if (error.code === 'AUTH_RATE_LIMITED') return 'rate_limited'
+    if (error.code === 'AUTHENTICATION_FAILED') return 'denied'
+    return 'dependency_error'
   }
 }

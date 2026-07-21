@@ -1,4 +1,7 @@
+import { performance } from 'node:perf_hooks'
+
 import type { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
+import { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
 
 import type { RedisManagedClient } from './redis-capability'
 
@@ -16,6 +19,7 @@ export class RedisCommandExecutor {
     private readonly client: RedisManagedClient,
     private readonly operationTracker: ActiveOperationTracker,
     private readonly timeoutMs: number,
+    private readonly metrics: RuntimeMetrics = new RuntimeMetrics(),
   ) {}
 
   /**
@@ -30,11 +34,29 @@ export class RedisCommandExecutor {
     signal?: AbortSignal,
   ): Promise<T> {
     void operationName
+    const startedAt = performance.now()
     const lease = this.operationTracker.begin()
     try {
-      return await this.withDeadline(operation, [lease.signal, signal])
+      const value = await this.withDeadline(operation, [lease.signal, signal])
+      this.recordOutcome('success', startedAt)
+      return value
+    } catch (error: unknown) {
+      this.recordOutcome('error', startedAt)
+      throw error
     } finally {
       lease.complete()
+    }
+  }
+
+  private recordOutcome(outcome: 'success' | 'error', startedAt: number): void {
+    try {
+      this.metrics.recordDependency(
+        'redis',
+        outcome,
+        Math.max(0, performance.now() - startedAt),
+      )
+    } catch {
+      // Telemetry cannot replace the Redis command settlement.
     }
   }
 

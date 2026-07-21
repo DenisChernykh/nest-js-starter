@@ -2,6 +2,7 @@ import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operati
 import type { RedisManagedClient } from '@/platform/redis/redis-capability'
 import type { RedisClientFactory } from '@/platform/redis/redis-client.factory'
 import { RedisConnectionRegistry } from '@/platform/redis/redis-connection.registry'
+import type { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
 
 function managedClient(): RedisManagedClient {
   return {
@@ -121,5 +122,34 @@ describe('RedisConnectionRegistry', () => {
     ).rejects.toThrow('Redis connection admission is closed')
     // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(coordination.connect).not.toHaveBeenCalled()
+  })
+
+  it('counts only reconnect attempts with finite outcomes', async () => {
+    const coordination = managedClient()
+    const metrics = {
+      recordRedisReconnect: jest.fn(),
+    } as unknown as RuntimeMetrics
+    const registry = new RedisConnectionRegistry(
+      { create: jest.fn(() => coordination) } as unknown as RedisClientFactory,
+      new ActiveOperationTracker(),
+      {
+        coordinationUrl: 'redis://coordination:6379',
+        commandTimeoutMs: 50,
+      },
+      metrics,
+    )
+    registry.register('coordination', true)
+    registry.seal()
+
+    await registry.connectRequired(new AbortController().signal)
+    Object.assign(coordination, { isReady: false })
+    await registry
+      .executor('coordination')
+      .execute('ping', (client) => client.ping())
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(metrics.recordRedisReconnect).toHaveBeenCalledWith('success')
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(metrics.recordRedisReconnect).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,15 +1,29 @@
 import type { AuthenticatedPrincipal } from './auth.types'
 import type { SessionStorePort } from './session-store.port'
 import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
+import {
+  NOOP_TELEMETRY,
+  type TelemetryPort,
+} from '@/shared/application/telemetry.port'
 
 /** Revokes one public session identifier within authenticated user ownership. */
 export class RevokeSessionUseCase {
   public constructor(
     private readonly sessions: SessionStorePort,
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
+    private readonly telemetry: TelemetryPort = NOOP_TELEMETRY,
   ) {}
 
   public async execute(
+    principal: AuthenticatedPrincipal,
+    publicId: string,
+  ): Promise<boolean> {
+    return this.telemetry.runAuthOperation('revoke_session', () =>
+      this.performRevoke(principal, publicId),
+    )
+  }
+
+  private async performRevoke(
     principal: AuthenticatedPrincipal,
     publicId: string,
   ): Promise<boolean> {
@@ -24,6 +38,10 @@ export class RevokeSessionUseCase {
         targetType: 'session',
         targetId: publicId,
       })
+      this.telemetry.recordAuthOutcome(
+        'revoke_session',
+        existed ? 'success' : 'denied',
+      )
       return existed
     } catch (error: unknown) {
       this.audit.emit({
@@ -35,6 +53,7 @@ export class RevokeSessionUseCase {
         targetType: 'session',
         targetId: publicId,
       })
+      this.telemetry.recordAuthOutcome('revoke_session', 'dependency_error')
       throw error
     }
   }

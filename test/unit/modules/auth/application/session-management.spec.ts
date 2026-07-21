@@ -13,6 +13,7 @@ import { definePermissions } from '@/modules/auth/application/permission'
 import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
 import type { TransactionPort } from '@/shared/application/transaction.port'
+import type { TelemetryPort } from '@/shared/application/telemetry.port'
 
 const principal: AuthenticatedPrincipal = {
   userId: 'user',
@@ -161,5 +162,41 @@ describe('auth session management', () => {
     await expect(target.execute('user')).resolves.toEqual({
       cleanupComplete: true,
     })
+  })
+
+  it('records fixed logout-all and revoke-session telemetry outcomes', async () => {
+    const telemetry = {
+      runAuthOperation: jest.fn((_operation, work) => work()),
+      recordAuthOutcome: jest.fn(),
+    } as jest.Mocked<TelemetryPort>
+    const sessions = {
+      revoke: jest.fn(() => Promise.resolve(false)),
+      revokeAll: jest.fn(() => Promise.resolve(1)),
+    } as unknown as SessionStorePort
+    const logoutAll = new LogoutAllUseCase(
+      {
+        incrementSessionGeneration: jest.fn(() => Promise.resolve(2n)),
+      } as unknown as AuthPersistencePort,
+      { run: (operation) => operation() },
+      sessions,
+      undefined,
+      undefined,
+      telemetry,
+    )
+    const revoke = new RevokeSessionUseCase(sessions, undefined, telemetry)
+
+    await expect(logoutAll.execute('private-user-id')).resolves.toEqual({
+      cleanupComplete: true,
+    })
+    await expect(revoke.execute(principal, 'private-session-id')).resolves.toBe(
+      false,
+    )
+    expect(
+      telemetry.runAuthOperation.mock.calls.map(([operation]) => operation),
+    ).toEqual(['logout_all', 'revoke_session'])
+    expect(telemetry.recordAuthOutcome.mock.calls).toEqual([
+      ['logout_all', 'success'],
+      ['revoke_session', 'denied'],
+    ])
   })
 })

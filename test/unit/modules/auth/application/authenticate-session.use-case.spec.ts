@@ -7,6 +7,7 @@ import {
 import { definePermissions } from '@/modules/auth/application/permission'
 import { RoleRegistry } from '@/modules/auth/application/role-registry'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
+import type { TelemetryPort } from '@/shared/application/telemetry.port'
 
 describe('AuthenticateSessionUseCase', () => {
   const record = {
@@ -158,6 +159,35 @@ describe('AuthenticateSessionUseCase', () => {
 
     await expect(target.execute('raw', 100)).rejects.toBeInstanceOf(
       AuthDependencyUnavailableError,
+    )
+  })
+
+  it('records a fixed span and dependency outcome without session identifiers', async () => {
+    const telemetry = {
+      runAuthOperation: jest.fn((_operation, work) => work()),
+      recordAuthOutcome: jest.fn(),
+    } as jest.Mocked<TelemetryPort>
+    const target = new AuthenticateSessionUseCase(
+      {
+        readAndTouch: jest.fn(() => Promise.reject(new Error('driver detail'))),
+      } as unknown as SessionStorePort,
+      {} as AuthPersistencePort,
+      new RoleRegistry([]),
+      telemetry,
+    )
+
+    await expect(
+      target.execute('raw-private-token', 100),
+    ).rejects.toBeInstanceOf(AuthDependencyUnavailableError)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(telemetry.runAuthOperation).toHaveBeenCalledWith(
+      'authenticate',
+      expect.any(Function),
+    )
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(telemetry.recordAuthOutcome).toHaveBeenCalledWith(
+      'authenticate',
+      'dependency_error',
     )
   })
 })

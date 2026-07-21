@@ -4,6 +4,7 @@ import type { LoginRateLimiterPort } from '@/modules/auth/application/login-rate
 import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
 import type { AuthAuditPort } from '@/modules/auth/application/auth-audit.port'
+import type { TelemetryPort } from '@/shared/application/telemetry.port'
 
 interface LoginHarness {
   readonly useCase: LoginUseCase
@@ -12,6 +13,7 @@ interface LoginHarness {
   readonly limiter: LoginRateLimiterPort
   readonly sessions: SessionStorePort
   readonly audit: jest.Mocked<AuthAuditPort>
+  readonly telemetry: jest.Mocked<TelemetryPort>
 }
 
 describe('LoginUseCase', () => {
@@ -44,6 +46,10 @@ describe('LoginUseCase', () => {
       ),
     } as unknown as SessionStorePort
     const audit = { emit: jest.fn() }
+    const telemetry = {
+      runAuthOperation: jest.fn((_operation, work) => work()),
+      recordAuthOutcome: jest.fn(),
+    } as jest.Mocked<TelemetryPort>
     return {
       useCase: new LoginUseCase(
         persistence,
@@ -52,12 +58,14 @@ describe('LoginUseCase', () => {
         sessions,
         '$argon2id$constant-dummy',
         audit,
+        telemetry,
       ),
       persistence,
       passwords,
       limiter,
       sessions,
       audit,
+      telemetry,
     }
   }
 
@@ -108,6 +116,16 @@ describe('LoginUseCase', () => {
         reasonCode: 'INVALID_CREDENTIALS',
       },
     ])
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(target.telemetry.recordAuthOutcome).toHaveBeenCalledWith(
+      'login',
+      'denied',
+    )
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(target.telemetry.runAuthOperation).toHaveBeenCalledWith(
+      'login',
+      expect.any(Function),
+    )
   })
 
   it('normalizes only email and issues from durable generation and epoch', async () => {
@@ -156,6 +174,11 @@ describe('LoginUseCase', () => {
         targetId: 'public',
       },
     ])
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(target.telemetry.recordAuthOutcome).toHaveBeenCalledWith(
+      'login',
+      'success',
+    )
   })
 
   it('denies before credential lookup when either distributed bucket is over limit', async () => {
@@ -189,6 +212,11 @@ describe('LoginUseCase', () => {
         reasonCode: 'RATE_LIMITED',
       },
     ])
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(target.telemetry.recordAuthOutcome).toHaveBeenCalledWith(
+      'login',
+      'rate_limited',
+    )
   })
 
   it('uses best-effort rehash CAS without rejecting a verified login conflict', async () => {

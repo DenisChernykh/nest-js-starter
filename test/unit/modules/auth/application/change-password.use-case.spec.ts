@@ -3,6 +3,7 @@ import { ChangePasswordUseCase } from '@/modules/auth/application/change-passwor
 import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
 import type { TransactionPort } from '@/shared/application/transaction.port'
+import type { TelemetryPort } from '@/shared/application/telemetry.port'
 
 describe('ChangePasswordUseCase', () => {
   it('hashes outside transaction, commits CAS plus generation, then cleans Redis', async () => {
@@ -51,6 +52,10 @@ describe('ChangePasswordUseCase', () => {
       }),
     } as unknown as SessionStorePort
     const audit = { emit: jest.fn(() => order.push('audit')) }
+    const telemetry = {
+      runAuthOperation: jest.fn((_operation, work) => work()),
+      recordAuthOutcome: jest.fn(),
+    } as jest.Mocked<TelemetryPort>
     const target = new ChangePasswordUseCase(
       persistence,
       passwords,
@@ -58,6 +63,7 @@ describe('ChangePasswordUseCase', () => {
       sessions,
       undefined,
       audit,
+      telemetry,
     )
 
     await expect(
@@ -82,6 +88,16 @@ describe('ChangePasswordUseCase', () => {
         outcome: 'success',
         reasonCode: 'PASSWORD_CHANGED',
       }),
+    )
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(telemetry.runAuthOperation).toHaveBeenCalledWith(
+      'change_password',
+      expect.any(Function),
+    )
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(telemetry.recordAuthOutcome).toHaveBeenCalledWith(
+      'change_password',
+      'success',
     )
   })
 

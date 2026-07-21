@@ -15,6 +15,10 @@ export type RedisCacheEventListener = (event: RedisCacheEvent) => void
 export class RedisCacheEvents {
   private readonly listeners = new Set<RedisCacheEventListener>()
 
+  public constructor(
+    private readonly metrics: RuntimeMetrics = new RuntimeMetrics(),
+  ) {}
+
   /** Registers a listener and returns its idempotent unsubscribe callback. */
   public subscribe(listener: RedisCacheEventListener): () => void {
     this.listeners.add(listener)
@@ -23,6 +27,11 @@ export class RedisCacheEvents {
 
   /** Publishes an event synchronously while isolating listener failures. */
   public publish(event: RedisCacheEvent): void {
+    try {
+      this.metrics.recordCache(event.type)
+    } catch {
+      // Telemetry cannot replace cache behavior or listener delivery.
+    }
     for (const listener of this.listeners) {
       try {
         listener(event)
@@ -32,3 +41,4 @@ export class RedisCacheEvents {
     }
   }
 }
+import { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
