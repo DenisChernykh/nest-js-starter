@@ -3,6 +3,14 @@
  */
 export type RuntimeEnvironment = 'development' | 'test' | 'production'
 
+/** Supported runtime exposure policies for generated API documentation. */
+export type ApiDocsMode = 'off' | 'public' | 'protected'
+
+/** Immutable API documentation exposure policy. */
+export interface ApiDocsRuntimeConfig {
+  readonly mode: ApiDocsMode
+}
+
 /** Logging levels that may be emitted by the production JSON sink. */
 export type RuntimeLogLevel =
   'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
@@ -101,6 +109,7 @@ export interface ApplicationRuntimeConfig {
   readonly environment: RuntimeEnvironment
   readonly logging: LoggingRuntimeConfig
   readonly observability: OpenTelemetryRuntimeConfig
+  readonly docs: ApiDocsRuntimeConfig
   readonly http: HttpRuntimeConfig
   readonly database: DatabaseRuntimeConfig
   readonly redis: RedisRuntimeConfig
@@ -171,6 +180,7 @@ export class RuntimeConfigurationError extends Error {
  */
 export interface ValidatedRuntimeEnvironment {
   readonly NODE_ENV: RuntimeEnvironment
+  readonly API_DOCS_MODE: ApiDocsMode
   readonly LOG_LEVEL: RuntimeLogLevel
   readonly OTEL_SERVICE_NAME: string
   readonly SERVICE_VERSION: string

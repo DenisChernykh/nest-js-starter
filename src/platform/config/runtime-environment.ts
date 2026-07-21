@@ -108,6 +108,9 @@ export function buildApiRuntimeConfig(
       batchSpanScheduleDelayMs: environment.OTEL_BSP_SCHEDULE_DELAY,
       batchSpanExportTimeoutMs: environment.OTEL_BSP_EXPORT_TIMEOUT,
     }),
+    docs: Object.freeze({
+      mode: environment.API_DOCS_MODE,
+    }),
     http: Object.freeze({
       host: environment.API_HOST,
       port: environment.API_PORT,

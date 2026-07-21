@@ -3,6 +3,7 @@ export function requiredRuntimeEnvironment(
   overrides: Record<string, unknown> = {},
 ): Record<string, unknown> {
   return {
+    API_DOCS_MODE: 'public',
     OTEL_SDK_DISABLED: 'true',
     REDIS_COORDINATION_URL: 'redis://default:test@127.0.0.1:6379',
     AUTH_SESSION_KEY_SECRET: Buffer.alloc(32, 1).toString('base64url'),

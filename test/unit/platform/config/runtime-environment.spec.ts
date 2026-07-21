@@ -1,5 +1,6 @@
 import { RuntimeConfigurationError } from '@/platform/config/runtime-config.types'
 import {
+  buildApiRuntimeConfig,
   buildPostgresCommandConfig,
   validateRuntimeEnvironment,
 } from '@/platform/config/runtime-environment'
@@ -47,6 +48,7 @@ describe('validateRuntimeEnvironment', () => {
     expect(result).toEqual(
       expect.objectContaining({
         NODE_ENV: 'development',
+        API_DOCS_MODE: 'public',
         API_HOST: '127.0.0.1',
         API_PORT: 3000,
         PUBLIC_API_URL: 'http://localhost:3000',
@@ -70,6 +72,34 @@ describe('validateRuntimeEnvironment', () => {
         OTEL_BSP_EXPORT_TIMEOUT: 1_000,
       }),
     )
+  })
+
+  it('defaults test API documentation to public', () => {
+    expect(validateEnvironment({ NODE_ENV: 'test' }).API_DOCS_MODE).toBe(
+      'public',
+    )
+  })
+
+  it.each(['off', 'public', 'protected'] as const)(
+    'accepts explicit %s API documentation mode outside production',
+    (mode) => {
+      expect(validateEnvironment({ API_DOCS_MODE: mode }).API_DOCS_MODE).toBe(
+        mode,
+      )
+    },
+  )
+
+  it('rejects an unknown API documentation mode without echoing it', () => {
+    const sentinel = 'DO_NOT_LEAK_DOCS_MODE'
+
+    try {
+      validateEnvironment({ API_DOCS_MODE: sentinel })
+      throw new Error('Expected validation to fail')
+    } catch (error: unknown) {
+      expect(String(error)).not.toContain(sentinel)
+      expect(JSON.stringify(error)).not.toContain(sentinel)
+      expect(error).toBeInstanceOf(RuntimeConfigurationError)
+    }
   })
 
   it('normalizes reviewed logging metadata and standard OTLP HTTP settings', () => {
@@ -173,12 +203,14 @@ describe('validateRuntimeEnvironment', () => {
     expect(config.logging.serviceName).toBe('nest-js-starter')
     expect(config).not.toHaveProperty('redis')
     expect(config).not.toHaveProperty('auth')
+    expect(config).not.toHaveProperty('docs')
   })
 
   it('accepts an HTTPS production configuration with explicit proxies', () => {
     expect(validateEnvironment(productionEnvironment())).toEqual(
       expect.objectContaining({
         NODE_ENV: 'production',
+        API_DOCS_MODE: 'off',
         PUBLIC_API_URL: 'https://api.example.com',
         CORS_ORIGINS: ['https://app.example.com'],
         TRUST_PROXY_CIDRS: ['10.0.0.0/8', '2001:db8::/32'],
@@ -186,6 +218,29 @@ describe('validateRuntimeEnvironment', () => {
         AUTH_COOKIE_SECURE: true,
       }),
     )
+  })
+
+  it('accepts protected API documentation in production', () => {
+    expect(
+      validateEnvironment({
+        ...productionEnvironment(),
+        API_DOCS_MODE: 'protected',
+      }).API_DOCS_MODE,
+    ).toBe('protected')
+  })
+
+  it('rejects public API documentation in production without echoing it', () => {
+    try {
+      buildApiRuntimeConfig({
+        ...productionEnvironment(),
+        API_DOCS_MODE: 'public',
+      })
+      throw new Error('Expected validation to fail')
+    } catch (error: unknown) {
+      expect(String(error)).not.toContain('public')
+      expect(JSON.stringify(error)).not.toContain('public')
+      expect(error).toBeInstanceOf(RuntimeConfigurationError)
+    }
   })
 
   it('normalizes ACL Redis URLs and decodes independent auth secrets', () => {
