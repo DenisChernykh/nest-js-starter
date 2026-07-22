@@ -43,7 +43,7 @@ export class HealthRegistry {
     )
   }
 
-  /** Runs all sealed indicators concurrently and waits for abort cleanup. */
+  /** Runs sealed indicators concurrently without awaiting late timed-out work. */
   public async checkAll(parentSignal: AbortSignal): Promise<HealthCheckResult> {
     if (!this.sealed) {
       throw new Error('Health registry is not sealed')
@@ -78,11 +78,25 @@ export class HealthRegistry {
       parentSignal.addEventListener('abort', abortChild, { once: true })
     }
     const timeout = setTimeout(abortChild, indicator.timeoutMs)
+    const aborted = new Promise<'down'>((resolve) => {
+      if (child.signal.aborted) {
+        resolve('down')
+        return
+      }
+      child.signal.addEventListener('abort', () => resolve('down'), {
+        once: true,
+      })
+    })
+    let checking: Promise<'up' | 'down'>
     try {
-      const status = await indicator
-        .check(child.signal)
-        .catch(() => 'down' as const)
-      return child.signal.aborted ? 'down' : status
+      checking = Promise.resolve(indicator.check(child.signal)).catch(
+        () => 'down' as const,
+      )
+    } catch {
+      checking = Promise.resolve('down')
+    }
+    try {
+      return await Promise.race([checking, aborted])
     } finally {
       clearTimeout(timeout)
       parentSignal.removeEventListener('abort', abortChild)

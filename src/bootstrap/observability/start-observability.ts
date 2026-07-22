@@ -1,6 +1,6 @@
 import { diag, DiagLogLevel, type Span } from '@opentelemetry/api'
-import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http'
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto'
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto'
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http'
 import { PgInstrumentation } from '@opentelemetry/instrumentation-pg'
 import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis'

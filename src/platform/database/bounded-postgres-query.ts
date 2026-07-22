@@ -51,9 +51,9 @@ function releaseOnce(client: PoolClient, destroy: boolean): void {
 /**
  * Runs one health-only query within one acquisition-plus-query deadline.
  *
- * @remarks Timeout or abort destructively releases the dedicated client and
- * awaits the losing driver promise before returning. Business Prisma queries
- * must not use this short health deadline.
+ * @remarks Timeout or abort destructively releases an acquired client and
+ * observes losing driver promises without awaiting them on the health response
+ * path. Business Prisma queries must not use this short health deadline.
  * @param pool - Externally owned PostgreSQL Pool.
  * @param text - Constant health SQL owned by the platform adapter.
  * @param signal - Parent cancellation signal.
@@ -79,10 +79,9 @@ export async function runBoundedPostgresQuery(
       acquireInterruption.promise,
     ])
     if (acquired === interrupted) {
-      await acquisition.then(
-        (lateClient) => releaseOnce(lateClient, true),
-        () => undefined,
-      )
+      void acquisition
+        .then((lateClient) => releaseOnce(lateClient, true))
+        .catch(() => undefined)
       return 'down'
     }
     client = acquired
@@ -105,14 +104,13 @@ export async function runBoundedPostgresQuery(
     const result = await Promise.race([query, queryInterruption.promise])
     if (result === interrupted) {
       releaseOnce(client, true)
-      await query.catch(() => undefined)
+      void query.catch(() => undefined)
       return 'down'
     }
     releaseOnce(client, false)
     return 'up'
   } catch {
     releaseOnce(client, true)
-    await query.catch(() => undefined)
     return 'down'
   } finally {
     queryInterruption.dispose()

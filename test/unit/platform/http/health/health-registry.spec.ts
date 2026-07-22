@@ -85,7 +85,7 @@ describe('HealthRegistry', () => {
     expect(JSON.stringify(result)).not.toContain('secret')
   })
 
-  it('aborts timed-out checks and waits for their cleanup settlement', async () => {
+  it('aborts timed-out checks without awaiting their cleanup settlement', async () => {
     const registry = new HealthRegistry()
     let cleaned = false
     registry.register(
@@ -115,7 +115,29 @@ describe('HealthRegistry', () => {
       checks: { postgresql: 'down' },
       requiredAvailable: false,
     })
+    expect(cleaned).toBe(false)
+    await new Promise((resolve) => setTimeout(resolve, 10))
     expect(cleaned).toBe(true)
+  })
+
+  it('returns down when an indicator ignores abort and never settles', async () => {
+    const registry = new HealthRegistry()
+    registry.register(
+      indicator('postgresql', true, () => new Promise(() => undefined), 5),
+    )
+    registry.seal()
+
+    const result = await Promise.race([
+      registry.checkAll(new AbortController().signal),
+      new Promise<'pending'>((resolve) =>
+        setTimeout(() => resolve('pending'), 25),
+      ),
+    ])
+
+    expect(result).toEqual({
+      checks: { postgresql: 'down' },
+      requiredAvailable: false,
+    })
   })
 
   it('propagates parent abort to every running indicator', async () => {

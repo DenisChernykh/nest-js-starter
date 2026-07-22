@@ -19,7 +19,7 @@ const interrupted = Symbol('interrupted')
 
 function interruption(
   signal: AbortSignal,
-  milliseconds: number,
+  milliseconds?: number,
 ): {
   readonly promise: Promise<typeof interrupted>
   readonly dispose: () => void
@@ -34,7 +34,9 @@ function interruption(
       return
     }
     signal.addEventListener('abort', finish, { once: true })
-    timer = setTimeout(finish, milliseconds)
+    if (milliseconds !== undefined) {
+      timer = setTimeout(finish, milliseconds)
+    }
   })
   return {
     promise,
@@ -52,19 +54,29 @@ function interruption(
 async function waitForSettledWithin<T>(
   promise: Promise<T>,
   signal: AbortSignal,
-  milliseconds: number,
+  milliseconds?: number,
 ): Promise<T> {
-  const boundary = interruption(signal, Math.max(1, milliseconds))
+  const boundary = interruption(
+    signal,
+    milliseconds === undefined ? undefined : Math.max(1, milliseconds),
+  )
   try {
     const result = await Promise.race([promise, boundary.promise])
     if (result === interrupted) {
-      await promise.catch(() => undefined)
+      void promise.catch(() => undefined)
       throw new DatabaseUnavailableError()
     }
     return result
   } finally {
     boundary.dispose()
   }
+}
+
+function waitForSettledBeforeAbort<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  return waitForSettledWithin(promise, signal, undefined)
 }
 
 /**
@@ -161,7 +173,13 @@ export class PrismaClientProvider {
       this.admissionOpen = true
       this.degraded = false
     } catch {
-      await this.cleanupResources().catch(() => undefined)
+      const cleanupSignal = AbortSignal.any([
+        signal,
+        AbortSignal.timeout(
+          Math.max(1, Math.ceil(deadline - performance.now())),
+        ),
+      ])
+      await this.cleanupResources(cleanupSignal).catch(() => undefined)
       this.state = 'closed'
       throw new DatabaseUnavailableError()
     }
@@ -274,10 +292,14 @@ export class PrismaClientProvider {
 
   private async performClose(signal: AbortSignal): Promise<void> {
     if (this.connectPromise !== undefined) {
-      await this.connectPromise.catch(() => undefined)
+      try {
+        await waitForSettledBeforeAbort(this.connectPromise, signal)
+      } catch {
+        if (signal.aborted) throw new DatabaseUnavailableError()
+      }
     }
     await this.waitForActiveOperations(signal)
-    await this.cleanupResources()
+    await this.cleanupResources(signal)
     this.state = 'closed'
   }
 
@@ -297,12 +319,11 @@ export class PrismaClientProvider {
     }
   }
 
-  private cleanupResources(): Promise<void> {
-    if (this.cleanupPromise !== undefined) {
-      return this.cleanupPromise
+  private cleanupResources(signal: AbortSignal): Promise<void> {
+    if (this.cleanupPromise === undefined) {
+      this.cleanupPromise = this.performCleanup()
     }
-    this.cleanupPromise = this.performCleanup()
-    return this.cleanupPromise
+    return waitForSettledBeforeAbort(this.cleanupPromise, signal)
   }
 
   private async performCleanup(): Promise<void> {

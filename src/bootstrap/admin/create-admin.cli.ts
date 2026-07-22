@@ -32,7 +32,7 @@ function parseEmail(argv: readonly string[]): string | undefined {
   return email
 }
 
-/** Parses the email-only command and returns a process-safe exit code. */
+/** Parses the email-only command and rejects bootstrap secrets below 12 characters. */
 export async function runCreateAdminCli(
   argv: readonly string[],
   dependencies: CreateAdminCliDependencies,
@@ -48,7 +48,7 @@ export async function runCreateAdminCli(
     const password = new TextDecoder('utf-8', { fatal: true }).decode(
       passwordBuffer,
     )
-    if (password.length === 0) throw new Error('Empty password')
+    if (password.length < 12) throw new Error('Weak password')
     const result = await dependencies.createInitialAdmin.execute({
       email,
       password,

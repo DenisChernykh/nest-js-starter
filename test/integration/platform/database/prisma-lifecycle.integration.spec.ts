@@ -26,6 +26,32 @@ function abortAfter(milliseconds: number): AbortSignal {
   return AbortSignal.timeout(milliseconds)
 }
 
+function deferred(): {
+  readonly promise: Promise<void>
+  readonly resolve: () => void
+} {
+  let resolve!: () => void
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
+async function settlementWithin(
+  promise: Promise<void>,
+  milliseconds: number,
+): Promise<'resolved' | 'rejected' | 'pending'> {
+  return Promise.race([
+    promise.then(
+      () => 'resolved' as const,
+      () => 'rejected' as const,
+    ),
+    new Promise<'pending'>((resolve) =>
+      setTimeout(() => resolve('pending'), milliseconds),
+    ),
+  ])
+}
+
 describe('Prisma PostgreSQL lifecycle', () => {
   let container: StartedPostgreSqlContainer
   let databaseUrl: string
@@ -181,6 +207,24 @@ describe('Prisma PostgreSQL lifecycle', () => {
     ).rejects.toThrow(DatabaseUnavailableError)
   })
 
+  it('rejects a timed-out startup without awaiting a stuck Prisma connect', async () => {
+    const provider = createProvider({
+      DATABASE_CONNECTION_TIMEOUT_MS: '25',
+      DATABASE_HEALTH_TIMEOUT_MS: '25',
+    })
+    const connect = deferred()
+    jest
+      .spyOn(resourcesOf(provider).prisma, '$connect')
+      .mockImplementationOnce(() => connect.promise)
+
+    const connecting = provider.connect(new AbortController().signal)
+    const settlement = await settlementWithin(connecting, 75)
+    connect.resolve()
+    await connecting.catch(() => undefined)
+
+    expect(settlement).toBe('rejected')
+  })
+
   it('loads the database only after DATABASE_URL is available', () => {
     expect(process.env['DATABASE_URL']).toBe(databaseUrl)
     expect(PrismaClientProvider).toBeDefined()
@@ -254,6 +298,45 @@ describe('Prisma PostgreSQL lifecycle', () => {
     settle?.()
     await running
     await provider.close(new AbortController().signal)
+  })
+
+  it('fails bounded cleanup and still attempts Pool end after stuck disconnect', async () => {
+    const provider = createProvider()
+    await provider.connect(new AbortController().signal)
+    const disconnect = deferred()
+    jest
+      .spyOn(resourcesOf(provider).prisma, '$disconnect')
+      .mockImplementationOnce(() => disconnect.promise)
+    const end = jest.spyOn(resourcesOf(provider).pool, 'end')
+
+    const closing = provider.close(abortAfter(25))
+    const settlement = await settlementWithin(closing, 75)
+    disconnect.resolve()
+    await closing.catch(() => undefined)
+
+    expect(settlement).toBe('rejected')
+    expect(end).toHaveBeenCalledTimes(1)
+  })
+
+  it('resumes shared cleanup after the first close deadline expires', async () => {
+    const provider = createProvider()
+    jest.spyOn(resourcesOf(provider).prisma, '$connect').mockResolvedValueOnce()
+    jest.spyOn(provider, 'runReadinessQuery').mockResolvedValueOnce('up')
+    await provider.connect(new AbortController().signal)
+    const disconnect = deferred()
+    const disconnectSpy = jest
+      .spyOn(resourcesOf(provider).prisma, '$disconnect')
+      .mockImplementationOnce(() => disconnect.promise)
+    const end = jest.spyOn(resourcesOf(provider).pool, 'end')
+
+    await expect(provider.close(abortAfter(25))).rejects.toThrow()
+    disconnect.resolve()
+
+    await expect(
+      provider.close(new AbortController().signal),
+    ).resolves.toBeUndefined()
+    expect(disconnectSpy).toHaveBeenCalledTimes(1)
+    expect(end).toHaveBeenCalledTimes(1)
   })
 
   it('handles an idle-client Pool error and can recover readiness', async () => {

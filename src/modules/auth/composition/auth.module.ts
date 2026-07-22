@@ -14,8 +14,13 @@ import {
   RoleRegistry,
 } from '../application/role-registry'
 import { RevokeSessionUseCase } from '../application/revoke-session.use-case'
+import {
+  AUTH_TELEMETRY_PORT,
+  type AuthTelemetryPort,
+} from '../application/auth-telemetry.port'
 import { Argon2PasswordHasher } from '../infrastructure/argon2-password.hasher'
 import { NodeAuthCryptoAdapter } from '../infrastructure/node-auth-crypto.adapter'
+import { OtelAuthTelemetryAdapter } from '../infrastructure/otel-auth-telemetry.adapter'
 import { PrismaAuthRepository } from '../infrastructure/prisma-auth.repository'
 import { RedisLoginRateLimiter } from '../infrastructure/redis-login-rate-limiter'
 import { RedisSessionStore } from '../infrastructure/redis-session.store'
@@ -50,9 +55,9 @@ import {
 } from '@/platform/http/docs/docs-access.contracts'
 import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
 import {
-  TELEMETRY_PORT,
-  type TelemetryPort,
-} from '@/shared/application/telemetry.port'
+  STRUCTURED_LOGGER,
+  type StructuredLogger,
+} from '@/platform/logging/logging.contracts'
 
 const dummyPasswordHash =
   '$argon2id$v=19$m=19456,p=1,t=2$AQEBAQEBAQEBAQEBAQEBAQ$89iZHLNRbRP/PDabySsV1BxlW1VfqedCPSqmvYANw2U'
@@ -66,6 +71,23 @@ const dummyPasswordHash =
     GetMeQuery,
     Argon2PasswordHasher,
     NodeAuthCryptoAdapter,
+    {
+      provide: OtelAuthTelemetryAdapter,
+      inject: [STRUCTURED_LOGGER],
+      useFactory: (logger: StructuredLogger): OtelAuthTelemetryAdapter =>
+        new OtelAuthTelemetryAdapter(undefined, undefined, (code) =>
+          logger.write({
+            level: 'warn',
+            event: 'telemetry.adapter.failure',
+            module: 'Auth',
+            attributes: { code },
+          }),
+        ),
+    },
+    {
+      provide: AUTH_TELEMETRY_PORT,
+      useExisting: OtelAuthTelemetryAdapter,
+    },
     { provide: RoleRegistry, useFactory: createAuthRoleRegistry },
     {
       provide: PrismaAuthRepository,
@@ -127,7 +149,7 @@ const dummyPasswordHash =
         RedisLoginRateLimiter,
         RedisSessionStore,
         AuthAuditLogger,
-        TELEMETRY_PORT,
+        AUTH_TELEMETRY_PORT,
       ],
       useFactory: (
         persistence: PrismaAuthRepository,
@@ -135,7 +157,7 @@ const dummyPasswordHash =
         limiter: RedisLoginRateLimiter,
         sessions: RedisSessionStore,
         audit: AuthAuditLogger,
-        telemetry: TelemetryPort,
+        telemetry: AuthTelemetryPort,
       ): LoginUseCase =>
         new LoginUseCase(
           persistence,
@@ -153,13 +175,13 @@ const dummyPasswordHash =
         RedisSessionStore,
         PrismaAuthRepository,
         RoleRegistry,
-        TELEMETRY_PORT,
+        AUTH_TELEMETRY_PORT,
       ],
       useFactory: (
         sessions: RedisSessionStore,
         persistence: PrismaAuthRepository,
         roles: RoleRegistry,
-        telemetry: TelemetryPort,
+        telemetry: AuthTelemetryPort,
       ): AuthenticateSessionUseCase =>
         new AuthenticateSessionUseCase(sessions, persistence, roles, telemetry),
     },
@@ -205,11 +227,11 @@ const dummyPasswordHash =
     },
     {
       provide: RevokeSessionUseCase,
-      inject: [RedisSessionStore, AuthAuditLogger, TELEMETRY_PORT],
+      inject: [RedisSessionStore, AuthAuditLogger, AUTH_TELEMETRY_PORT],
       useFactory: (
         sessions: RedisSessionStore,
         audit: AuthAuditLogger,
-        telemetry: TelemetryPort,
+        telemetry: AuthTelemetryPort,
       ): RevokeSessionUseCase =>
         new RevokeSessionUseCase(sessions, audit, telemetry),
     },
@@ -220,14 +242,14 @@ const dummyPasswordHash =
         TRANSACTION_PORT,
         RedisSessionStore,
         AuthAuditLogger,
-        TELEMETRY_PORT,
+        AUTH_TELEMETRY_PORT,
       ],
       useFactory: (
         persistence: PrismaAuthRepository,
         transaction: TransactionPort,
         sessions: RedisSessionStore,
         audit: AuthAuditLogger,
-        telemetry: TelemetryPort,
+        telemetry: AuthTelemetryPort,
       ): LogoutAllUseCase =>
         new LogoutAllUseCase(
           persistence,
@@ -246,7 +268,7 @@ const dummyPasswordHash =
         TRANSACTION_PORT,
         RedisSessionStore,
         AuthAuditLogger,
-        TELEMETRY_PORT,
+        AUTH_TELEMETRY_PORT,
       ],
       useFactory: (
         persistence: PrismaAuthRepository,
@@ -254,7 +276,7 @@ const dummyPasswordHash =
         transaction: TransactionPort,
         sessions: RedisSessionStore,
         audit: AuthAuditLogger,
-        telemetry: TelemetryPort,
+        telemetry: AuthTelemetryPort,
       ): ChangePasswordUseCase =>
         new ChangePasswordUseCase(
           persistence,

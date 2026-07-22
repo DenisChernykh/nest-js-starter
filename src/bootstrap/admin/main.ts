@@ -1,3 +1,5 @@
+import 'dotenv/config'
+
 import { runCreateAdminCli } from './create-admin.cli'
 import { readSecret } from './read-secret'
 import { createInitialAdminCommand } from '@/modules/auth/composition/initial-admin.module'

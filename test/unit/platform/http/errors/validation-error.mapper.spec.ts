@@ -124,4 +124,20 @@ describe('mapValidationErrors', () => {
     expect(Object.isFrozen(error.errors)).toBe(true)
     expect(Object.isFrozen(error.errors[0])).toBe(true)
   })
+
+  it('maps class-validator root failures to the empty JSON pointer', () => {
+    const mapped = mapValidationErrors([
+      validationError({
+        constraints: { unknownValue: 'raw object must be validated' },
+      }),
+    ])
+
+    expect(mapped).toEqual([
+      {
+        pointer: '',
+        code: 'invalid_value',
+        detail: 'Field has an invalid value.',
+      },
+    ])
+  })
 })

@@ -13,7 +13,7 @@ import { definePermissions } from '@/modules/auth/application/permission'
 import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
 import type { TransactionPort } from '@/shared/application/transaction.port'
-import type { TelemetryPort } from '@/shared/application/telemetry.port'
+import type { AuthTelemetryPort } from '@/modules/auth/application/auth-telemetry.port'
 
 const principal: AuthenticatedPrincipal = {
   userId: 'user',
@@ -168,7 +168,7 @@ describe('auth session management', () => {
     const telemetry = {
       runAuthOperation: jest.fn((_operation, work) => work()),
       recordAuthOutcome: jest.fn(),
-    } as jest.Mocked<TelemetryPort>
+    } as jest.Mocked<AuthTelemetryPort>
     const sessions = {
       revoke: jest.fn(() => Promise.resolve(false)),
       revokeAll: jest.fn(() => Promise.resolve(1)),

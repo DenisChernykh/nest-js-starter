@@ -8,9 +8,9 @@ import type { AuthenticatedPrincipal } from './auth.types'
 import type { RoleRegistry } from './role-registry'
 import type { SessionStorePort } from './session-store.port'
 import {
-  NOOP_TELEMETRY,
-  type TelemetryPort,
-} from '@/shared/application/telemetry.port'
+  NOOP_AUTH_TELEMETRY,
+  type AuthTelemetryPort,
+} from './auth-telemetry.port'
 
 /** Authenticates one opaque token against fresh durable account state. */
 export class AuthenticateSessionUseCase {
@@ -18,7 +18,7 @@ export class AuthenticateSessionUseCase {
     private readonly sessions: SessionStorePort,
     private readonly persistence: AuthPersistencePort,
     private readonly roles: RoleRegistry,
-    private readonly telemetry: TelemetryPort = NOOP_TELEMETRY,
+    private readonly telemetry: AuthTelemetryPort = NOOP_AUTH_TELEMETRY,
   ) {}
 
   public async execute(

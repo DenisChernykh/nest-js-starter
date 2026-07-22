@@ -11,8 +11,8 @@ export type AuthTelemetryOutcome =
   | 'partial'
   | 'dependency_error'
 
-/** Framework-free telemetry effects available to application use cases. */
-export interface TelemetryPort {
+/** Framework-free telemetry effects owned by authentication use cases. */
+export interface AuthTelemetryPort {
   /** Runs one auth operation inside its fixed telemetry span. */
   runAuthOperation<T>(
     operation: AuthTelemetryOperation,
@@ -26,11 +26,11 @@ export interface TelemetryPort {
   ): void
 }
 
-/** Injection token for the framework-free telemetry application port. */
-export const TELEMETRY_PORT = Symbol('TELEMETRY_PORT')
+/** Injection token for the module-local authentication telemetry port. */
+export const AUTH_TELEMETRY_PORT = Symbol('AUTH_TELEMETRY_PORT')
 
-/** No-op telemetry used by isolated application tests and adapters. */
-export const NOOP_TELEMETRY: TelemetryPort = Object.freeze({
+/** No-op telemetry used by isolated authentication application tests. */
+export const NOOP_AUTH_TELEMETRY: AuthTelemetryPort = Object.freeze({
   runAuthOperation: <T>(
     _operation: AuthTelemetryOperation,
     work: () => Promise<T>,

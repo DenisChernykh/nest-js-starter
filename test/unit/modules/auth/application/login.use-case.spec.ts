@@ -5,7 +5,7 @@ import type { LoginRateLimiterPort } from '@/modules/auth/application/login-rate
 import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
 import type { AuthAuditPort } from '@/modules/auth/application/auth-audit.port'
-import type { TelemetryPort } from '@/shared/application/telemetry.port'
+import type { AuthTelemetryPort } from '@/modules/auth/application/auth-telemetry.port'
 
 interface LoginHarness {
   readonly useCase: LoginUseCase
@@ -14,7 +14,7 @@ interface LoginHarness {
   readonly limiter: LoginRateLimiterPort
   readonly sessions: SessionStorePort
   readonly audit: jest.Mocked<AuthAuditPort>
-  readonly telemetry: jest.Mocked<TelemetryPort>
+  readonly telemetry: jest.Mocked<AuthTelemetryPort>
 }
 
 describe('LoginUseCase', () => {
@@ -50,7 +50,7 @@ describe('LoginUseCase', () => {
     const telemetry = {
       runAuthOperation: jest.fn((_operation, work) => work()),
       recordAuthOutcome: jest.fn(),
-    } as jest.Mocked<TelemetryPort>
+    } as jest.Mocked<AuthTelemetryPort>
     return {
       useCase: new LoginUseCase(
         persistence,

@@ -2,16 +2,16 @@ import type { AuthenticatedPrincipal } from './auth.types'
 import type { SessionStorePort } from './session-store.port'
 import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
 import {
-  NOOP_TELEMETRY,
-  type TelemetryPort,
-} from '@/shared/application/telemetry.port'
+  NOOP_AUTH_TELEMETRY,
+  type AuthTelemetryPort,
+} from './auth-telemetry.port'
 
 /** Revokes one public session identifier within authenticated user ownership. */
 export class RevokeSessionUseCase {
   public constructor(
     private readonly sessions: SessionStorePort,
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
-    private readonly telemetry: TelemetryPort = NOOP_TELEMETRY,
+    private readonly telemetry: AuthTelemetryPort = NOOP_AUTH_TELEMETRY,
   ) {}
 
   public async execute(

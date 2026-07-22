@@ -64,6 +64,24 @@ describe('initial administrator CLI', () => {
     expect(harness.stderr).toEqual([])
   })
 
+  it.each(['', 'short', 'elevenchars'])(
+    'rejects a bootstrap password shorter than 12 characters',
+    async (password) => {
+      const harness = cliHarness(password)
+      const passwordBuffer = await harness.readPassword()
+      harness.readPassword.mockResolvedValueOnce(passwordBuffer)
+
+      await expect(
+        runCreateAdminCli(['--email=a@example.com'], harness.dependencies),
+      ).resolves.toBe(1)
+      expect(harness.create).not.toHaveBeenCalled()
+      expect(passwordBuffer.every((byte) => byte === 0)).toBe(true)
+      expect(harness.stderr).toEqual([
+        'Initial administrator creation failed.\n',
+      ])
+    },
+  )
+
   it.each([
     ['password option', ['--email', 'a@example.com', '--password', 'secret']],
     ['password equals option', ['--email=a@example.com', '--password=secret']],
