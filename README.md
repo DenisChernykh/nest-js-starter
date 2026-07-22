@@ -5,18 +5,20 @@ typed configuration, PostgreSQL/Prisma, capability-scoped Redis, opaque browser
 sessions, explicit migrations, three health contracts and bounded graceful
 shutdown, RFC 9457 errors, structured Pino JSON logs and an explicit
 OpenTelemetry pipeline. Repository architecture and the exact toolchain are
-enforced by executable gates.
+enforced by executable gates. The same gates produce a non-root OCI image with
+registry-attached SBOM/provenance and an immutable GHCR digest on `stage`.
 
 Included: HTTP runtime, typed config, PostgreSQL/Prisma, migrations, transaction
 boundary, required coordination Redis, Argon2id credentials, server-side
 sessions, session-bound CSRF, code-owned RBAC, health, graceful shutdown and
 architecture/toolchain foundation, request correlation, normalized problems,
 security audit events, traces, low-cardinality runtime metrics and a committed
-OpenAPI 3.0.3 contract with policy-controlled Swagger UI.
+OpenAPI 3.0.3 contract with policy-controlled Swagger UI, Docker image roles,
+pull-request CI and build-once stage publication.
 
 Not included yet: registration/recovery/account administration, JWT/OAuth,
-Docker application image, CI/GHCR, Dokploy and recipes. The starter deliberately
-contains no fake CRUD or business model.
+Dokploy environments, production rollout, backup/rollback and recipes. The
+starter deliberately contains no fake CRUD or business model.
 
 ## Prerequisites
 
@@ -68,6 +70,60 @@ JSON content type and the session-bound `X-CSRF-Token`. See
 `docs/architecture/auth-core.md` and
 `docs/runbooks/coordination-redis-loss.md`.
 
+## OCI image and CI
+
+The Dockerfile produces one image used in one role at a time. Its canonical
+commands are:
+
+- API: `node dist/bootstrap/api/main.js` (the image default);
+- migrator: `corepack pnpm@11.15.1 run start:migrate` (an explicit one-shot
+  command that must finish before API rollout).
+
+Build and exercise both roles locally with the repository-owned smoke:
+
+```bash
+corepack pnpm@11.15.1 run oci:check
+```
+
+`oci:check` validates immutable pins, applies Dockerfile build checks, builds
+the runtime target, rejects a bad migration, runs the real migration, waits for
+readiness, verifies the auth problem contract and confirms a graceful non-root
+stop. Runtime environment values still come from the typed configuration
+contract in `.env.example`; secrets are runtime inputs and never Docker build
+arguments. The root docker-compose.yml is local infrastructure, not production
+deployment.
+
+Pull requests into `stage` run the complete `check` gate with read-only
+repository permissions and no package write. A push merge commit on `stage`
+runs the same gate before it logs in to GHCR, then builds and pushes exactly one
+`linux/amd64` image tagged with the 40-character Git SHA. It scans the resulting
+digest for fixable High/Critical vulnerabilities and uploads
+`image-evidence.json`, SPDX SBOM, SLSA provenance, Trivy JSON and the canonical
+OpenAPI artifact.
+
+The SHA tag is a lookup pointer. `Digest references are the only deployment input`:
+
+```text
+ghcr.io/owner/repository@sha256:<64-hex-digest>
+```
+
+Resolve an already published SHA without build, tag or push:
+
+```bash
+corepack pnpm@11.15.1 oci:resolve -- \
+  --image ghcr.io/owner/repository \
+  --revision <40-hex>
+```
+
+External actions and base images are immutable pins. Update
+`scripts/oci/oci-pins.json` only in a reviewed pull request after resolving a
+stable release tag to its exact commit or digest and rerunning the supply-chain
+tests. Native attestations: `private repositories require GitHub Enterprise Cloud`.
+This starter therefore treats BuildKit attestations attached to the GHCR digest
+plus uploaded evidence as its Slice 6 contract.
+See `docs/architecture/oci-supply-chain.md` and
+`docs/runbooks/stage-image-publication.md`.
+
 ## API contract and Swagger UI
 
 Controllers, request/response DTOs and their explicit Swagger decorators are
@@ -105,8 +161,9 @@ Prisma validation/generation, lint, TypeScript 7 checks, unit/generator/
 architecture tests, manifest and production build. `check` additionally runs
 real PostgreSQL/Redis integration and multi-instance e2e suites plus the
 aggregate 80/80/80/75 runtime coverage gate and 90% auth security branch
-thresholds. The full gate has no implicit OpenAPI comparison base: CI and local
-release verification must supply exactly one reviewed base through
+thresholds, then builds and exercises the OCI image. The full gate has no
+implicit OpenAPI comparison base: CI and local release verification must supply
+exactly one reviewed base through
 `OPENAPI_BREAKING_BASE_REF` or `OPENAPI_BREAKING_BASE_FILE`.
 
 Normal contract-development commands:

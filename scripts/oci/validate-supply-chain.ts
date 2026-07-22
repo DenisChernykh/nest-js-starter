@@ -39,6 +39,14 @@ export interface SupplyChainFilesInput {
   readonly workflows?: Readonly<Record<string, string>>
 }
 
+/** Supplies the user, architecture, operator and scope documents for OCI policy. */
+export interface OciDocumentationInput {
+  readonly readme: string
+  readonly architecture: string
+  readonly runbook: string
+  readonly foundationScope: string
+}
+
 function isRecord(value: unknown): value is UnknownRecord {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
@@ -280,6 +288,62 @@ function validateDockerignore(source: string, issues: string[]): void {
   }
   if (['src', 'prisma', 'package.json'].some((entry) => entries.has(entry))) {
     issues.push('Docker ignore policy excludes required build inputs')
+  }
+}
+
+/**
+ * Validates that committed documentation states every OCI ownership boundary.
+ *
+ * @param input - README, architecture, runbook and foundation-scope sources.
+ * @throws Error when a required user or operator contract is absent.
+ */
+export function validateOciDocumentation(input: OciDocumentationInput): void {
+  const requiredByDocument: Readonly<
+    Record<keyof OciDocumentationInput, readonly string[]>
+  > = {
+    readme: [
+      'node dist/bootstrap/api/main.js',
+      'corepack pnpm@11.15.1 run start:migrate',
+      'corepack pnpm@11.15.1 run oci:check',
+      '@sha256:',
+      'Digest references are the only deployment input',
+      'root docker-compose.yml is local infrastructure',
+      'scripts/oci/oci-pins.json',
+      'private repositories require GitHub Enterprise Cloud',
+    ],
+    architecture: [
+      'Build arguments are public metadata',
+      'SHA tags are non-deployment pointers',
+      'GHCR digest is normative',
+      'BuildKit registry attestations',
+      'Trivy exceptions are explicit and reviewable',
+      'no Dokploy mutation',
+    ],
+    runbook: [
+      'Gate failure',
+      'Build or push failure',
+      'Scan failure',
+      'Evidence upload failure',
+      'Package permission diagnostics',
+      'Safe workflow rerun',
+      'must not rebuild',
+      'oci:resolve',
+    ],
+    foundationScope: [
+      'OCI image, PR CI and stage GHCR publication',
+      'starter.manifest.json remains schema v1',
+    ],
+  }
+  const issues = Object.entries(requiredByDocument).flatMap(
+    ([document, required]) => {
+      const source = input[document as keyof OciDocumentationInput]
+      return required
+        .filter((contract) => !source.includes(contract))
+        .map((contract) => `${document}: ${contract}`)
+    },
+  )
+  if (issues.length > 0) {
+    throw new Error(`Invalid OCI documentation: ${issues.join('; ')}`)
   }
 }
 
@@ -713,10 +777,31 @@ async function main(): Promise<void> {
   const packageJson = JSON.parse(
     await readFile(join(projectRoot, 'package.json'), 'utf8'),
   ) as unknown
-  const [dockerfile, dockerignore, workflows] = await Promise.all([
+  const [
+    dockerfile,
+    dockerignore,
+    workflows,
+    readme,
+    architecture,
+    runbook,
+    foundationScope,
+  ] = await Promise.all([
     readOptionalFile(join(projectRoot, 'Dockerfile')),
     readOptionalFile(join(projectRoot, '.dockerignore')),
     readWorkflows(join(projectRoot, '.github/workflows')),
+    readFile(join(projectRoot, 'README.md'), 'utf8'),
+    readFile(
+      join(projectRoot, 'docs/architecture/oci-supply-chain.md'),
+      'utf8',
+    ),
+    readFile(
+      join(projectRoot, 'docs/runbooks/stage-image-publication.md'),
+      'utf8',
+    ),
+    readFile(
+      join(projectRoot, 'docs/architecture/foundation-scope.md'),
+      'utf8',
+    ),
   ])
   validateSupplyChainFiles({
     ...(dockerfile === undefined ? {} : { dockerfile }),
@@ -724,6 +809,12 @@ async function main(): Promise<void> {
     packageJson,
     pins,
     workflows,
+  })
+  validateOciDocumentation({
+    readme,
+    architecture,
+    runbook,
+    foundationScope,
   })
   process.stdout.write('OCI supply-chain files: valid\n')
 }
