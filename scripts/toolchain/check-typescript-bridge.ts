@@ -11,15 +11,15 @@ const STABLE_ALIAS = /^npm:(?:@[^/]+\/)?[^@]+@\d+\.\d+\.\d+$/u
 const COMPATIBILITY_VERSION = /^6\.0\.\d+$/u
 const OBSERVABILITY_DEPENDENCY_FAMILY = {
   '@opentelemetry/api': '1.9.1',
-  '@opentelemetry/exporter-metrics-otlp-http': '0.220.0',
-  '@opentelemetry/exporter-trace-otlp-http': '0.220.0',
-  '@opentelemetry/instrumentation-http': '0.220.0',
+  '@opentelemetry/exporter-metrics-otlp-proto': '0.221.0',
+  '@opentelemetry/exporter-trace-otlp-proto': '0.221.0',
+  '@opentelemetry/instrumentation-http': '0.221.0',
   '@opentelemetry/instrumentation-pg': '0.72.0',
   '@opentelemetry/instrumentation-redis': '0.68.0',
-  '@opentelemetry/resources': '2.9.0',
-  '@opentelemetry/sdk-metrics': '2.9.0',
-  '@opentelemetry/sdk-node': '0.220.0',
-  '@opentelemetry/sdk-trace-base': '2.9.0',
+  '@opentelemetry/resources': '2.10.0',
+  '@opentelemetry/sdk-metrics': '2.10.0',
+  '@opentelemetry/sdk-node': '0.221.0',
+  '@opentelemetry/sdk-trace-base': '2.10.0',
   '@opentelemetry/semantic-conventions': '1.43.0',
   pino: '10.3.1',
 } as const

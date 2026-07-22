@@ -6,6 +6,18 @@ import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { requiredRuntimeEnvironment } from '@test/support/required-runtime-environment'
 
 describe('pre-framework observability bootstrap', () => {
+  it('uses only the OTLP HTTP protobuf exporter packages', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/bootstrap/observability/start-observability.ts'),
+      'utf8',
+    )
+
+    expect(source).toContain('@opentelemetry/exporter-trace-otlp-proto')
+    expect(source).toContain('@opentelemetry/exporter-metrics-otlp-proto')
+    expect(source).not.toContain('@opentelemetry/exporter-trace-otlp-http')
+    expect(source).not.toContain('@opentelemetry/exporter-metrics-otlp-http')
+  })
+
   it('keeps API runtime behind a dynamic import in main', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/bootstrap/api/main.ts'),
