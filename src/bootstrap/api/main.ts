@@ -1,3 +1,5 @@
+import 'dotenv/config'
+
 import { startObservability } from '@/bootstrap/observability/start-observability'
 import { createApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { PinoLogSink } from '@/platform/logging/pino-log.sink'
