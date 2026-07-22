@@ -13,9 +13,12 @@ const contractSecrets = [1, 2, 3, 4].map((byte) =>
  */
 export function createOpenApiRuntimeConfig(): ApplicationRuntimeConfig {
   return buildApiRuntimeConfig({
-    NODE_ENV: 'development',
+    NODE_ENV: 'production',
     API_DOCS_MODE: 'off',
     OTEL_SDK_DISABLED: 'true',
+    PUBLIC_API_URL: 'https://api.example.invalid',
+    CORS_ORIGINS: 'https://app.example.invalid',
+    TRUST_PROXY_CIDRS: '127.0.0.1/32',
     DATABASE_URL:
       'postgresql://contract:contract@127.0.0.1:1/contract?schema=public',
     REDIS_COORDINATION_URL: 'redis://default:contract@127.0.0.1:1',
@@ -23,6 +26,7 @@ export function createOpenApiRuntimeConfig(): ApplicationRuntimeConfig {
     AUTH_CSRF_SECRET: contractSecrets[1],
     AUTH_RATE_LIMIT_KEY_SECRET: contractSecrets[2],
     AUTH_NETWORK_METADATA_SECRET: contractSecrets[3],
-    AUTH_CSRF_ORIGINS: 'http://localhost:3000',
+    AUTH_CSRF_ORIGINS:
+      'https://app.example.invalid,https://api.example.invalid',
   })
 }

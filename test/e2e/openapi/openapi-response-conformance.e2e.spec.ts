@@ -144,4 +144,21 @@ describe('committed OpenAPI response conformance', () => {
       .expect(204)
     await assertOpenApiResponseConforms('authLogout', logout)
   })
+
+  it('validates login origin and media-type policy failures', async () => {
+    const deniedOrigin = await request(auth.server)
+      .post('/v1/auth/login')
+      .set('Content-Type', 'application/json')
+      .send({ email: 'user@example.com', password: 'correct password' })
+      .expect(403)
+    await assertOpenApiResponseConforms('authLogin', deniedOrigin)
+
+    const unsupportedMediaType = await request(auth.server)
+      .post('/v1/auth/login')
+      .set('Origin', 'https://app.example.com')
+      .set('Content-Type', 'text/plain')
+      .send('not-json')
+      .expect(415)
+    await assertOpenApiResponseConforms('authLogin', unsupportedMediaType)
+  })
 })

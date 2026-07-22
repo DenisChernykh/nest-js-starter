@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, UnsupportedMediaTypeException } from '@nestjs/common'
 import type { CanActivate, ExecutionContext } from '@nestjs/common'
 
 import { AuthCsrfRejectedError } from '../application/auth-errors'
@@ -29,7 +29,7 @@ function refererOrigin(referer: string | undefined): string | undefined {
   }
 }
 
-/** Enforces exact trusted browser origin and JSON-only unsafe requests. */
+/** Enforces JSON media type and exact trusted origin for unsafe requests. */
 @Injectable()
 export class BrowserOriginGuard implements CanActivate {
   private readonly allowedOrigins: ReadonlySet<string>
@@ -43,13 +43,16 @@ export class BrowserOriginGuard implements CanActivate {
     if (safeMethods.has(request.method.toUpperCase())) return true
     const fetchSite = oneHeader(request.headers, 'sec-fetch-site')
     const contentType = oneHeader(request.headers, 'content-type')
+    if (
+      contentType?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/json'
+    ) {
+      throw new UnsupportedMediaTypeException()
+    }
     const origin =
       oneHeader(request.headers, 'origin') ??
       refererOrigin(oneHeader(request.headers, 'referer'))
     if (
       fetchSite === 'cross-site' ||
-      contentType?.split(';', 1)[0]?.trim().toLowerCase() !==
-        'application/json' ||
       origin === undefined ||
       !this.allowedOrigins.has(origin)
     ) {

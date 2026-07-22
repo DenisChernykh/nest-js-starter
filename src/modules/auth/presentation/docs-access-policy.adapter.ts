@@ -24,7 +24,7 @@ function createDocsReadPermission(): PermissionKey {
 }
 const docsReadPermission = createDocsReadPermission()
 
-/** Auth-owned adapter for fresh session and permission-based docs access. */
+/** Auth presentation adapter for fresh session and permission-based docs access. */
 export class DocsAccessPolicyAdapter implements DocsAccessPolicy {
   public constructor(
     private readonly authenticate: AuthenticateSessionUseCase,

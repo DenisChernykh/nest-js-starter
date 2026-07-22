@@ -48,6 +48,11 @@ describe('offline OpenAPI generation', () => {
     const artifact = await generateOpenApiArtifact()
     const document = JSON.parse(artifact) as {
       readonly paths: Readonly<Record<string, unknown>>
+      readonly components?: {
+        readonly securitySchemes?: Readonly<
+          Record<string, { readonly name?: string }>
+        >
+      }
     }
 
     expect(Object.keys(document.paths)).toEqual(
@@ -64,6 +69,9 @@ describe('offline OpenAPI generation', () => {
     expect(startAll).not.toHaveBeenCalled()
     expect(connectDatabase).not.toHaveBeenCalled()
     expect(connectRedis).not.toHaveBeenCalled()
+    expect(document.components?.securitySchemes?.['sessionCookie']?.name).toBe(
+      '__Host-session',
+    )
   })
 
   it('writes byte-identical canonical files on repeated generation', async () => {

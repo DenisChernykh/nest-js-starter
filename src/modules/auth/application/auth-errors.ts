@@ -79,7 +79,7 @@ export class AuthorizationDeniedError extends AuthError {
   }
 }
 
-/** Browser request failed the origin, content-type or session CSRF policy. */
+/** Browser request failed the trusted-origin or session CSRF policy. */
 export class AuthCsrfRejectedError extends AuthError {
   public constructor() {
     super('AUTH_CSRF_REJECTED', 'Request rejected')

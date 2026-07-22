@@ -5,7 +5,7 @@ import {
   AuthenticationRequiredError,
 } from '@/modules/auth/application/auth-errors'
 import { definePermissions } from '@/modules/auth/application/permission'
-import { DocsAccessPolicyAdapter } from '@/modules/auth/composition/docs-access-policy.adapter'
+import { DocsAccessPolicyAdapter } from '@/modules/auth/presentation/docs-access-policy.adapter'
 
 describe('DocsAccessPolicyAdapter', () => {
   const rawToken = 'A'.repeat(43)
@@ -31,6 +31,19 @@ describe('DocsAccessPolicyAdapter', () => {
       emit,
     }
   }
+
+  it('lives in presentation instead of the DI-only composition layer', () => {
+    expect(
+      existsSync(
+        resolve('src/modules/auth/composition/docs-access-policy.adapter.ts'),
+      ),
+    ).toBe(false)
+    expect(
+      existsSync(
+        resolve('src/modules/auth/presentation/docs-access-policy.adapter.ts'),
+      ),
+    ).toBe(true)
+  })
 
   it.each([
     undefined,
@@ -119,3 +132,5 @@ describe('DocsAccessPolicyAdapter', () => {
     expect(emit).not.toHaveBeenCalled()
   })
 })
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'

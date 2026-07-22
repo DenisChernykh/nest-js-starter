@@ -109,6 +109,7 @@ export class AuthController {
   @ApiProblemResponses(
     'MALFORMED_REQUEST',
     'AUTHENTICATION_REQUIRED',
+    'AUTHORIZATION_DENIED',
     'PAYLOAD_TOO_LARGE',
     'UNSUPPORTED_MEDIA_TYPE',
     'VALIDATION_FAILED',
@@ -157,6 +158,7 @@ export class AuthController {
   @ApiProblemResponses(
     'AUTHENTICATION_REQUIRED',
     'AUTHORIZATION_DENIED',
+    'UNSUPPORTED_MEDIA_TYPE',
     'INTERNAL_ERROR',
     'DEPENDENCY_UNAVAILABLE',
   )
@@ -297,6 +299,7 @@ export class AuthController {
   @ApiProblemResponses(
     'AUTHENTICATION_REQUIRED',
     'AUTHORIZATION_DENIED',
+    'UNSUPPORTED_MEDIA_TYPE',
     'VALIDATION_FAILED',
     'INTERNAL_ERROR',
     'DEPENDENCY_UNAVAILABLE',
@@ -321,6 +324,7 @@ export class AuthController {
   @ApiProblemResponses(
     'AUTHENTICATION_REQUIRED',
     'AUTHORIZATION_DENIED',
+    'UNSUPPORTED_MEDIA_TYPE',
     'INTERNAL_ERROR',
     'DEPENDENCY_UNAVAILABLE',
   )
