@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -33,8 +33,51 @@ const packageJson = {
 }
 
 const dockerfile = `# syntax=${pins.dockerfileFrontend}
+# check=error=true
+
 ARG NODE_IMAGE=${pins.nodeRuntime}
+
+FROM \${NODE_IMAGE} AS dependencies
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store corepack pnpm@11.15.1 install --frozen-lockfile --store-dir=/pnpm/store
+
+FROM dependencies AS build
+COPY . .
+RUN corepack pnpm@11.15.1 run build && CI=true corepack pnpm@11.15.1 prune --prod
+
 FROM \${NODE_IMAGE} AS runtime
+ARG BUILD_REVISION
+ARG BUILD_SOURCE
+ARG BUILD_CREATED
+RUN corepack install --global pnpm@11.15.1
+RUN node -e 'const [revision, source] = process.argv.slice(1); if (!/^[0-9a-f]{40}$/.test(revision)) throw new Error("BUILD_REVISION must be 40 lowercase hex"); const url = new URL(source); if (url.protocol !== "https:" || url.username !== "" || url.password !== "") throw new Error("BUILD_SOURCE must be a credential-free HTTPS URL")' "$BUILD_REVISION" "$BUILD_SOURCE"
+LABEL org.opencontainers.image.title="nest-js-starter" org.opencontainers.image.source="\${BUILD_SOURCE}" org.opencontainers.image.revision="\${BUILD_REVISION}" org.opencontainers.image.created="\${BUILD_CREATED}"
+ENV NODE_ENV=production API_HOST=0.0.0.0
+WORKDIR /app
+COPY --chown=node:node --from=build /app/package.json ./package.json
+COPY --chown=node:node --from=build /app/node_modules ./node_modules
+COPY --chown=node:node --from=build /app/dist ./dist
+COPY --chown=node:node --from=build /app/prisma ./prisma
+COPY --chown=node:node --from=build /app/prisma.config.ts ./prisma.config.ts
+USER node
+EXPOSE 3000
+CMD ["node", "dist/bootstrap/api/main.js"]
+`
+
+const dockerignore = `.git
+.github
+.env*
+node_modules
+.pnpm-store
+dist
+coverage
+*.log
+.DS_Store
+.idea
+.vscode
+test
+*.tsbuildinfo
 `
 
 const pullRequestWorkflow = `name: Pull request
@@ -72,12 +115,14 @@ jobs:
 function validate(
   overrides: {
     readonly dockerfile?: string
+    readonly dockerignore?: string
     readonly packageJson?: unknown
     readonly workflows?: Readonly<Record<string, string>>
   } = {},
 ): void {
   validateSupplyChainFiles({
     dockerfile: overrides.dockerfile ?? dockerfile,
+    dockerignore: overrides.dockerignore ?? dockerignore,
     packageJson: overrides.packageJson ?? packageJson,
     pins,
     workflows: overrides.workflows ?? {
@@ -145,6 +190,124 @@ describe('validateSupplyChainFiles', () => {
         dockerfile: dockerfile.replace(pins.nodeRuntime, 'node:24-trixie-slim'),
       }),
     ).toThrow('Dockerfile base image must be digest-pinned')
+  })
+
+  it.each(['dependencies', 'build', 'runtime'])(
+    'rejects a Dockerfile missing the %s stage',
+    (stage) => {
+      expect(() =>
+        validate({
+          dockerfile: dockerfile.replace(
+            ` AS ${stage}`,
+            ` AS missing-${stage}`,
+          ),
+        }),
+      ).toThrow('Dockerfile must define dependencies, build and runtime stages')
+    },
+  )
+
+  it.each(['install --frozen-lockfile', 'run build', 'prune --prod'])(
+    'rejects a Dockerfile missing %s',
+    (command) => {
+      expect(() =>
+        validate({
+          dockerfile: dockerfile.replace(command, 'missing-command'),
+        }),
+      ).toThrow('Dockerfile install/build/prune contract is incomplete')
+    },
+  )
+
+  it('requires non-interactive production pruning', () => {
+    expect(() =>
+      validate({ dockerfile: dockerfile.replace('CI=true', 'CI=false') }),
+    ).toThrow('Dockerfile install/build/prune contract is incomplete')
+  })
+
+  it.each([
+    '/app/package.json',
+    '/app/node_modules',
+    '/app/dist',
+    '/app/prisma',
+    '/app/prisma.config.ts',
+  ])('rejects a runtime image missing %s', (path) => {
+    expect(() =>
+      validate({ dockerfile: dockerfile.replace(path, '/app/missing') }),
+    ).toThrow('Dockerfile runtime contents are incomplete')
+  })
+
+  it('rejects incomplete OCI metadata labels', () => {
+    expect(() =>
+      validate({
+        dockerfile: dockerfile.replace(
+          'org.opencontainers.image.revision',
+          'invalid.revision',
+        ),
+      }),
+    ).toThrow('Dockerfile OCI metadata contract is incomplete')
+  })
+
+  it.each([
+    'BUILD_REVISION must be 40 lowercase hex',
+    'BUILD_SOURCE must be a credential-free HTTPS URL',
+  ])('rejects missing build metadata validation for %s', (message) => {
+    expect(() =>
+      validate({ dockerfile: dockerfile.replace(message, 'missing-check') }),
+    ).toThrow('Dockerfile must validate public metadata inputs during build')
+  })
+
+  it.each([
+    ['USER node', 'USER root'],
+    [
+      'CMD ["node", "dist/bootstrap/api/main.js"]',
+      'CMD node dist/bootstrap/api/main.js',
+    ],
+  ])(
+    'rejects an unsafe runtime instruction replacing %s',
+    (expected, unsafe) => {
+      expect(() =>
+        validate({ dockerfile: dockerfile.replace(expected, unsafe) }),
+      ).toThrow('Dockerfile must run as non-root with exec-form API command')
+    },
+  )
+
+  it('rejects source copied into the runtime stage', () => {
+    expect(() =>
+      validate({
+        dockerfile: dockerfile.replace(
+          'USER node',
+          'COPY --from=build /app/src ./src\nUSER node',
+        ),
+      }),
+    ).toThrow('Dockerfile runtime stage must not copy forbidden paths')
+  })
+
+  it.each(['.git', '.env*', 'node_modules', 'dist', 'coverage', 'test'])(
+    'rejects a dockerignore missing %s',
+    (entry) => {
+      expect(() =>
+        validate({
+          dockerignore: dockerignore
+            .split('\n')
+            .filter((line) => line !== entry)
+            .join('\n'),
+        }),
+      ).toThrow('Docker ignore policy is incomplete')
+    },
+  )
+
+  it('validates the committed Dockerfile and dockerignore', async () => {
+    const [committedDockerfile, committedDockerignore] = await Promise.all([
+      readFile('Dockerfile', 'utf8'),
+      readFile('.dockerignore', 'utf8'),
+    ])
+
+    expect(() =>
+      validate({
+        dockerfile: committedDockerfile,
+        dockerignore: committedDockerignore,
+        workflows: {},
+      }),
+    ).not.toThrow()
   })
 
   it('rejects pull_request_target workflows', () => {

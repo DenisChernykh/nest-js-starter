@@ -33,6 +33,7 @@ export interface OciPins {
  */
 export interface SupplyChainFilesInput {
   readonly dockerfile?: string
+  readonly dockerignore?: string
   readonly packageJson: unknown
   readonly pins: OciPins
   readonly workflows?: Readonly<Record<string, string>>
@@ -156,24 +157,122 @@ function validateDockerfile(
     }
   }
 
-  const fromReferences = lines
-    .map((line) => /^FROM\s+(\S+)(?:\s+AS\s+\S+)?\s*$/iu.exec(line)?.[1])
-    .filter((reference): reference is string => reference !== undefined)
-  if (fromReferences.length === 0) {
+  const stages = new Set<string>()
+  const fromInstructions = lines
+    .map((line) => /^FROM\s+(\S+)(?:\s+AS\s+(\S+))?\s*$/iu.exec(line))
+    .filter((match): match is RegExpExecArray => match !== null)
+  if (fromInstructions.length === 0) {
     issues.push('Dockerfile must define a base image')
   }
 
-  for (const reference of fromReferences) {
+  for (const instruction of fromInstructions) {
+    const reference = instruction[1]
+    if (reference === undefined) continue
     const variable = /^\$\{([A-Z0-9_]+)\}$/u.exec(reference)?.[1]
     const resolvedReference =
       variable === undefined ? reference : argumentsByName.get(variable)
     if (
       resolvedReference === undefined ||
-      !digestReference.test(resolvedReference) ||
-      resolvedReference !== pins.nodeRuntime
+      (!stages.has(resolvedReference.toLowerCase()) &&
+        (!digestReference.test(resolvedReference) ||
+          resolvedReference !== pins.nodeRuntime))
     ) {
       issues.push('Dockerfile base image must be digest-pinned')
     }
+    if (instruction[2] !== undefined) {
+      stages.add(instruction[2].toLowerCase())
+    }
+  }
+
+  if (
+    !['dependencies', 'build', 'runtime'].every((stage) => stages.has(stage))
+  ) {
+    issues.push('Dockerfile must define dependencies, build and runtime stages')
+  }
+  if (
+    !source.includes('corepack pnpm@11.15.1 install --frozen-lockfile') ||
+    !source.includes('corepack pnpm@11.15.1 run build') ||
+    !source.includes('CI=true corepack pnpm@11.15.1 prune --prod') ||
+    !source.includes('corepack install --global pnpm@11.15.1')
+  ) {
+    issues.push('Dockerfile install/build/prune contract is incomplete')
+  }
+
+  const runtimeStart = lines.findIndex((line) =>
+    /^FROM\s+\S+\s+AS\s+runtime\s*$/iu.test(line),
+  )
+  const runtimeSource =
+    runtimeStart < 0 ? '' : lines.slice(runtimeStart).join('\n')
+  const requiredRuntimeCopies = [
+    /\s\/app\/package\.json(?:\s|$)/u,
+    /\s\/app\/node_modules(?:\s|$)/u,
+    /\s\/app\/dist(?:\s|$)/u,
+    /\s\/app\/prisma(?:\s|$)/u,
+    /\s\/app\/prisma\.config\.ts(?:\s|$)/u,
+  ]
+  if (!requiredRuntimeCopies.every((pattern) => pattern.test(runtimeSource))) {
+    issues.push('Dockerfile runtime contents are incomplete')
+  }
+
+  const requiredMetadata = [
+    'ARG BUILD_REVISION',
+    'ARG BUILD_SOURCE',
+    'ARG BUILD_CREATED',
+    'org.opencontainers.image.title="nest-js-starter"',
+    'org.opencontainers.image.source="${BUILD_SOURCE}"',
+    'org.opencontainers.image.revision="${BUILD_REVISION}"',
+    'org.opencontainers.image.created="${BUILD_CREATED}"',
+  ]
+  if (!requiredMetadata.every((entry) => runtimeSource.includes(entry))) {
+    issues.push('Dockerfile OCI metadata contract is incomplete')
+  }
+  if (
+    !runtimeSource.includes('BUILD_REVISION must be 40 lowercase hex') ||
+    !runtimeSource.includes('BUILD_SOURCE must be a credential-free HTTPS URL')
+  ) {
+    issues.push('Dockerfile must validate public metadata inputs during build')
+  }
+  if (
+    !runtimeSource.split(/\r?\n/u).includes('USER node') ||
+    !runtimeSource
+      .split(/\r?\n/u)
+      .includes('CMD ["node", "dist/bootstrap/api/main.js"]')
+  ) {
+    issues.push('Dockerfile must run as non-root with exec-form API command')
+  }
+
+  const forbiddenRuntimePaths = [
+    '/app/src',
+    '/app/test',
+    '/app/coverage',
+    '/app/.env',
+    '/app/.git',
+  ]
+  const runtimeCopies = runtimeSource
+    .split(/\r?\n/u)
+    .filter((line) => /^COPY\s/iu.test(line))
+  if (
+    runtimeCopies.some((line) =>
+      forbiddenRuntimePaths.some((path) => line.includes(path)),
+    )
+  ) {
+    issues.push('Dockerfile runtime stage must not copy forbidden paths')
+  }
+}
+
+function validateDockerignore(source: string, issues: string[]): void {
+  const entries = new Set(
+    source
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter((line) => line !== '' && !line.startsWith('#')),
+  )
+  const required = ['.git', '.env*', 'node_modules', 'dist', 'coverage', 'test']
+  if (!required.every((entry) => entries.has(entry))) {
+    issues.push('Docker ignore policy is incomplete')
+  }
+  if (['src', 'prisma', 'package.json'].some((entry) => entries.has(entry))) {
+    issues.push('Docker ignore policy excludes required build inputs')
   }
 }
 
@@ -285,6 +384,12 @@ export function validateSupplyChainFiles(input: SupplyChainFilesInput): void {
   if (input.dockerfile !== undefined) {
     validateDockerfile(input.dockerfile, pins, issues)
   }
+  if (input.dockerignore !== undefined) {
+    validateDockerignore(input.dockerignore, issues)
+  }
+  if ((input.dockerfile === undefined) !== (input.dockerignore === undefined)) {
+    issues.push('Dockerfile and dockerignore must be introduced together')
+  }
   for (const [path, source] of Object.entries(input.workflows ?? {})) {
     validateWorkflow(path, source, pins, issues)
   }
@@ -331,12 +436,14 @@ async function main(): Promise<void> {
   const packageJson = JSON.parse(
     await readFile(join(projectRoot, 'package.json'), 'utf8'),
   ) as unknown
-  const [dockerfile, workflows] = await Promise.all([
+  const [dockerfile, dockerignore, workflows] = await Promise.all([
     readOptionalFile(join(projectRoot, 'Dockerfile')),
+    readOptionalFile(join(projectRoot, '.dockerignore')),
     readWorkflows(join(projectRoot, '.github/workflows')),
   ])
   validateSupplyChainFiles({
     ...(dockerfile === undefined ? {} : { dockerfile }),
+    ...(dockerignore === undefined ? {} : { dockerignore }),
     packageJson,
     pins,
     workflows,
