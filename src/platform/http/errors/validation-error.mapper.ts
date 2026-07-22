@@ -80,7 +80,11 @@ function collectError(
   parentPointer: string,
   output: ProblemFieldError[],
 ): void {
-  const pointer = `${parentPointer}/${escapePointerSegment(error.property)}`
+  const property: unknown = error.property
+  const pointer =
+    typeof property === 'string' && property.length > 0
+      ? `${parentPointer}/${escapePointerSegment(property)}`
+      : parentPointer
   for (const constraint of Object.keys(error.constraints ?? {}).sort()) {
     const code = constraintCodes[constraint] ?? 'invalid_value'
     output.push({ pointer, code, detail: details[code] })
