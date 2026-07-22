@@ -29,6 +29,7 @@
     "manifest:check": "tsx scripts/manifest/check-starter-manifest.ts",
     "oci:build": "docker buildx build --load --target runtime --tag nest-js-starter:smoke --build-arg BUILD_REVISION=0000000000000000000000000000000000000000 --build-arg BUILD_SOURCE=https://github.com/DenisChernykh/nest-js-starter --build-arg BUILD_CREATED=2026-07-22T00:00:00Z .",
     "oci:check": "corepack pnpm@11.15.1 run oci:validate && docker build --check . && corepack pnpm@11.15.1 run oci:build && corepack pnpm@11.15.1 run oci:smoke -- --image nest-js-starter:smoke --revision 0000000000000000000000000000000000000000",
+    "oci:resolve": "tsx scripts/oci/resolve-image-digest.ts",
     "oci:smoke": "tsx scripts/oci/run-image-smoke.ts",
     "oci:validate": "tsx scripts/oci/validate-supply-chain.ts",
     "openapi:drift": "tsx scripts/openapi/check-openapi-drift.ts",

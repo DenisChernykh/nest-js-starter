@@ -48,7 +48,23 @@ export function normalizeGhcrImage(repository: string): string {
     throw new Error('Invalid GitHub repository')
   }
   const image = `ghcr.io/${repository.toLowerCase()}`
-  if (!ghcrImage.test(image)) throw new Error('Invalid GitHub repository')
+  try {
+    validateGhcrImage(image)
+  } catch (error: unknown) {
+    throw new Error('Invalid GitHub repository', { cause: error })
+  }
+  return image
+}
+
+/**
+ * Validates a lowercase, untagged GHCR image name.
+ *
+ * @param image - Candidate `ghcr.io/owner/repository` value.
+ * @returns The unchanged canonical image name.
+ * @throws Error when a registry, tag, digest or uppercase segment is present.
+ */
+export function validateGhcrImage(image: string): string {
+  if (!ghcrImage.test(image)) throw new Error('Invalid GHCR image')
   return image
 }
 
@@ -61,7 +77,12 @@ export function normalizeGhcrImage(repository: string): string {
  * @throws Error when either component is mutable or malformed.
  */
 export function createDigestReference(image: string, digest: string): string {
-  if (!ghcrImage.test(image) || !sha256Digest.test(digest)) {
+  try {
+    validateGhcrImage(image)
+  } catch {
+    throw new Error('Invalid immutable image input')
+  }
+  if (!sha256Digest.test(digest)) {
     throw new Error('Invalid immutable image input')
   }
   return `${image}@${digest}`
