@@ -23,9 +23,25 @@ const pins: OciPins = {
       tag: 'v7.0.0',
       sha: '820762786026740c76f36085b0efc47a31fe5020',
     },
+    'actions/upload-artifact': {
+      tag: 'v7.0.1',
+      sha: '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a',
+    },
+    'docker/setup-buildx-action': {
+      tag: 'v4.2.0',
+      sha: 'bb05f3f5519dd87d3ba754cc423b652a5edd6d2c',
+    },
+    'docker/login-action': {
+      tag: 'v4.4.0',
+      sha: 'af1e73f918a031802d376d3c8bbc3fe56130a9b0',
+    },
     'docker/build-push-action': {
       tag: 'v7.3.0',
       sha: '53b7df96c91f9c12dcc8a07bcb9ccacbed38856a',
+    },
+    'aquasecurity/trivy-action': {
+      tag: 'v0.36.0',
+      sha: 'ed142fd0673e97e23eac54620cfb913e5ce36c25',
     },
   },
 }
@@ -119,16 +135,85 @@ on:
 permissions:
   contents: read
   packages: write
+concurrency:
+  group: stage-image-\${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: .node-version
+          check-latest: false
+      - run: corepack pnpm@11.15.1 install --frozen-lockfile
+      - name: Run full gate
+        run: corepack pnpm@11.15.1 run check
+        env:
+          OPENAPI_BREAKING_BASE_REF: \${{ github.event.before }}
+          TESTCONTAINERS_REUSE_ENABLE: "false"
+      - id: image
+        name: Derive public image metadata
+        shell: bash
+        run: |
+          repository="\${GITHUB_REPOSITORY,,}"
+          echo "name=ghcr.io/\${repository}" >> "\${GITHUB_OUTPUT}"
+          echo "created=$(git show -s --format=%cI "\${GITHUB_SHA}")" >> "\${GITHUB_OUTPUT}"
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
+        with:
+          registry: ghcr.io
+          username: \${{ github.actor }}
+          password: \${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
           push: true
-          tags: ghcr.io/example/starter:\${{ github.sha }}
+          tags: \${{ steps.image.outputs.name }}:\${{ github.sha }}
+          build-args: |
+            BUILD_REVISION=\${{ github.sha }}
+            BUILD_SOURCE=\${{ github.server_url }}/\${{ github.repository }}
+            BUILD_CREATED=\${{ steps.image.outputs.created }}
           sbom: true
           provenance: mode=max,version=v1
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Scan immutable digest
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: \${{ steps.image.outputs.name }}@\${{ steps.build.outputs.digest }}
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: 1
+          format: json
+          output: trivy.json
+      - name: Read registry attestations
+        if: \${{ !cancelled() }}
+        run: corepack pnpm@11.15.1 exec tsx scripts/oci/read-registry-attestations.ts --reference "\${{ steps.image.outputs.name }}@\${{ steps.build.outputs.digest }}" --sbom-output sbom.spdx.json --provenance-output provenance.json
+      - name: Write image evidence
+        if: \${{ !cancelled() }}
+        run: corepack pnpm@11.15.1 exec tsx scripts/oci/write-image-evidence.ts --image "\${{ steps.image.outputs.name }}" --digest "\${{ steps.build.outputs.digest }}" --revision "\${{ github.sha }}" --openapi docs/api/openapi.json --output image-evidence.json
+      - name: Upload stage evidence
+        if: \${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: stage-image-\${{ github.sha }}
+          path: |
+            image-evidence.json
+            sbom.spdx.json
+            provenance.json
+            trivy.json
+            docs/api/openapi.json
+          if-no-files-found: error
+          retention-days: 30
 `
 
 function validate(
@@ -408,8 +493,8 @@ describe('validateSupplyChainFiles', () => {
       validate({
         workflows: {
           'stage-image.yml': stageWorkflow.replace(
-            'ghcr.io/example/starter:${{ github.sha }}',
-            'ghcr.io/example/starter:latest',
+            '${{ steps.image.outputs.name }}:${{ github.sha }}',
+            '${{ steps.image.outputs.name }}:latest',
           ),
         },
       }),
@@ -431,4 +516,106 @@ describe('validateSupplyChainFiles', () => {
       ).toThrow('published image must include SBOM and max provenance')
     },
   )
+
+  it.each([
+    ['branches: [stage]', 'branches: [main]'],
+    ['contents: read\n  packages: write', 'contents: write\n  packages: read'],
+    [
+      'OPENAPI_BREAKING_BASE_REF: ${{ github.event.before }}',
+      'OPENAPI_BREAKING_BASE_REF: origin/stage',
+    ],
+    [
+      'repository="${GITHUB_REPOSITORY,,}"',
+      'repository="${GITHUB_REPOSITORY}"',
+    ],
+    ['git show -s --format=%cI "${GITHUB_SHA}"', 'date -u +%FT%TZ'],
+    ['platforms: linux/amd64', 'platforms: linux/amd64,linux/arm64'],
+    [
+      'tags: ${{ steps.image.outputs.name }}:${{ github.sha }}',
+      'tags: ghcr.io/example/starter:latest',
+    ],
+    ['BUILD_REVISION=${{ github.sha }}', 'BUILD_REVISION=main'],
+    [
+      'image-ref: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}',
+      'image-ref: ${{ steps.image.outputs.name }}:${{ github.sha }}',
+    ],
+    ['scanners: vuln', 'scanners: vuln,secret'],
+    ['severity: HIGH,CRITICAL', 'severity: CRITICAL'],
+    ['ignore-unfixed: true', 'ignore-unfixed: false'],
+    ['exit-code: 1', 'exit-code: 0'],
+    ['if-no-files-found: error', 'if-no-files-found: warn'],
+    ['retention-days: 30', 'retention-days: 90'],
+    ['sbom.spdx.json', 'missing-sbom.json'],
+    ['provenance.json', 'missing-provenance.json'],
+    ['trivy.json', 'missing-trivy.json'],
+    ['docs/api/openapi.json', 'missing-openapi.json'],
+  ])(
+    'rejects an incomplete stage workflow replacing %s',
+    (required, invalid) => {
+      expect(() =>
+        validate({
+          workflows: {
+            'stage-image.yml': stageWorkflow.replace(required, invalid),
+          },
+        }),
+      ).toThrow('Stage image workflow contract is incomplete')
+    },
+  )
+
+  it('rejects a deployment environment in stage publication', () => {
+    expect(() =>
+      validate({
+        workflows: {
+          'stage-image.yml': stageWorkflow.replace(
+            '    runs-on: ubuntu-latest',
+            '    runs-on: ubuntu-latest\n    environment: stage',
+          ),
+        },
+      }),
+    ).toThrow('Stage image workflow contract is incomplete')
+  })
+
+  it('rejects more than one image build-push step', () => {
+    const buildStep = `      - id: rebuild
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
+        with:
+          push: false
+`
+    expect(() =>
+      validate({
+        workflows: {
+          'stage-image.yml': stageWorkflow.replace(
+            '      - name: Scan immutable digest',
+            `${buildStep}      - name: Scan immutable digest`,
+          ),
+        },
+      }),
+    ).toThrow('Stage image workflow contract is incomplete')
+  })
+
+  it('requires the full gate before registry login and build', () => {
+    const fullGate = `      - name: Run full gate
+        run: corepack pnpm@11.15.1 run check
+        env:
+          OPENAPI_BREAKING_BASE_REF: \${{ github.event.before }}
+          TESTCONTAINERS_REUSE_ENABLE: "false"
+`
+    const changedOrder = stageWorkflow
+      .replace(fullGate, '')
+      .replace(
+        '      - name: Scan immutable digest',
+        `${fullGate}      - name: Scan immutable digest`,
+      )
+    expect(() =>
+      validate({ workflows: { 'stage-image.yml': changedOrder } }),
+    ).toThrow('Stage image workflow contract is incomplete')
+  })
+
+  it('validates the committed stage image workflow', async () => {
+    const workflow = await readFile('.github/workflows/stage-image.yml', 'utf8')
+
+    expect(() =>
+      validate({ workflows: { 'stage-image.yml': workflow } }),
+    ).not.toThrow()
+  })
 })

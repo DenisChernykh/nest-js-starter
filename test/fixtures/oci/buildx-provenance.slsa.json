@@ -1,0 +1,16 @@
+{
+  "buildDefinition": {
+    "buildType": "https://mobyproject.org/buildkit@v1",
+    "externalParameters": {},
+    "internalParameters": {},
+    "resolvedDependencies": []
+  },
+  "runDetails": {
+    "builder": {
+      "id": "https://github.com/docker/build-push-action"
+    },
+    "metadata": {
+      "invocationId": "fixture"
+    }
+  }
+}

@@ -395,6 +395,208 @@ function validatePullRequestWorkflow(
   if (!valid) issues.push('Pull request workflow contract is incomplete')
 }
 
+function findStepByAction(
+  steps: readonly unknown[],
+  action: string,
+  pins: OciPins,
+): UnknownRecord | undefined {
+  const sha = pins.actions[action]?.sha
+  return steps.find(
+    (step): step is UnknownRecord =>
+      isRecord(step) && step['uses'] === `${action}@${sha}`,
+  )
+}
+
+function splitMultiline(value: unknown): readonly string[] {
+  return typeof value === 'string'
+    ? value
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter(Boolean)
+    : []
+}
+
+function validateStageWorkflow(
+  workflow: UnknownRecord,
+  pins: OciPins,
+  issues: string[],
+): void {
+  const triggers = workflow['on']
+  const push = isRecord(triggers) ? triggers['push'] : undefined
+  const branches = isRecord(push) ? push['branches'] : undefined
+  const permissions = workflow['permissions']
+  const concurrency = workflow['concurrency']
+  const jobs = workflow['jobs']
+  const publish = isRecord(jobs) ? jobs['publish'] : undefined
+  const rawSteps = isRecord(publish) ? publish['steps'] : undefined
+  const steps = isUnknownArray(rawSteps) ? rawSteps : []
+  const checkout = findStepByAction(steps, 'actions/checkout', pins)
+  const setupNode = findStepByAction(steps, 'actions/setup-node', pins)
+  const setupBuildx = findStepByAction(
+    steps,
+    'docker/setup-buildx-action',
+    pins,
+  )
+  const login = findStepByAction(steps, 'docker/login-action', pins)
+  const trivy = findStepByAction(steps, 'aquasecurity/trivy-action', pins)
+  const upload = findStepByAction(steps, 'actions/upload-artifact', pins)
+  const buildSteps = steps.filter(
+    (step): step is UnknownRecord =>
+      isRecord(step) &&
+      step['uses'] ===
+        `docker/build-push-action@${pins.actions['docker/build-push-action']?.sha}`,
+  )
+  const build = buildSteps[0]
+  const install = steps.find(
+    (step): step is UnknownRecord =>
+      isRecord(step) &&
+      step['run'] === 'corepack pnpm@11.15.1 install --frozen-lockfile',
+  )
+  const fullGate = steps.find(
+    (step): step is UnknownRecord =>
+      isRecord(step) && step['run'] === 'corepack pnpm@11.15.1 run check',
+  )
+  const imageMetadata = steps.find(
+    (step): step is UnknownRecord => isRecord(step) && step['id'] === 'image',
+  )
+  const attestationReader = steps.find(
+    (step): step is UnknownRecord =>
+      isRecord(step) &&
+      typeof step['run'] === 'string' &&
+      step['run'].includes('scripts/oci/read-registry-attestations.ts'),
+  )
+  const evidenceWriter = steps.find(
+    (step): step is UnknownRecord =>
+      isRecord(step) &&
+      typeof step['run'] === 'string' &&
+      step['run'].includes('scripts/oci/write-image-evidence.ts'),
+  )
+  const checkoutWith = isRecord(checkout) ? checkout['with'] : undefined
+  const setupNodeWith = isRecord(setupNode) ? setupNode['with'] : undefined
+  const fullGateEnvironment = isRecord(fullGate) ? fullGate['env'] : undefined
+  const loginWith = isRecord(login) ? login['with'] : undefined
+  const buildWith = isRecord(build) ? build['with'] : undefined
+  const trivyWith = isRecord(trivy) ? trivy['with'] : undefined
+  const uploadWith = isRecord(upload) ? upload['with'] : undefined
+  const imageMetadataSource = isRecord(imageMetadata)
+    ? imageMetadata['run']
+    : undefined
+  const buildArguments = isRecord(buildWith)
+    ? splitMultiline(buildWith['build-args'])
+    : []
+  const uploadedPaths = isRecord(uploadWith)
+    ? splitMultiline(uploadWith['path'])
+    : []
+  const fullGateIndex = steps.indexOf(fullGate)
+  const loginIndex = steps.indexOf(login)
+  const buildIndex = steps.indexOf(build)
+
+  const valid =
+    isUnknownArray(branches) &&
+    branches.length === 1 &&
+    branches[0] === 'stage' &&
+    isRecord(permissions) &&
+    hasExactKeys(permissions, ['contents', 'packages']) &&
+    permissions['contents'] === 'read' &&
+    permissions['packages'] === 'write' &&
+    isRecord(concurrency) &&
+    concurrency['group'] === 'stage-image-${{ github.ref }}' &&
+    concurrency['cancel-in-progress'] === false &&
+    isRecord(publish) &&
+    publish['runs-on'] === 'ubuntu-latest' &&
+    publish['timeout-minutes'] === 60 &&
+    !('environment' in publish) &&
+    isRecord(checkoutWith) &&
+    checkoutWith['fetch-depth'] === 0 &&
+    isRecord(setupNodeWith) &&
+    setupNodeWith['node-version-file'] === '.node-version' &&
+    setupNodeWith['check-latest'] === false &&
+    install !== undefined &&
+    isRecord(fullGateEnvironment) &&
+    fullGateEnvironment['OPENAPI_BREAKING_BASE_REF'] ===
+      '${{ github.event.before }}' &&
+    fullGateEnvironment['TESTCONTAINERS_REUSE_ENABLE'] === 'false' &&
+    fullGateIndex >= 0 &&
+    fullGateIndex < loginIndex &&
+    fullGateIndex < buildIndex &&
+    isRecord(imageMetadata) &&
+    imageMetadata['shell'] === 'bash' &&
+    typeof imageMetadataSource === 'string' &&
+    imageMetadataSource.includes('repository="${GITHUB_REPOSITORY,,}"') &&
+    imageMetadataSource.includes('name=ghcr.io/${repository}') &&
+    imageMetadataSource.includes('git show -s --format=%cI "${GITHUB_SHA}"') &&
+    setupBuildx !== undefined &&
+    isRecord(loginWith) &&
+    loginWith['registry'] === 'ghcr.io' &&
+    loginWith['username'] === '${{ github.actor }}' &&
+    loginWith['password'] === '${{ secrets.GITHUB_TOKEN }}' &&
+    buildSteps.length === 1 &&
+    build?.['id'] === 'build' &&
+    isRecord(buildWith) &&
+    buildWith['context'] === '.' &&
+    buildWith['file'] === 'Dockerfile' &&
+    buildWith['platforms'] === 'linux/amd64' &&
+    buildWith['push'] === true &&
+    buildWith['tags'] === '${{ steps.image.outputs.name }}:${{ github.sha }}' &&
+    buildWith['sbom'] === true &&
+    buildWith['provenance'] === 'mode=max,version=v1' &&
+    buildWith['cache-from'] === 'type=gha' &&
+    buildWith['cache-to'] === 'type=gha,mode=max' &&
+    buildArguments.length === 3 &&
+    buildArguments.includes('BUILD_REVISION=${{ github.sha }}') &&
+    buildArguments.includes(
+      'BUILD_SOURCE=${{ github.server_url }}/${{ github.repository }}',
+    ) &&
+    buildArguments.includes(
+      'BUILD_CREATED=${{ steps.image.outputs.created }}',
+    ) &&
+    isRecord(trivyWith) &&
+    trivyWith['image-ref'] ===
+      '${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}' &&
+    trivyWith['scanners'] === 'vuln' &&
+    trivyWith['severity'] === 'HIGH,CRITICAL' &&
+    trivyWith['ignore-unfixed'] === true &&
+    trivyWith['exit-code'] === 1 &&
+    trivyWith['format'] === 'json' &&
+    trivyWith['output'] === 'trivy.json' &&
+    isRecord(attestationReader) &&
+    attestationReader['if'] === '${{ !cancelled() }}' &&
+    typeof attestationReader['run'] === 'string' &&
+    attestationReader['run'].includes(
+      '--reference "${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}"',
+    ) &&
+    attestationReader['run'].includes('--sbom-output sbom.spdx.json') &&
+    attestationReader['run'].includes('--provenance-output provenance.json') &&
+    isRecord(evidenceWriter) &&
+    evidenceWriter['if'] === '${{ !cancelled() }}' &&
+    typeof evidenceWriter['run'] === 'string' &&
+    evidenceWriter['run'].includes(
+      '--image "${{ steps.image.outputs.name }}"',
+    ) &&
+    evidenceWriter['run'].includes(
+      '--digest "${{ steps.build.outputs.digest }}"',
+    ) &&
+    evidenceWriter['run'].includes('--revision "${{ github.sha }}"') &&
+    evidenceWriter['run'].includes('--openapi docs/api/openapi.json') &&
+    evidenceWriter['run'].includes('--output image-evidence.json') &&
+    isRecord(upload) &&
+    upload['if'] === '${{ !cancelled() }}' &&
+    isRecord(uploadWith) &&
+    uploadWith['name'] === 'stage-image-${{ github.sha }}' &&
+    uploadWith['if-no-files-found'] === 'error' &&
+    uploadWith['retention-days'] === 30 &&
+    uploadedPaths.length === 5 &&
+    [
+      'image-evidence.json',
+      'sbom.spdx.json',
+      'provenance.json',
+      'trivy.json',
+      'docs/api/openapi.json',
+    ].every((path) => uploadedPaths.includes(path))
+
+  if (!valid) issues.push('Stage image workflow contract is incomplete')
+}
+
 function validateWorkflow(
   path: string,
   source: string,
@@ -408,6 +610,9 @@ function validateWorkflow(
   }
 
   const isPullRequest = isRecord(triggers) && 'pull_request' in triggers
+  if (path === 'stage-image.yml') {
+    validateStageWorkflow(workflow, pins, issues)
+  }
   if (isPullRequest) validatePullRequestWorkflow(workflow, pins, issues)
   if (isPullRequest && grantsWrite(workflow['permissions'])) {
     issues.push('pull request workflow must not grant write permissions')
