@@ -36,6 +36,7 @@ import {
 import { configureApiDocs } from '@/platform/http/docs/configure-api-docs'
 import { CorrelationFieldsProvider } from '@/platform/http/context/correlation-fields.provider'
 import { createHttpAccessLogMiddleware } from '@/platform/logging/http-access-log.middleware'
+import { NestLoggerAdapter } from '@/platform/logging/nest-logger.adapter'
 import {
   STRUCTURED_LOGGER,
   type StructuredLogger,
@@ -97,8 +98,10 @@ export async function configureApi(
     ApiModule.forRoot(runtimeConfig),
     {
       bodyParser: false,
+      bufferLogs: true,
     },
   )
+  app.useLogger(app.get(NestLoggerAdapter))
   const config = app.get(RuntimeConfigService)
   const lifecycle = app.get(ApplicationLifecycleState)
   const registry = app.get(HealthRegistry)
