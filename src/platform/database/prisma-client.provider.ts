@@ -320,17 +320,16 @@ export class PrismaClientProvider {
   }
 
   private cleanupResources(signal: AbortSignal): Promise<void> {
-    if (this.cleanupPromise !== undefined) {
-      return this.cleanupPromise
+    if (this.cleanupPromise === undefined) {
+      this.cleanupPromise = this.performCleanup()
     }
-    this.cleanupPromise = this.performCleanup(signal)
-    return this.cleanupPromise
+    return waitForSettledBeforeAbort(this.cleanupPromise, signal)
   }
 
-  private async performCleanup(signal: AbortSignal): Promise<void> {
+  private async performCleanup(): Promise<void> {
     const failures: unknown[] = []
     try {
-      await waitForSettledBeforeAbort(this.prisma.$disconnect(), signal)
+      await this.prisma.$disconnect()
     } catch (error: unknown) {
       failures.push(error)
     } finally {
@@ -339,7 +338,7 @@ export class PrismaClientProvider {
         this.errorListenerInstalled = false
       }
       try {
-        await waitForSettledBeforeAbort(this.pool.end(), signal)
+        await this.pool.end()
       } catch (error: unknown) {
         failures.push(error)
       }

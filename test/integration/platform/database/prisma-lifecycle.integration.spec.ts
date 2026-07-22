@@ -318,6 +318,27 @@ describe('Prisma PostgreSQL lifecycle', () => {
     expect(end).toHaveBeenCalledTimes(1)
   })
 
+  it('resumes shared cleanup after the first close deadline expires', async () => {
+    const provider = createProvider()
+    jest.spyOn(resourcesOf(provider).prisma, '$connect').mockResolvedValueOnce()
+    jest.spyOn(provider, 'runReadinessQuery').mockResolvedValueOnce('up')
+    await provider.connect(new AbortController().signal)
+    const disconnect = deferred()
+    const disconnectSpy = jest
+      .spyOn(resourcesOf(provider).prisma, '$disconnect')
+      .mockImplementationOnce(() => disconnect.promise)
+    const end = jest.spyOn(resourcesOf(provider).pool, 'end')
+
+    await expect(provider.close(abortAfter(25))).rejects.toThrow()
+    disconnect.resolve()
+
+    await expect(
+      provider.close(new AbortController().signal),
+    ).resolves.toBeUndefined()
+    expect(disconnectSpy).toHaveBeenCalledTimes(1)
+    expect(end).toHaveBeenCalledTimes(1)
+  })
+
   it('handles an idle-client Pool error and can recover readiness', async () => {
     const provider = createProvider()
     await provider.connect(new AbortController().signal)
