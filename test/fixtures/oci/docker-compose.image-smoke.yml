@@ -1,0 +1,53 @@
+services:
+  postgres:
+    ports: !reset []
+
+  redis-coordination:
+    command:
+      - redis-server
+      - --appendonly
+      - 'yes'
+      - --appendfsync
+      - always
+      - --maxmemory-policy
+      - noeviction
+      - --requirepass
+      - ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    ports: !reset []
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep PONG
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  migrator:
+    image: ${IMAGE}
+    command:
+      - corepack
+      - pnpm@11.15.1
+      - run
+      - start:migrate
+    env_file:
+      - ${SMOKE_ENV_FILE}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    image: ${IMAGE}
+    env_file:
+      - ${SMOKE_ENV_FILE}
+    ports:
+      - '127.0.0.1::3000'
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      redis-coordination:
+        condition: service_healthy
+    restart: 'no'

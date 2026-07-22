@@ -25,7 +25,8 @@ LABEL org.opencontainers.image.title="nest-js-starter" \
       org.opencontainers.image.revision="${BUILD_REVISION}" \
       org.opencontainers.image.created="${BUILD_CREATED}"
 ENV NODE_ENV=production \
-    API_HOST=0.0.0.0
+    API_HOST=0.0.0.0 \
+    pnpm_config_verify_deps_before_run=false
 WORKDIR /app
 COPY --chown=node:node --from=build /app/package.json ./package.json
 COPY --chown=node:node --from=build /app/node_modules ./node_modules

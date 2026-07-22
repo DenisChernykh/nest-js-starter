@@ -240,6 +240,9 @@ function validateDockerfile(
   ) {
     issues.push('Dockerfile must run as non-root with exec-form API command')
   }
+  if (!runtimeSource.includes('pnpm_config_verify_deps_before_run=false')) {
+    issues.push('Dockerfile runtime pnpm policy is incomplete')
+  }
 
   const forbiddenRuntimePaths = [
     '/app/src',

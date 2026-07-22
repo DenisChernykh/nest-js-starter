@@ -53,7 +53,7 @@ ARG BUILD_CREATED
 RUN corepack install --global pnpm@11.15.1
 RUN node -e 'const [revision, source] = process.argv.slice(1); if (!/^[0-9a-f]{40}$/.test(revision)) throw new Error("BUILD_REVISION must be 40 lowercase hex"); const url = new URL(source); if (url.protocol !== "https:" || url.username !== "" || url.password !== "") throw new Error("BUILD_SOURCE must be a credential-free HTTPS URL")' "$BUILD_REVISION" "$BUILD_SOURCE"
 LABEL org.opencontainers.image.title="nest-js-starter" org.opencontainers.image.source="\${BUILD_SOURCE}" org.opencontainers.image.revision="\${BUILD_REVISION}" org.opencontainers.image.created="\${BUILD_CREATED}"
-ENV NODE_ENV=production API_HOST=0.0.0.0
+ENV NODE_ENV=production API_HOST=0.0.0.0 pnpm_config_verify_deps_before_run=false
 WORKDIR /app
 COPY --chown=node:node --from=build /app/package.json ./package.json
 COPY --chown=node:node --from=build /app/node_modules ./node_modules
@@ -221,6 +221,17 @@ describe('validateSupplyChainFiles', () => {
     expect(() =>
       validate({ dockerfile: dockerfile.replace('CI=true', 'CI=false') }),
     ).toThrow('Dockerfile install/build/prune contract is incomplete')
+  })
+
+  it('disables pnpm runtime dependency auto-install', () => {
+    expect(() =>
+      validate({
+        dockerfile: dockerfile.replace(
+          'pnpm_config_verify_deps_before_run=false',
+          'PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false',
+        ),
+      }),
+    ).toThrow('Dockerfile runtime pnpm policy is incomplete')
   })
 
   it.each([
