@@ -5,7 +5,7 @@
 - Date: 2026-07-22 (Asia/Yekaterinburg).
 - Branch: `feat/openapi-swagger-contracts`.
 - `testedImplementationHead`:
-  `9c9617fa5e4ac18c7c27d83e74173816928323cb`.
+  `a8b87a2cc3ce718507b7e9b8898b5a203e067a8c`.
 - Target at verification time: `origin/stage` at
   `bc79fab7e042603a4d9f5466b68c29950dee1d5e`.
 - The frozen install was already up to date and did not change
@@ -16,18 +16,17 @@
 - Nest Swagger: `11.4.6`; Redocly CLI: `2.40.0`; Hey API OpenAPI TS:
   `0.99.0`; `openapi-diff`: `0.24.1`; `openapi-response-validator`: `12.1.3`.
 
-The documentation and environment comments added after the tested implementation
-head do not change runtime behavior. The existing nvm installation was activated
-for every verification command; its global default was not changed.
+The existing nvm installation was activated for every verification command; its
+global default was not changed.
 
 ## Canonical artifact
 
 Two consecutive `openapi:generate` runs produced byte-identical output:
 
 ```text
-SHA-256: d14af1611860bc60d735fa7827f55546758e351960e2c2564a058d68e33bfa57
-Bytes:   65415
-Lines:   1894
+SHA-256: 2213d5ff39ea210c03146b2316172344921414c94619eb3be617732bba06bf81
+Bytes:   69360
+Lines:   1990
 Operations: 11 with stable unique operationId values
 ```
 
@@ -93,24 +92,24 @@ OPENAPI_BREAKING_BASE_FILE=docs/api/openapi.json \
 git diff --check
 ```
 
-Final successful gate counts:
+Final successful gate counts after review hardening:
 
-- unit: 69 suites, 450 tests;
+- unit: 70 suites, 452 tests;
 - generator: 3 suites, 52 tests;
 - generator golden: 2 suites, 2 tests;
 - architecture: 1 suite, 44 tests;
-- OpenAPI response conformance: 2 suites, 11 tests;
+- OpenAPI response conformance: 2 suites, 12 tests;
 - real PostgreSQL/Redis integration: 12 suites, 54 tests;
-- API/health/auth/docs e2e: 26 suites, 81 tests;
-- aggregate runtime coverage: 107 suites, 585 tests.
+- API/health/auth/docs e2e: 26 suites, 82 tests;
+- aggregate runtime coverage: 108 suites, 588 tests.
 
 Coverage exceeded the global 80/80/80/75 gate:
 
 ```text
-Statements: 90.55% (9214/10175)
+Statements: 90.56% (9225/10186)
 Functions:  88.71% (519/585)
-Lines:      90.55% (9214/10175)
-Branches:   85.94% (1406/1636)
+Lines:      90.56% (9225/10186)
+Branches:   85.97% (1410/1640)
 ```
 
 The collected-path auth branch thresholds also passed:
@@ -118,7 +117,7 @@ The collected-path auth branch thresholds also passed:
 ```text
 auth application:            90.68% (146/161)
 auth session infrastructure: 90.91% (80/88)
-auth presentation guards:    91.53% (54/59)
+auth presentation guards:    91.80% (56/61)
 ```
 
 Architecture checks found no violation across 196 source modules and 581
@@ -154,11 +153,27 @@ and rechecked rather than bypassed:
   existing fixture. `cd ./test/...` now bypasses `CDPATH`; the exact gate passed
   with the real environment value and again inside both aggregate runs.
 
+Review hardening added five regression boundaries and re-ran the complete gate:
+
+- `authLogin` now declares the real trusted-origin 403 response; non-JSON unsafe
+  requests throw a framework 415 that the global problem filter maps to the
+  canonical `UNSUPPORTED_MEDIA_TYPE` document.
+- Offline generation uses a production-valid immutable configuration, so the
+  reviewed cookie security scheme names `__Host-session`.
+- The docs permission adapter and its tests live in `presentation`; `composition`
+  contains only dependency-injection wiring.
+- `check:quick` validates and generates Prisma before loading the OpenAPI
+  application graph. The gate passed after the ignored `src/generated/prisma`
+  directory was moved out of the checkout, proving the fresh-checkout order.
+- `OPENAPI_BREAKING_BASE_REF=40f57e5` reported no breaking changes; the generated
+  Fetch client, 12-response conformance suite, integration, e2e and coverage
+  gates all exited successfully.
+
 The sandbox also rejected `tsx`'s local IPC Unix socket with `EPERM`. Evidence
 commands were rerun outside that sandbox with the same repository, Node and
 dependency state; this did not require a code or assertion change.
 
 Dependency/artifact diffs and `git diff --check` were reviewed. After the
-separate evidence commit, `git status --short` is expected to be empty. No
-listener, external database/Redis access, remote push, pull request, merge or
-deployment is part of this evidence commit.
+separate evidence commit, `git status --short` is expected to be empty. These
+review-hardening commits update the existing PR #7; no merge or deployment is
+part of this evidence commit.
