@@ -19,6 +19,10 @@ const pins: OciPins = {
       tag: 'v7.0.1',
       sha: '3d3c42e5aac5ba805825da76410c181273ba90b1',
     },
+    'actions/setup-node': {
+      tag: 'v7.0.0',
+      sha: '820762786026740c76f36085b0efc47a31fe5020',
+    },
     'docker/build-push-action': {
       tag: 'v7.3.0',
       sha: '53b7df96c91f9c12dcc8a07bcb9ccacbed38856a',
@@ -86,11 +90,26 @@ on:
     branches: [stage]
 permissions:
   contents: read
+concurrency:
+  group: \${{ github.workflow }}-\${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 jobs:
   full-gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: .node-version
+          check-latest: false
+      - run: corepack pnpm@11.15.1 install --frozen-lockfile
+      - run: corepack pnpm@11.15.1 run check
+        env:
+          OPENAPI_BREAKING_BASE_REF: origin/stage
+          TESTCONTAINERS_REUSE_ENABLE: "false"
 `
 
 const stageWorkflow = `name: Stage image
@@ -345,6 +364,43 @@ describe('validateSupplyChainFiles', () => {
         },
       }),
     ).toThrow('pull request workflow must not grant write permissions')
+  })
+
+  it.each([
+    ['branches: [stage]', 'branches: [main]'],
+    ['fetch-depth: 0', 'fetch-depth: 1'],
+    ['node-version-file: .node-version', 'node-version: 24'],
+    ['check-latest: false', 'check-latest: true'],
+    ['install --frozen-lockfile', 'install'],
+    [
+      'OPENAPI_BREAKING_BASE_REF: origin/stage',
+      'OPENAPI_BREAKING_BASE_REF: HEAD~1',
+    ],
+    [
+      'TESTCONTAINERS_REUSE_ENABLE: "false"',
+      'TESTCONTAINERS_REUSE_ENABLE: "true"',
+    ],
+    ['timeout-minutes: 45', 'timeout-minutes: 5'],
+    ['cancel-in-progress: true', 'cancel-in-progress: false'],
+  ])('rejects an incomplete PR workflow replacing %s', (required, invalid) => {
+    expect(() =>
+      validate({
+        workflows: {
+          'pull-request.yml': pullRequestWorkflow.replace(required, invalid),
+        },
+      }),
+    ).toThrow('Pull request workflow contract is incomplete')
+  })
+
+  it('validates the committed pull request workflow', async () => {
+    const workflow = await readFile(
+      '.github/workflows/pull-request.yml',
+      'utf8',
+    )
+
+    expect(() =>
+      validate({ workflows: { 'pull-request.yml': workflow } }),
+    ).not.toThrow()
   })
 
   it('rejects mutable image tags', () => {

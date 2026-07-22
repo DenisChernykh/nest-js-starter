@@ -43,6 +43,10 @@ function isRecord(value: unknown): value is UnknownRecord {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+function isUnknownArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value)
+}
+
 function hasExactKeys(
   value: UnknownRecord,
   expected: readonly string[],
@@ -327,6 +331,70 @@ function validateBuildPublication(step: UnknownRecord, issues: string[]): void {
   }
 }
 
+function validatePullRequestWorkflow(
+  workflow: UnknownRecord,
+  pins: OciPins,
+  issues: string[],
+): void {
+  const triggers = workflow['on']
+  const pullRequest = isRecord(triggers) ? triggers['pull_request'] : undefined
+  const branches = isRecord(pullRequest) ? pullRequest['branches'] : undefined
+  const permissions = workflow['permissions']
+  const concurrency = workflow['concurrency']
+  const jobs = workflow['jobs']
+  const fullGate = isRecord(jobs) ? jobs['full-gate'] : undefined
+  const steps = isRecord(fullGate) ? fullGate['steps'] : undefined
+  const workflowSteps = isUnknownArray(steps) ? steps : []
+  const checkout = workflowSteps.find(
+    (step) =>
+      isRecord(step) &&
+      step['uses'] ===
+        `actions/checkout@${pins.actions['actions/checkout']?.sha}`,
+  )
+  const setupNode = workflowSteps.find(
+    (step) =>
+      isRecord(step) &&
+      step['uses'] ===
+        `actions/setup-node@${pins.actions['actions/setup-node']?.sha}`,
+  )
+  const install = workflowSteps.find(
+    (step) =>
+      isRecord(step) &&
+      step['run'] === 'corepack pnpm@11.15.1 install --frozen-lockfile',
+  )
+  const check = workflowSteps.find(
+    (step) =>
+      isRecord(step) && step['run'] === 'corepack pnpm@11.15.1 run check',
+  )
+  const checkoutWith = isRecord(checkout) ? checkout['with'] : undefined
+  const setupWith = isRecord(setupNode) ? setupNode['with'] : undefined
+  const checkEnvironment = isRecord(check) ? check['env'] : undefined
+  const valid =
+    isUnknownArray(branches) &&
+    branches.length === 1 &&
+    branches[0] === 'stage' &&
+    isRecord(permissions) &&
+    hasExactKeys(permissions, ['contents']) &&
+    permissions['contents'] === 'read' &&
+    isRecord(concurrency) &&
+    concurrency['group'] ===
+      '${{ github.workflow }}-${{ github.event.pull_request.number }}' &&
+    concurrency['cancel-in-progress'] === true &&
+    isRecord(fullGate) &&
+    fullGate['runs-on'] === 'ubuntu-latest' &&
+    fullGate['timeout-minutes'] === 45 &&
+    isRecord(checkoutWith) &&
+    checkoutWith['fetch-depth'] === 0 &&
+    isRecord(setupWith) &&
+    setupWith['node-version-file'] === '.node-version' &&
+    setupWith['check-latest'] === false &&
+    install !== undefined &&
+    isRecord(checkEnvironment) &&
+    checkEnvironment['OPENAPI_BREAKING_BASE_REF'] === 'origin/stage' &&
+    checkEnvironment['TESTCONTAINERS_REUSE_ENABLE'] === 'false'
+  if (!valid) issues.push('Pull request workflow contract is incomplete')
+}
+
 function validateWorkflow(
   path: string,
   source: string,
@@ -340,6 +408,7 @@ function validateWorkflow(
   }
 
   const isPullRequest = isRecord(triggers) && 'pull_request' in triggers
+  if (isPullRequest) validatePullRequestWorkflow(workflow, pins, issues)
   if (isPullRequest && grantsWrite(workflow['permissions'])) {
     issues.push('pull request workflow must not grant write permissions')
   }
