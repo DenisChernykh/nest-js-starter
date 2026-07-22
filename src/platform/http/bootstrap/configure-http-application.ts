@@ -19,6 +19,19 @@ import { createTrafficGateMiddleware } from './traffic-gate.middleware'
 import { trustedProxySetting } from './trusted-proxy'
 import type { ActiveRequestTracker } from './active-request-tracker'
 
+/** Applies the production API prefix and its infrastructure-route exclusions. */
+export function configureApiRouteMetadata(
+  app: Pick<NestExpressApplication, 'setGlobalPrefix'>,
+): void {
+  app.setGlobalPrefix('v1', {
+    exclude: [
+      { path: 'health/live', method: RequestMethod.GET },
+      { path: 'health/startup', method: RequestMethod.GET },
+      { path: 'health/ready', method: RequestMethod.GET },
+    ],
+  })
+}
+
 /** Applies security-sensitive HTTP policy before application initialization. */
 export function configureHttpApplication(
   app: NestExpressApplication,
@@ -56,13 +69,7 @@ export function configureHttpApplication(
         new RequestValidationError(mapValidationErrors(errors)),
     }),
   )
-  app.setGlobalPrefix('v1', {
-    exclude: [
-      { path: 'health/live', method: RequestMethod.GET },
-      { path: 'health/startup', method: RequestMethod.GET },
-      { path: 'health/ready', method: RequestMethod.GET },
-    ],
-  })
+  configureApiRouteMetadata(app)
   const server: Server = app.getHttpServer()
   server.requestTimeout = config.http.requestTimeoutMs
   server.headersTimeout = config.http.headersTimeoutMs

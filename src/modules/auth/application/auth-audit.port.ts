@@ -8,6 +8,7 @@ export type AuthAuditAction =
   | 'initial_admin_create'
   | 'role_change'
   | 'status_change'
+  | 'docs_access'
 
 /** Reviewed result classes shared by all auth audit actions. */
 export type AuthAuditOutcome = 'success' | 'denied' | 'partial' | 'conflict'

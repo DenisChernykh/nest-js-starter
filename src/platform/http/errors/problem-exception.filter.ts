@@ -24,7 +24,9 @@ import type { ProblemDocument } from './problem.contracts'
 @Injectable()
 export class ProblemExceptionFilter implements ExceptionFilter<unknown> {
   public constructor(
+    @Inject(HttpAdapterHost)
     private readonly adapterHost: HttpAdapterHost,
+    @Inject(RequestContext)
     private readonly requestContext: RequestContext,
     @Inject(STRUCTURED_LOGGER) private readonly logger: StructuredLogger,
   ) {}

@@ -29,6 +29,7 @@ import { AuthRequestContext } from '../presentation/auth-request.context'
 import { AuthRequestInterceptor } from '../presentation/auth-request.interceptor'
 import { AuthenticationGuard } from '../presentation/authentication.guard'
 import { BrowserOriginGuard } from '../presentation/browser-origin.guard'
+import { DocsAccessPolicyAdapter } from '../presentation/docs-access-policy.adapter'
 import { PermissionGuard } from '../presentation/permission.guard'
 import { SessionCsrfGuard } from '../presentation/session-csrf.guard'
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
@@ -43,6 +44,10 @@ import {
   type TransactionPort,
 } from '@/shared/application/transaction.port'
 import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
+import {
+  DOCS_ACCESS_POLICY,
+  type DocsAccessPolicy,
+} from '@/platform/http/docs/docs-access.contracts'
 import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
 import {
   TELEMETRY_PORT,
@@ -157,6 +162,26 @@ const dummyPasswordHash =
         telemetry: TelemetryPort,
       ): AuthenticateSessionUseCase =>
         new AuthenticateSessionUseCase(sessions, persistence, roles, telemetry),
+    },
+    {
+      provide: DOCS_ACCESS_POLICY,
+      inject: [
+        AuthenticateSessionUseCase,
+        AuthAuditLogger,
+        RuntimeConfigService,
+      ],
+      useFactory: (
+        authenticate: AuthenticateSessionUseCase,
+        audit: AuthAuditLogger,
+        config: RuntimeConfigService,
+      ): DocsAccessPolicy | null =>
+        config.docs.mode === 'protected'
+          ? new DocsAccessPolicyAdapter(
+              authenticate,
+              audit,
+              config.auth.sessionCookieName,
+            )
+          : null,
     },
     {
       provide: LogoutUseCase,
@@ -313,6 +338,6 @@ const dummyPasswordHash =
     { provide: APP_GUARD, useExisting: PermissionGuard },
     { provide: APP_INTERCEPTOR, useExisting: AuthRequestInterceptor },
   ],
-  exports: [PrismaAuthRepository, Argon2PasswordHasher],
+  exports: [PrismaAuthRepository, Argon2PasswordHasher, DOCS_ACCESS_POLICY],
 })
 export class AuthModule {}

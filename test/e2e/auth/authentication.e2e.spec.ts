@@ -36,7 +36,7 @@ describe('browser authentication contract', () => {
     expect(JSON.stringify(response.body)).not.toContain(development.rawToken)
     expect(response.body).toMatchObject({
       csrfToken: development.csrfToken,
-      session: { publicId: 'session-current' },
+      session: { publicId: 'C'.repeat(22) },
     })
   })
 

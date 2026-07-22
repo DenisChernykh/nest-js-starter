@@ -1,4 +1,7 @@
-import type { ExecutionContext } from '@nestjs/common'
+import {
+  UnsupportedMediaTypeException,
+  type ExecutionContext,
+} from '@nestjs/common'
 
 import { AuthCsrfRejectedError } from '@/modules/auth/application/auth-errors'
 import { BrowserOriginGuard } from '@/modules/auth/presentation/browser-origin.guard'
@@ -56,13 +59,20 @@ describe('BrowserOriginGuard', () => {
       'untrusted origin',
       { origin: 'https://evil.example', 'content-type': 'application/json' },
     ],
-    [
-      'wrong content type',
-      { origin: 'https://app.example.com', 'content-type': 'text/plain' },
-    ],
   ])('rejects %s', (_name, headers) => {
     expect(() => guard.canActivate(context('POST', headers))).toThrow(
       AuthCsrfRejectedError,
     )
+  })
+
+  it('reports a non-JSON unsafe request as unsupported media type', () => {
+    expect(() =>
+      guard.canActivate(
+        context('POST', {
+          origin: 'https://app.example.com',
+          'content-type': 'text/plain',
+        }),
+      ),
+    ).toThrow(UnsupportedMediaTypeException)
   })
 })

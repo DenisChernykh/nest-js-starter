@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import ts from 'typescript'
@@ -48,6 +48,13 @@ export interface TypeScriptBridgeEvidence {
   readonly nativeCliVersion: string
 }
 
+/** Minimal compiler configuration inspected for forbidden metadata transforms. */
+export interface TypeScriptCompilerConfiguration {
+  readonly compilerOptions?: {
+    readonly plugins?: readonly unknown[]
+  }
+}
+
 function fail(details: readonly string[]): never {
   throw new Error(`Invalid TypeScript toolchain bridge: ${details.join('; ')}`)
 }
@@ -76,6 +83,27 @@ export function assertExactStableDirectDependencies(
         .map(([name, spec]) => `${name}=${spec}`)
         .join(', ')}`,
     )
+  }
+}
+
+/**
+ * Rejects Nest Swagger CLI plugins and custom TypeScript transformers.
+ *
+ * @param configurations - Parsed compiler or Nest CLI configuration objects.
+ * @throws Error when explicit-decorator metadata would be supplemented by a
+ * compiler transform.
+ */
+export function assertNoSwaggerTransformerConfig(
+  configurations: readonly unknown[],
+): void {
+  for (const configuration of configurations) {
+    if (!isCompilerConfiguration(configuration)) continue
+    for (const plugin of configuration.compilerOptions?.plugins ?? []) {
+      const name = readCompilerPluginName(plugin)
+      if (name === '@nestjs/swagger' || name === '@nestjs/swagger/plugin') {
+        throw new Error('Swagger transformer configuration is forbidden')
+      }
+    }
   }
 }
 
@@ -170,6 +198,38 @@ function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8')) as unknown
 }
 
+function isCompilerConfiguration(
+  value: unknown,
+): value is TypeScriptCompilerConfiguration {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const configuration = value as Readonly<Record<string, unknown>>
+  const compilerOptions = configuration.compilerOptions
+  if (compilerOptions === undefined) return true
+  if (
+    compilerOptions === null ||
+    typeof compilerOptions !== 'object' ||
+    Array.isArray(compilerOptions)
+  ) {
+    return false
+  }
+  const plugins = (compilerOptions as Readonly<Record<string, unknown>>).plugins
+  return plugins === undefined || Array.isArray(plugins)
+}
+
+function readCompilerPluginName(plugin: unknown): string | undefined {
+  if (typeof plugin === 'string') return plugin
+  if (plugin === null || typeof plugin !== 'object' || Array.isArray(plugin)) {
+    return undefined
+  }
+  const configuration = plugin as Readonly<Record<string, unknown>>
+  const name = configuration.name
+  const transform = configuration.transform
+  if (typeof name === 'string') return name
+  return typeof transform === 'string' ? transform : undefined
+}
+
 function isManifest(value: unknown): value is TypeScriptBridgeManifest {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
@@ -200,6 +260,16 @@ function main(): void {
   if (!isManifest(manifestValue)) {
     throw new Error('Root package manifest must be an object')
   }
+  const compilerConfigurations = [
+    'tsconfig.base.json',
+    'tsconfig.json',
+    'tsconfig.build.json',
+    'tsconfig.test.json',
+    'nest-cli.json',
+  ]
+    .map((relativePath) => join(projectRoot, relativePath))
+    .filter((path) => existsSync(path))
+    .map(readJson)
 
   const nativePackageVersion = readPackageVersion(
     join(projectRoot, 'node_modules/@typescript/native/package.json'),
@@ -213,6 +283,7 @@ function main(): void {
   }
 
   assertExactStableDirectDependencies(manifestValue)
+  assertNoSwaggerTransformerConfig(compilerConfigurations)
   assertObservabilityDependencyFamily(
     manifestValue,
     OBSERVABILITY_DEPENDENCY_FAMILY,

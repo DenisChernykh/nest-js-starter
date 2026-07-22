@@ -3,6 +3,7 @@ import { join } from 'node:path'
 
 import {
   assertExactStableDirectDependencies,
+  assertNoSwaggerTransformerConfig,
   assertObservabilityDependencyFamily,
   assertTypeScriptBridge,
   type TypeScriptBridgeEvidence,
@@ -22,6 +23,17 @@ const OBSERVABILITY_DEPENDENCY_FAMILY = {
   '@opentelemetry/sdk-trace-base': '2.9.0',
   '@opentelemetry/semantic-conventions': '1.43.0',
   pino: '10.3.1',
+} as const
+
+const OPENAPI_RUNTIME_DEPENDENCY_FAMILY = {
+  '@nestjs/swagger': '11.4.6',
+} as const
+
+const OPENAPI_DEVELOPMENT_DEPENDENCY_FAMILY = {
+  '@hey-api/openapi-ts': '0.99.0',
+  '@redocly/cli': '2.40.0',
+  'openapi-diff': '0.24.1',
+  'openapi-response-validator': '12.1.3',
 } as const
 
 describe('TypeScript toolchain bridge', () => {
@@ -96,6 +108,46 @@ describe('TypeScript toolchain bridge', () => {
         packageManifest,
         OBSERVABILITY_DEPENDENCY_FAMILY,
       ),
+    ).not.toThrow()
+  })
+
+  it('keeps the committed OpenAPI dependency family exact and compiler-compatible', () => {
+    expect(packageManifest.dependencies).toEqual(
+      expect.objectContaining(OPENAPI_RUNTIME_DEPENDENCY_FAMILY),
+    )
+    expect(packageManifest.devDependencies).toEqual(
+      expect.objectContaining(OPENAPI_DEVELOPMENT_DEPENDENCY_FAMILY),
+    )
+    expect(packageManifest.dependencies).not.toHaveProperty(
+      'swagger-ui-express',
+    )
+    expect(packageManifest.devDependencies).not.toHaveProperty(
+      'openapi-typescript',
+    )
+    expect(packageManifest.devDependencies).not.toHaveProperty(
+      '@hey-api/client-fetch',
+    )
+  })
+
+  it('rejects Nest Swagger compiler plugins and custom transformers', () => {
+    expect(() =>
+      assertNoSwaggerTransformerConfig([
+        { compilerOptions: { plugins: ['@nestjs/swagger'] } },
+      ]),
+    ).toThrow('Swagger transformer configuration is forbidden')
+    expect(() =>
+      assertNoSwaggerTransformerConfig([
+        {
+          compilerOptions: {
+            plugins: [{ transform: '@nestjs/swagger/plugin' }],
+          },
+        },
+      ]),
+    ).toThrow('Swagger transformer configuration is forbidden')
+    expect(() =>
+      assertNoSwaggerTransformerConfig([
+        { compilerOptions: { plugins: [{ name: 'unrelated' }] } },
+      ]),
     ).not.toThrow()
   })
 

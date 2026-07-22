@@ -154,6 +154,7 @@ const sessionMilliseconds = Joi.number().integer().min(1).max(7_776_000_000)
 const runtimeMode = Joi.string()
   .valid('development', 'test', 'production')
   .default('development')
+const apiDocsMode = Joi.string().valid('off', 'public', 'protected')
 const databaseUrl = Joi.string()
   .trim()
   .required()
@@ -234,6 +235,11 @@ const secretBytes = Joi.string()
 export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
   {
     NODE_ENV: runtimeMode,
+    API_DOCS_MODE: Joi.when('NODE_ENV', {
+      is: 'production',
+      then: Joi.string().valid('off', 'protected').default('off'),
+      otherwise: apiDocsMode.default('public'),
+    }),
     LOG_LEVEL: logLevel,
     OTEL_SERVICE_NAME: serviceName,
     SERVICE_VERSION: serviceVersion,

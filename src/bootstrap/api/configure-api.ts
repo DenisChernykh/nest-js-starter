@@ -29,6 +29,11 @@ import type { ShutdownParticipant } from '@/platform/lifecycle/shutdown-particip
 import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
 import { ActiveRequestTracker } from '@/platform/http/bootstrap/active-request-tracker'
 import { RequestContext } from '@/platform/http/context/request-context'
+import {
+  DOCS_ACCESS_POLICY,
+  type DocsAccessPolicy,
+} from '@/platform/http/docs/docs-access.contracts'
+import { configureApiDocs } from '@/platform/http/docs/configure-api-docs'
 import { CorrelationFieldsProvider } from '@/platform/http/context/correlation-fields.provider'
 import { createHttpAccessLogMiddleware } from '@/platform/logging/http-access-log.middleware'
 import {
@@ -141,6 +146,11 @@ export async function configureApi(
       correlation,
     }),
   )
+  const docsPolicy =
+    config.docs.mode === 'protected'
+      ? app.get<DocsAccessPolicy | null>(DOCS_ACCESS_POLICY)
+      : null
+  configureApiDocs(app, runtimeConfig, requestContext, docsPolicy)
   await app.init()
 
   return {

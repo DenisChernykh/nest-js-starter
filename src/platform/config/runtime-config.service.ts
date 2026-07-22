@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common'
 
 import {
   APPLICATION_RUNTIME_CONFIG,
+  type ApiDocsRuntimeConfig,
   type ApplicationRuntimeConfig,
   type AuthRuntimeConfig,
   type DatabaseRuntimeConfig,
@@ -24,6 +25,7 @@ export class RuntimeConfigService {
   private readonly runtimeEnvironment: RuntimeEnvironment
   private readonly loggingConfig: LoggingRuntimeConfig
   private readonly observabilityConfig: OpenTelemetryRuntimeConfig
+  private readonly docsConfig: ApiDocsRuntimeConfig
   private readonly httpConfig: HttpRuntimeConfig
   private readonly databaseConfig: DatabaseRuntimeConfig
   private readonly redisConfig: RedisRuntimeConfig
@@ -36,6 +38,7 @@ export class RuntimeConfigService {
     this.runtimeEnvironment = config.environment
     this.loggingConfig = Object.freeze({ ...config.logging })
     this.observabilityConfig = Object.freeze({ ...config.observability })
+    this.docsConfig = Object.freeze({ ...config.docs })
     this.httpConfig = Object.freeze({
       ...config.http,
       corsOrigins: Object.freeze([...config.http.corsOrigins]),
@@ -78,6 +81,11 @@ export class RuntimeConfigService {
   /** Returns immutable OpenTelemetry SDK/export settings. */
   public get observability(): OpenTelemetryRuntimeConfig {
     return this.observabilityConfig
+  }
+
+  /** Returns the immutable API documentation exposure policy. */
+  public get docs(): ApiDocsRuntimeConfig {
+    return this.docsConfig
   }
 
   /** Returns immutable HTTP settings. */

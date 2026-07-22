@@ -1,0 +1,278 @@
+{
+  "base": {
+    "openapi": "3.0.3",
+    "info": { "title": "Fixture", "version": "1.0.0" },
+    "paths": {
+      "/items": {
+        "get": {
+          "responses": {
+            "200": { "description": "Items" },
+            "404": { "description": "Missing" }
+          }
+        },
+        "post": {
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "name": { "type": "string" } }
+                }
+              }
+            }
+          },
+          "responses": { "201": { "description": "Created" } }
+        }
+      },
+      "/items/{itemId}": {
+        "get": {
+          "parameters": [
+            {
+              "in": "path",
+              "name": "itemId",
+              "required": true,
+              "schema": { "type": "string" }
+            }
+          ],
+          "responses": { "200": { "description": "Item" } }
+        }
+      }
+    }
+  },
+  "breaking": {
+    "removedPath": {
+      "openapi": "3.0.3",
+      "info": { "title": "Fixture", "version": "1.0.0" },
+      "paths": {
+        "/items": {
+          "get": {
+            "responses": {
+              "200": { "description": "Items" },
+              "404": { "description": "Missing" }
+            }
+          },
+          "post": {
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": { "name": { "type": "string" } }
+                  }
+                }
+              }
+            },
+            "responses": { "201": { "description": "Created" } }
+          }
+        }
+      }
+    },
+    "removedMethod": {
+      "openapi": "3.0.3",
+      "info": { "title": "Fixture", "version": "1.0.0" },
+      "paths": {
+        "/items": {
+          "post": {
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": { "name": { "type": "string" } }
+                  }
+                }
+              }
+            },
+            "responses": { "201": { "description": "Created" } }
+          }
+        },
+        "/items/{itemId}": {
+          "get": {
+            "parameters": [
+              {
+                "in": "path",
+                "name": "itemId",
+                "required": true,
+                "schema": { "type": "string" }
+              }
+            ],
+            "responses": { "200": { "description": "Item" } }
+          }
+        }
+      }
+    },
+    "removedResponse": {
+      "openapi": "3.0.3",
+      "info": { "title": "Fixture", "version": "1.0.0" },
+      "paths": {
+        "/items": {
+          "get": { "responses": { "200": { "description": "Items" } } },
+          "post": {
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": { "name": { "type": "string" } }
+                  }
+                }
+              }
+            },
+            "responses": { "201": { "description": "Created" } }
+          }
+        },
+        "/items/{itemId}": {
+          "get": {
+            "parameters": [
+              {
+                "in": "path",
+                "name": "itemId",
+                "required": true,
+                "schema": { "type": "string" }
+              }
+            ],
+            "responses": { "200": { "description": "Item" } }
+          }
+        }
+      }
+    },
+    "tightenedRequest": {
+      "openapi": "3.0.3",
+      "info": { "title": "Fixture", "version": "1.0.0" },
+      "paths": {
+        "/items": {
+          "get": {
+            "responses": {
+              "200": { "description": "Items" },
+              "404": { "description": "Missing" }
+            }
+          },
+          "post": {
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": ["name"],
+                    "properties": { "name": { "type": "string" } }
+                  }
+                }
+              }
+            },
+            "responses": { "201": { "description": "Created" } }
+          }
+        },
+        "/items/{itemId}": {
+          "get": {
+            "parameters": [
+              {
+                "in": "path",
+                "name": "itemId",
+                "required": true,
+                "schema": { "type": "string" }
+              }
+            ],
+            "responses": { "200": { "description": "Item" } }
+          }
+        }
+      }
+    }
+  },
+  "nonBreaking": {
+    "additiveEndpoint": {
+      "openapi": "3.0.3",
+      "info": { "title": "Fixture", "version": "1.0.0" },
+      "paths": {
+        "/items": {
+          "get": {
+            "responses": {
+              "200": { "description": "Items" },
+              "404": { "description": "Missing" }
+            }
+          },
+          "post": {
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": { "name": { "type": "string" } }
+                  }
+                }
+              }
+            },
+            "responses": { "201": { "description": "Created" } }
+          }
+        },
+        "/items/{itemId}": {
+          "get": {
+            "parameters": [
+              {
+                "in": "path",
+                "name": "itemId",
+                "required": true,
+                "schema": { "type": "string" }
+              }
+            ],
+            "responses": { "200": { "description": "Item" } }
+          }
+        },
+        "/status": {
+          "get": { "responses": { "200": { "description": "Status" } } }
+        }
+      }
+    },
+    "additiveResponseProperty": {
+      "openapi": "3.0.3",
+      "info": { "title": "Fixture", "version": "1.0.0" },
+      "paths": {
+        "/items": {
+          "get": {
+            "responses": {
+              "200": {
+                "description": "Items",
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "description": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              },
+              "404": { "description": "Missing" }
+            }
+          },
+          "post": {
+            "requestBody": {
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "properties": { "name": { "type": "string" } }
+                  }
+                }
+              }
+            },
+            "responses": { "201": { "description": "Created" } }
+          }
+        },
+        "/items/{itemId}": {
+          "get": {
+            "parameters": [
+              {
+                "in": "path",
+                "name": "itemId",
+                "required": true,
+                "schema": { "type": "string" }
+              }
+            ],
+            "responses": { "200": { "description": "Item" } }
+          }
+        }
+      }
+    }
+  }
+}

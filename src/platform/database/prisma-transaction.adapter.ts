@@ -11,7 +11,9 @@ import { PrismaTransactionContext } from './prisma-transaction.context'
 @Injectable()
 export class PrismaTransactionAdapter implements TransactionPort {
   public constructor(
+    @Inject(PrismaClientProvider)
     private readonly provider: PrismaClientProvider,
+    @Inject(PrismaTransactionContext)
     private readonly context: PrismaTransactionContext,
     @Inject(RuntimeConfigService)
     private readonly config: { readonly database: DatabaseRuntimeConfig },

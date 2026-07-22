@@ -46,6 +46,13 @@ describe('RuntimeConfigService', () => {
     expect(Object.isFrozen(service.database)).toBe(true)
   })
 
+  it('exposes immutable API documentation policy', () => {
+    const service = createService()
+
+    expect(service.docs).toEqual({ mode: 'public' })
+    expect(Object.isFrozen(service.docs)).toBe(true)
+  })
+
   it('exposes immutable Redis and auth groups without string-key access', () => {
     const runtimeService = createService()
     const service = runtimeService as unknown as Record<string, unknown>

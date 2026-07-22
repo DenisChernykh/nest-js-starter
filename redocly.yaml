@@ -1,0 +1,18 @@
+extends:
+  - recommended
+
+rules:
+  # The reusable starter package is intentionally private and UNLICENSED.
+  info-license: off
+  no-invalid-media-type-examples: error
+  no-unused-components: error
+  operation-2xx-response: error
+  # Infrastructure probes have no normal client-error response contract.
+  operation-4xx-response: off
+  operation-operationId: error
+  operation-operationId-unique: error
+  operation-operationId-url-safe: error
+  operation-singular-tag: error
+  operation-summary: error
+  operation-tag-defined: error
+  security-defined: error

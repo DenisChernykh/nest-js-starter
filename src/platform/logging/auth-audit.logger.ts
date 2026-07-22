@@ -40,6 +40,9 @@ const allowed = new Set([
   'status_change|success|STATUS_CHANGED',
   'status_change|denied|AUTHORIZATION_DENIED',
   'status_change|conflict|STATE_CONFLICT',
+  'docs_access|denied|AUTHENTICATION_REQUIRED',
+  'docs_access|denied|AUTHORIZATION_DENIED',
+  'docs_access|denied|DEPENDENCY_UNAVAILABLE',
 ])
 const validIdentifier = /^[A-Za-z0-9_-]{1,128}$/u
 

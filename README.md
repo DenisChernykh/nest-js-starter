@@ -11,11 +11,12 @@ Included: HTTP runtime, typed config, PostgreSQL/Prisma, migrations, transaction
 boundary, required coordination Redis, Argon2id credentials, server-side
 sessions, session-bound CSRF, code-owned RBAC, health, graceful shutdown and
 architecture/toolchain foundation, request correlation, normalized problems,
-security audit events, traces and low-cardinality runtime metrics.
+security audit events, traces, low-cardinality runtime metrics and a committed
+OpenAPI 3.0.3 contract with policy-controlled Swagger UI.
 
 Not included yet: registration/recovery/account administration, JWT/OAuth,
-OpenAPI/Swagger, Docker application image, CI/GHCR, Dokploy and recipes. The
-starter deliberately contains no fake CRUD or business model.
+Docker application image, CI/GHCR, Dokploy and recipes. The starter deliberately
+contains no fake CRUD or business model.
 
 ## Prerequisites
 
@@ -67,11 +68,36 @@ JSON content type and the session-bound `X-CSRF-Token`. See
 `docs/architecture/auth-core.md` and
 `docs/runbooks/coordination-redis-loss.md`.
 
+## API contract and Swagger UI
+
+Controllers, request/response DTOs and their explicit Swagger decorators are
+the source of truth. The reviewed artifact is committed at
+`docs/api/openapi.json`; generation constructs the complete Nest graph in
+memory without opening a listener or connecting PostgreSQL/Redis. See
+`docs/architecture/openapi-contracts.md` for ownership, review and consumer
+pinning rules.
+
+`API_DOCS_MODE` controls the runtime routes `/docs` and `/openapi.json`:
+
+- `public` serves both routes without authentication and is allowed only in
+  development/test;
+- `protected` requires a valid browser session with `system.docs.read`;
+- `off` registers neither route and is the production default.
+
+Stage must set `API_DOCS_MODE=protected` explicitly. Production rejects
+`public` during configuration validation. In protected mode, sign in through
+the normal application flow, open `/docs`, fetch the CSRF token through
+`GET /v1/auth/csrf`, then enter only that token in Swagger's `csrfToken`
+authorization field. The HttpOnly session cookie is sent by the browser through
+`withCredentials`; it must never be copied into Swagger UI. Authorization is
+not persisted by the UI.
+
 ## Verification
 
 ```bash
 corepack pnpm@11.15.1 check:quick
-TESTCONTAINERS_REUSE_ENABLE=false corepack pnpm@11.15.1 check
+OPENAPI_BREAKING_BASE_REF=origin/stage \
+  TESTCONTAINERS_REUSE_ENABLE=false corepack pnpm@11.15.1 check
 ```
 
 `check:quick` is the non-Docker developer gate: formatting, exact toolchain,
@@ -79,7 +105,29 @@ Prisma validation/generation, lint, TypeScript 7 checks, unit/generator/
 architecture tests, manifest and production build. `check` additionally runs
 real PostgreSQL/Redis integration and multi-instance e2e suites plus the
 aggregate 80/80/80/75 runtime coverage gate and 90% auth security branch
-thresholds.
+thresholds. The full gate has no implicit OpenAPI comparison base: CI and local
+release verification must supply exactly one reviewed base through
+`OPENAPI_BREAKING_BASE_REF` or `OPENAPI_BREAKING_BASE_FILE`.
+
+Normal contract-development commands:
+
+- `corepack pnpm@11.15.1 openapi:generate` — rewrite the canonical committed artifact;
+- `corepack pnpm@11.15.1 openapi:drift` — fail when committed bytes differ from fresh offline generation;
+- `corepack pnpm@11.15.1 openapi:lint` — lint the committed OpenAPI document;
+- `corepack pnpm@11.15.1 openapi:operations` — enforce explicit, unique stable operation IDs;
+- `corepack pnpm@11.15.1 openapi:client:check` — generate a temporary fetch client and compile its consumer fixture.
+
+CI/release comparison is intentionally explicit and fail-closed:
+
+```bash
+corepack pnpm@11.15.1 openapi:breaking -- --base-ref origin/stage
+# Git-free certification against an explicitly materialized reviewed artifact:
+corepack pnpm@11.15.1 openapi:breaking -- --base-file /secure/base/openapi.json
+```
+
+`openapi:conformance` is an internal/full-gate command: it validates real health,
+auth and RFC 9457 responses against the committed document. It complements, but
+does not replace, the Docker-backed integration/e2e suites.
 
 Useful focused commands:
 

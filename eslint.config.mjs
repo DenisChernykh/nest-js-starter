@@ -28,6 +28,7 @@ export default tseslint.config(
   },
   {
     files: [
+      'openapi-ts.config.ts',
       'prisma.config.ts',
       'src/**/*.ts',
       'scripts/**/*.ts',
@@ -63,7 +64,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/**/*.ts', 'scripts/**/*.ts'],
+    files: ['openapi-ts.config.ts', 'src/**/*.ts', 'scripts/**/*.ts'],
     rules: {
       'jsdoc/require-jsdoc': [
         'error',
