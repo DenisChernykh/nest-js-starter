@@ -13,10 +13,10 @@ import type {
 } from './session-store.port'
 import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
 import {
-  NOOP_TELEMETRY,
+  NOOP_AUTH_TELEMETRY,
   type AuthTelemetryOutcome,
-  type TelemetryPort,
-} from '@/shared/application/telemetry.port'
+  type AuthTelemetryPort,
+} from './auth-telemetry.port'
 
 /** Untrusted login fields plus safe request metadata. */
 export interface LoginInput {
@@ -37,7 +37,7 @@ export class LoginUseCase {
     private readonly sessions: SessionStorePort,
     private readonly dummyPasswordHash: string,
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
-    private readonly telemetry: TelemetryPort = NOOP_TELEMETRY,
+    private readonly telemetry: AuthTelemetryPort = NOOP_AUTH_TELEMETRY,
   ) {}
 
   public async execute(input: LoginInput): Promise<IssuedBrowserSession> {

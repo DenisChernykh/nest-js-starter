@@ -4,9 +4,7 @@ import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { CorrelationFieldsProvider } from '@/platform/http/context/correlation-fields.provider'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { HttpMetrics } from '@/platform/observability/http-metrics'
-import { OtelTelemetryAdapter } from '@/platform/observability/otel-telemetry.adapter'
 import { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
-import { TELEMETRY_PORT } from '@/shared/application/telemetry.port'
 
 import { STRUCTURED_LOGGER } from './logging.contracts'
 import { NestLoggerAdapter } from './nest-logger.adapter'
@@ -51,23 +49,6 @@ export class LoggingModule {
             ),
         },
         {
-          provide: OtelTelemetryAdapter,
-          inject: [RuntimeMetrics, STRUCTURED_LOGGER],
-          useFactory: (
-            metrics: RuntimeMetrics,
-            logger: PinoLogSink,
-          ): OtelTelemetryAdapter =>
-            new OtelTelemetryAdapter(undefined, metrics, (code) =>
-              logger.write({
-                level: 'warn',
-                event: 'telemetry.adapter.failure',
-                module: 'Observability',
-                attributes: { code },
-              }),
-            ),
-        },
-        { provide: TELEMETRY_PORT, useExisting: OtelTelemetryAdapter },
-        {
           provide: AuthAuditLogger,
           inject: [STRUCTURED_LOGGER],
           useFactory: (logger: PinoLogSink): AuthAuditLogger =>
@@ -83,7 +64,6 @@ export class LoggingModule {
         CorrelationFieldsProvider,
         HttpMetrics,
         RuntimeMetrics,
-        TELEMETRY_PORT,
         AuthAuditLogger,
       ],
     }

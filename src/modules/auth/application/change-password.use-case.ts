@@ -14,10 +14,10 @@ import type { SessionStorePort } from './session-store.port'
 import type { TransactionPort } from '@/shared/application/transaction.port'
 import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
 import {
-  NOOP_TELEMETRY,
+  NOOP_AUTH_TELEMETRY,
   type AuthTelemetryOutcome,
-  type TelemetryPort,
-} from '@/shared/application/telemetry.port'
+  type AuthTelemetryPort,
+} from './auth-telemetry.port'
 
 /** Current/new password mutation fields bound to one authenticated identity. */
 export interface ChangePasswordInput {
@@ -36,7 +36,7 @@ export class ChangePasswordUseCase {
     private readonly sessions: SessionStorePort,
     private readonly cleanupObserver?: AuthSessionCleanupObserver,
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
-    private readonly telemetry: TelemetryPort = NOOP_TELEMETRY,
+    private readonly telemetry: AuthTelemetryPort = NOOP_AUTH_TELEMETRY,
   ) {}
 
   public async execute(

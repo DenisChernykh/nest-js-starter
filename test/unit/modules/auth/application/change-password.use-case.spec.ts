@@ -3,7 +3,7 @@ import { ChangePasswordUseCase } from '@/modules/auth/application/change-passwor
 import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
 import type { TransactionPort } from '@/shared/application/transaction.port'
-import type { TelemetryPort } from '@/shared/application/telemetry.port'
+import type { AuthTelemetryPort } from '@/modules/auth/application/auth-telemetry.port'
 
 describe('ChangePasswordUseCase', () => {
   it('hashes outside transaction, commits CAS plus generation, then cleans Redis', async () => {
@@ -55,7 +55,7 @@ describe('ChangePasswordUseCase', () => {
     const telemetry = {
       runAuthOperation: jest.fn((_operation, work) => work()),
       recordAuthOutcome: jest.fn(),
-    } as jest.Mocked<TelemetryPort>
+    } as jest.Mocked<AuthTelemetryPort>
     const target = new ChangePasswordUseCase(
       persistence,
       passwords,

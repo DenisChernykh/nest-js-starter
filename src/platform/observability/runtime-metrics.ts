@@ -5,11 +5,6 @@ import {
   type Meter,
 } from '@opentelemetry/api'
 
-import type {
-  AuthTelemetryOperation,
-  AuthTelemetryOutcome,
-} from '@/shared/application/telemetry.port'
-
 /** External runtime dependencies allowed in metric attributes. */
 export type RuntimeDependency = 'postgres' | 'redis'
 
@@ -32,21 +27,6 @@ const cacheEvents = new Set<CacheMetricEvent>([
   'write',
   'invalidate',
 ])
-const authOperations = new Set<AuthTelemetryOperation>([
-  'login',
-  'authenticate',
-  'change_password',
-  'logout_all',
-  'revoke_session',
-])
-const authOutcomes = new Set<AuthTelemetryOutcome>([
-  'success',
-  'denied',
-  'rate_limited',
-  'conflict',
-  'partial',
-  'dependency_error',
-])
 
 /** Low-cardinality OpenTelemetry instruments for critical runtime operations. */
 export class RuntimeMetrics {
@@ -54,7 +34,6 @@ export class RuntimeMetrics {
   private readonly dependencyErrors: Counter
   private readonly redisReconnects: Counter
   private readonly cacheOperations: Counter
-  private readonly authOperations: Counter
 
   /** Creates instruments backed by the active global meter provider. */
   public constructor(
@@ -70,7 +49,6 @@ export class RuntimeMetrics {
     )
     this.redisReconnects = meter.createCounter('redis.reconnect.count')
     this.cacheOperations = meter.createCounter('cache.operation.count')
-    this.authOperations = meter.createCounter('auth.operation.count')
   }
 
   /** Records one monotonic dependency duration and its finite outcome. */
@@ -108,17 +86,6 @@ export class RuntimeMetrics {
   public recordCache(event: CacheMetricEvent): void {
     if (!cacheEvents.has(event)) throw new Error('Invalid runtime metric')
     this.emit(() => this.cacheOperations.add(1, { event }))
-  }
-
-  /** Counts one fixed auth operation and finite outcome. */
-  public recordAuth(
-    operation: AuthTelemetryOperation,
-    outcome: AuthTelemetryOutcome,
-  ): void {
-    if (!authOperations.has(operation) || !authOutcomes.has(outcome)) {
-      throw new Error('Invalid runtime metric')
-    }
-    this.emit(() => this.authOperations.add(1, { operation, outcome }))
   }
 
   private emit(work: () => void): void {

@@ -1,12 +1,17 @@
-import { SpanStatusCode, trace, type Tracer } from '@opentelemetry/api'
+import {
+  metrics,
+  SpanStatusCode,
+  trace,
+  type Counter,
+  type Meter,
+  type Tracer,
+} from '@opentelemetry/api'
 
 import type {
   AuthTelemetryOperation,
   AuthTelemetryOutcome,
-  TelemetryPort,
-} from '@/shared/application/telemetry.port'
-
-import { RuntimeMetrics } from './runtime-metrics'
+  AuthTelemetryPort,
+} from '../application/auth-telemetry.port'
 
 type TelemetryDiagnostic = (code: string) => void
 
@@ -17,16 +22,39 @@ const spanNames: Readonly<Record<AuthTelemetryOperation, string>> = {
   logout_all: 'auth.logout_all',
   revoke_session: 'auth.revoke_session',
 }
+const authOperations = new Set<AuthTelemetryOperation>([
+  'login',
+  'authenticate',
+  'change_password',
+  'logout_all',
+  'revoke_session',
+])
+const authOutcomes = new Set<AuthTelemetryOutcome>([
+  'success',
+  'denied',
+  'rate_limited',
+  'conflict',
+  'partial',
+  'dependency_error',
+])
 
-/** OpenTelemetry adapter that cannot replace an application operation result. */
-export class OtelTelemetryAdapter implements TelemetryPort {
+/** OpenTelemetry adapter owned by auth that preserves application settlement. */
+export class OtelAuthTelemetryAdapter implements AuthTelemetryPort {
+  private readonly tracer: Tracer
+  private readonly authOperations?: Counter
+
   public constructor(
-    private readonly tracer: Tracer = trace.getTracer(
-      'nest-js-starter.application',
-    ),
-    private readonly metrics: RuntimeMetrics = new RuntimeMetrics(),
+    tracer: Tracer = trace.getTracer('nest-js-starter.auth'),
+    meter: Meter = metrics.getMeter('nest-js-starter.auth'),
     private readonly diagnostic: TelemetryDiagnostic = () => undefined,
-  ) {}
+  ) {
+    this.tracer = tracer
+    try {
+      this.authOperations = meter.createCounter('auth.operation.count')
+    } catch {
+      this.report('auth_metric_create_failed')
+    }
+  }
 
   /** Runs work once in a fixed auth span and preserves its exact settlement. */
   public async runAuthOperation<T>(
@@ -58,13 +86,16 @@ export class OtelTelemetryAdapter implements TelemetryPort {
     }
   }
 
-  /** Records a finite auth outcome while isolating metric failures. */
+  /** Records a finite auth outcome while isolating instrument failures. */
   public recordAuthOutcome(
     operation: AuthTelemetryOperation,
     outcome: AuthTelemetryOutcome,
   ): void {
+    if (!authOperations.has(operation) || !authOutcomes.has(outcome)) {
+      throw new Error('Invalid auth metric')
+    }
     try {
-      this.metrics.recordAuth(operation, outcome)
+      this.authOperations?.add(1, { operation, outcome })
     } catch {
       this.report('auth_metric_emit_failed')
     }

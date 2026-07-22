@@ -1,17 +1,15 @@
 import type { Meter } from '@opentelemetry/api'
 
 import { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
-import type { TelemetryPort } from '@/shared/application/telemetry.port'
 
 describe('RuntimeMetrics', () => {
-  it('emits only the exact finite dependency, cache and auth attributes', () => {
+  it('emits only the exact finite dependency and cache attributes', () => {
     const fixture = createFixture()
 
     fixture.metrics.recordDependency('postgres', 'success', 12.5)
     fixture.metrics.recordDependency('redis', 'error', 4)
     fixture.metrics.recordRedisReconnect('success')
     fixture.metrics.recordCache('hit')
-    fixture.metrics.recordAuth('login', 'rate_limited')
 
     expect(
       fixture.histograms.get('dependency.operation.duration')?.record,
@@ -34,20 +32,11 @@ describe('RuntimeMetrics', () => {
     expect(
       fixture.counters.get('cache.operation.count')?.add,
     ).toHaveBeenCalledWith(1, { event: 'hit' })
-    expect(
-      fixture.counters.get('auth.operation.count')?.add,
-    ).toHaveBeenCalledWith(1, {
-      operation: 'login',
-      outcome: 'rate_limited',
-    })
   })
 
   it('rejects arbitrary cardinality before emitting a point', () => {
     const fixture = createFixture()
 
-    expect(() =>
-      fixture.metrics.recordAuth('user-42' as 'login', 'success'),
-    ).toThrow('Invalid runtime metric')
     expect(() =>
       fixture.metrics.recordCache('starter:v1:item:42' as 'hit'),
     ).toThrow('Invalid runtime metric')
@@ -58,9 +47,6 @@ describe('RuntimeMetrics', () => {
         1,
       ),
     ).toThrow('Invalid runtime metric')
-    expect(
-      fixture.counters.get('auth.operation.count')?.add,
-    ).not.toHaveBeenCalled()
     expect(
       fixture.counters.get('cache.operation.count')?.add,
     ).not.toHaveBeenCalled()
@@ -74,31 +60,22 @@ describe('RuntimeMetrics', () => {
       throw new Error('diagnostic unavailable')
     })
     const fixture = createFixture(diagnostic)
-    fixture.counters.get('auth.operation.count')?.add.mockImplementation(() => {
-      throw new Error('export path unavailable')
-    })
+    fixture.counters
+      .get('cache.operation.count')
+      ?.add.mockImplementation(() => {
+        throw new Error('export path unavailable')
+      })
 
-    expect(() =>
-      fixture.metrics.recordAuth('authenticate', 'success'),
-    ).not.toThrow()
+    expect(() => fixture.metrics.recordCache('hit')).not.toThrow()
     expect(diagnostic).toHaveBeenCalledWith('runtime_metric_emit_failed')
   })
 })
 
-function compileTimeCardinalityContract(
-  metrics: RuntimeMetrics,
-  telemetry: TelemetryPort,
-): void {
-  // @ts-expect-error User identifiers are not auth operation labels.
-  metrics.recordAuth('user-42', 'success')
+function compileTimeCardinalityContract(metrics: RuntimeMetrics): void {
   // @ts-expect-error Cache keys are not cache event labels.
   metrics.recordCache('starter:v1:item:42')
   // @ts-expect-error HTTP routes are not dependency labels.
   metrics.recordDependency('/users/:userId', 'error', 1)
-  // @ts-expect-error Arbitrary operation names cannot produce auth spans.
-  void telemetry.runAuthOperation('custom-operation', () =>
-    Promise.resolve(undefined),
-  )
 }
 
 void compileTimeCardinalityContract
