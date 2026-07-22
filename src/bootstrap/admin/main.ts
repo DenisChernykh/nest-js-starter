@@ -27,7 +27,9 @@ export async function main(
     const useCase = createInitialAdminCommand(
       provider,
       transaction,
-      new AuthAuditLogger(new PinoLogSink(config)),
+      new AuthAuditLogger(
+        new PinoLogSink(config, { destination: process.stderr }),
+      ),
     )
     await provider.connect(
       AbortSignal.timeout(config.database.connectionTimeoutMs),

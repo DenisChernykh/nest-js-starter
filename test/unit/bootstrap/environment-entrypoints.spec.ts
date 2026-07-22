@@ -9,4 +9,18 @@ describe('runtime environment entrypoints', () => {
       )
     },
   )
+
+  it('keeps admin command results separate from audit diagnostics', () => {
+    const source = readFileSync('src/bootstrap/admin/main.ts', 'utf8')
+
+    expect(source).toMatch(
+      /new PinoLogSink\(config,\s*\{\s*destination: process\.stderr,?\s*\}\)/u,
+    )
+    expect(source).toContain(
+      'writeOutput: (message) => process.stdout.write(message)',
+    )
+    expect(source).toContain(
+      'writeError: (message) => process.stderr.write(message)',
+    )
+  })
 })
