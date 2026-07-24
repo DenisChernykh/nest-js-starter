@@ -36,6 +36,7 @@ export interface SupplyChainFilesInput {
   readonly dockerignore?: string
   readonly packageJson: unknown
   readonly pins: OciPins
+  readonly pnpmWorkspace: unknown
   readonly workflows?: Readonly<Record<string, string>>
 }
 
@@ -151,6 +152,15 @@ function validatePackageJson(packageJson: unknown, issues: string[]): void {
   }
 }
 
+function validatePnpmWorkspace(pnpmWorkspace: unknown, issues: string[]): void {
+  const overrides = isRecord(pnpmWorkspace)
+    ? pnpmWorkspace['overrides']
+    : undefined
+  if (!isRecord(overrides) || overrides['find-my-way'] !== '9.7.0') {
+    issues.push('find-my-way security override must be exact stable 9.7.0')
+  }
+}
+
 function validateDockerfile(
   source: string,
   pins: OciPins,
@@ -254,6 +264,16 @@ function validateDockerfile(
   }
   if (!runtimeSource.includes('pnpm_config_verify_deps_before_run=false')) {
     issues.push('Dockerfile runtime pnpm policy is incomplete')
+  }
+  if (
+    !/\brm\s+-rf\s+\/usr\/local\/lib\/node_modules\/npm(?:\s|&&|$)/u.test(
+      runtimeSource,
+    ) ||
+    !/\brm\s+-f\s+\/usr\/local\/bin\/npm\s+\/usr\/local\/bin\/npx(?:\s|&&|$)/u.test(
+      runtimeSource,
+    )
+  ) {
+    issues.push('Dockerfile runtime npm removal policy is incomplete')
   }
 
   const forbiddenRuntimePaths = [
@@ -766,13 +786,14 @@ function validateWorkflow(
 /**
  * Validates local dependency, Docker and GitHub workflow supply-chain policy.
  *
- * @param input - Parsed package/pins plus optional raw future-slice files.
+ * @param input - Parsed package/workspace/pins plus optional raw slice files.
  * @throws Error containing every deterministic policy violation found.
  */
 export function validateSupplyChainFiles(input: SupplyChainFilesInput): void {
   const pins = parsePins(input.pins)
   const issues: string[] = []
   validatePackageJson(input.packageJson, issues)
+  validatePnpmWorkspace(input.pnpmWorkspace, issues)
   if (input.dockerfile !== undefined) {
     validateDockerfile(input.dockerfile, pins, issues)
   }
@@ -828,6 +849,9 @@ async function main(): Promise<void> {
   const packageJson = JSON.parse(
     await readFile(join(projectRoot, 'package.json'), 'utf8'),
   ) as unknown
+  const pnpmWorkspace = parseDocument(
+    await readFile(join(projectRoot, 'pnpm-workspace.yaml'), 'utf8'),
+  ).toJS() as unknown
   const [
     dockerfile,
     dockerignore,
@@ -859,6 +883,7 @@ async function main(): Promise<void> {
     ...(dockerignore === undefined ? {} : { dockerignore }),
     packageJson,
     pins,
+    pnpmWorkspace,
     workflows,
   })
   validateOciDocumentation({

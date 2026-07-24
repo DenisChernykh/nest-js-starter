@@ -62,5 +62,7 @@ minimumReleaseAgeExclude:
   - '@opentelemetry/sdk-trace-base@2.10.0'
   - '@opentelemetry/sdk-trace-node@2.10.0'
   - '@opentelemetry/sdk-trace@2.10.0'
+overrides:
+  find-my-way: 9.7.0
 saveExact: true
 strictPeerDependencies: true
