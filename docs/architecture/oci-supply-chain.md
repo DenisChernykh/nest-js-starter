@@ -30,9 +30,12 @@ Build arguments are public metadata, never secrets. `BUILD_REVISION`,
 visible to registry readers. Credentials and runtime configuration may enter
 only when a container starts.
 
-The `stage-image` workflow runs the complete repository gate before registry
-login/build. It derives the lowercase GHCR name, builds `linux/amd64` once,
-pushes one exact-SHA tag and captures the action-produced digest. The
+The `stage-image` workflow uses a read-only gate job for the complete repository
+check. Only its dependent publisher can receive `packages: write`. Workflow
+`concurrency.queue: max` preserves every pending stage SHA, while a fail-closed
+registry preflight rejects an existing SHA tag before `push: true`. The
+publisher derives the lowercase GHCR name, builds `linux/amd64` once, pushes one
+exact-SHA tag and captures the action-produced digest. The
 `GHCR digest is normative` and `SHA tags are non-deployment pointers` are
 mandatory rules. A tag must never be
 passed to a deployment target. Promotion resolves the existing SHA tag,
@@ -65,13 +68,16 @@ Actions evidence artifact.
 ## Threat and deployment boundary
 
 The PR workflow has only `contents: read`; it cannot publish packages. The stage
-workflow has only `contents: read` and `packages: write`, uses the repository
-`GITHUB_TOKEN`, publishes after the full gate and names no GitHub Environment.
-It performs no Dokploy mutation. Slice 7 must consume an already verified digest
-and defines environment approval, rollout and recovery separately.
+workflow defaults to `contents: read`; its full gate inherits that read-only
+scope, and only the dependent publisher job adds `packages: write` for the
+repository `GITHUB_TOKEN`. It publishes after the full gate, names no GitHub
+Environment and performs no Dokploy mutation. Slice 7 must consume an already
+verified digest and defines environment approval, rollout and recovery
+separately.
 
 Registry tags can move, Actions artifacts expire and scan databases evolve.
 The durable handoff is the Git revision plus captured digest, corroborated by
-the OCI revision label, registry attestations and evidence hashes. A rerun may
-recreate missing evidence for the same commit, but it must not be used to
-replace a previously selected digest without review.
+the OCI revision label, structurally validated registry attestations and
+evidence hashes. A rerun cannot overwrite an existing SHA tag: it fails before
+the build. Missing evidence must be recovered through read-only inspection or a
+reviewed repair workflow, never by replacing a previously selected digest.

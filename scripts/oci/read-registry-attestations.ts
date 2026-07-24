@@ -77,6 +77,34 @@ function parseAttestation(source: string): Readonly<Record<string, unknown>> {
   return value
 }
 
+function parseSpdxAttestation(
+  source: string,
+): Readonly<Record<string, unknown>> {
+  const value = parseAttestation(source)
+  if (
+    typeof value['SPDXID'] !== 'string' ||
+    value['SPDXID'].length === 0 ||
+    typeof value['spdxVersion'] !== 'string' ||
+    !/^SPDX-\d+\.\d+$/u.test(value['spdxVersion'])
+  ) {
+    throw new Error('Invalid registry attestation')
+  }
+  return value
+}
+
+function parseSlsaAttestation(
+  source: string,
+): Readonly<Record<string, unknown>> {
+  const value = parseAttestation(source)
+  if (
+    !isNonEmptyRecord(value['buildDefinition']) ||
+    !isNonEmptyRecord(value['runDetails'])
+  ) {
+    throw new Error('Invalid registry attestation')
+  }
+  return value
+}
+
 /**
  * Reads Buildx-attached SPDX and SLSA payloads from one immutable image.
  *
@@ -102,8 +130,8 @@ export async function readRegistryAttestations(
     command('docker', [...baseArguments, '{{json .Provenance.SLSA}}']),
   ])
   return {
-    sbom: parseAttestation(sbomResult.stdout),
-    provenance: parseAttestation(provenanceResult.stdout),
+    sbom: parseSpdxAttestation(sbomResult.stdout),
+    provenance: parseSlsaAttestation(provenanceResult.stdout),
   }
 }
 

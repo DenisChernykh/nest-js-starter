@@ -95,9 +95,12 @@ deployment.
 
 Pull requests into `stage` run the complete `check` gate with read-only
 repository permissions and no package write. A push merge commit on `stage`
-runs the same gate before it logs in to GHCR, then builds and pushes exactly one
-`linux/amd64` image tagged with the 40-character Git SHA. It scans the resulting
-digest for fixable High/Critical vulnerabilities and uploads
+runs the same gate in a read-only job. Only the dependent publisher receives
+`packages: write`; queued stage commits use `concurrency.queue: max`, and a
+registry preflight rejects an already published SHA before build. The publisher
+then builds and pushes exactly one `linux/amd64` image tagged with the
+40-character Git SHA. It scans the resulting digest for fixable High/Critical
+vulnerabilities and uploads
 `image-evidence.json`, SPDX SBOM, SLSA provenance, Trivy JSON and the canonical
 OpenAPI artifact.
 

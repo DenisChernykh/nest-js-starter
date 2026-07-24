@@ -134,14 +134,13 @@ on:
     branches: [stage]
 permissions:
   contents: read
-  packages: write
 concurrency:
   group: stage-image-\${{ github.ref }}
-  cancel-in-progress: false
+  queue: max
 jobs:
-  publish:
+  gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -156,6 +155,23 @@ jobs:
         env:
           OPENAPI_BREAKING_BASE_REF: \${{ github.event.before }}
           TESTCONTAINERS_REUSE_ENABLE: "false"
+  publish:
+    needs: gate
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: .node-version
+          check-latest: false
+      - run: corepack pnpm@11.15.1 install --frozen-lockfile
       - id: image
         name: Derive public image metadata
         shell: bash
@@ -169,6 +185,8 @@ jobs:
           registry: ghcr.io
           username: \${{ github.actor }}
           password: \${{ secrets.GITHUB_TOKEN }}
+      - name: Reject an existing SHA tag
+        run: corepack pnpm@11.15.1 exec tsx scripts/oci/assert-image-tag-available.ts --image "\${{ steps.image.outputs.name }}" --revision "\${{ github.sha }}"
       - id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a
         with:
@@ -519,7 +537,17 @@ describe('validateSupplyChainFiles', () => {
 
   it.each([
     ['branches: [stage]', 'branches: [main]'],
-    ['contents: read\n  packages: write', 'contents: write\n  packages: read'],
+    [
+      'permissions:\n  contents: read',
+      'permissions:\n  contents: read\n  packages: write',
+    ],
+    [
+      '      contents: read\n      packages: write',
+      '      contents: write\n      packages: read',
+    ],
+    ['queue: max', 'cancel-in-progress: false'],
+    ['needs: gate', 'needs: missing-gate'],
+    ['persist-credentials: false', 'persist-credentials: true'],
     [
       'OPENAPI_BREAKING_BASE_REF: ${{ github.event.before }}',
       'OPENAPI_BREAKING_BASE_REF: origin/stage',
@@ -535,6 +563,10 @@ describe('validateSupplyChainFiles', () => {
       'tags: ghcr.io/example/starter:latest',
     ],
     ['BUILD_REVISION=${{ github.sha }}', 'BUILD_REVISION=main'],
+    [
+      'scripts/oci/assert-image-tag-available.ts',
+      'scripts/oci/resolve-image-digest.ts',
+    ],
     [
       'image-ref: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}',
       'image-ref: ${{ steps.image.outputs.name }}:${{ github.sha }}',
@@ -593,21 +625,13 @@ describe('validateSupplyChainFiles', () => {
     ).toThrow('Stage image workflow contract is incomplete')
   })
 
-  it('requires the full gate before registry login and build', () => {
-    const fullGate = `      - name: Run full gate
-        run: corepack pnpm@11.15.1 run check
-        env:
-          OPENAPI_BREAKING_BASE_REF: \${{ github.event.before }}
-          TESTCONTAINERS_REUSE_ENABLE: "false"
-`
-    const changedOrder = stageWorkflow
-      .replace(fullGate, '')
-      .replace(
-        '      - name: Scan immutable digest',
-        `${fullGate}      - name: Scan immutable digest`,
-      )
+  it('rejects package write permission on the full gate job', () => {
+    const changedPermissions = stageWorkflow.replace(
+      '  gate:\n    runs-on: ubuntu-latest',
+      '  gate:\n    permissions:\n      packages: write\n    runs-on: ubuntu-latest',
+    )
     expect(() =>
-      validate({ workflows: { 'stage-image.yml': changedOrder } }),
+      validate({ workflows: { 'stage-image.yml': changedPermissions } }),
     ).toThrow('Stage image workflow contract is incomplete')
   })
 

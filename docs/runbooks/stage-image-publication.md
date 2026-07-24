@@ -3,9 +3,11 @@
 ## Expected path
 
 A regular pull request merges into `stage`. `Stage image` runs for the exact
-merge SHA, completes `pnpm check`, publishes the lowercase GHCR SHA tag once,
-scans the returned digest, reads registry attestations and uploads the five-file
-evidence artifact.
+merge SHA. A read-only job completes `pnpm check`; only its dependent publisher
+receives `packages: write`. `concurrency.queue: max` preserves pending stage
+commits. Before build, a registry preflight proves that the lowercase GHCR SHA
+tag is absent; the publisher then writes it once, scans the returned digest,
+reads registry attestations and uploads the five-file evidence artifact.
 
 Record the workflow URL/run ID, merge SHA, `image-evidence.json` reference and
 digest, artifact ID, Trivy result and successful SBOM/provenance reads. Confirm
@@ -42,8 +44,8 @@ registry incident because mutation occurs only afterward.
 Check the immutable action/base pins, Dockerfile build-check output, GHCR login
 step, Actions quota and package write permission. Never replace a failed SHA
 build with a mutable tag or a workstation push. If a partial push exists,
-resolve the SHA tag and compare its OCI revision label before deciding whether
-the workflow can be safely rerun.
+resolve the SHA tag and compare its OCI revision label. Do not rerun the
+publisher: the immutable-tag guard will intentionally fail before build.
 
 ## Scan failure
 
@@ -62,19 +64,20 @@ deployment until the complete artifact exists and its OpenAPI hash matches.
 
 ## Package permission diagnostics
 
-Confirm the workflow has `packages: write`, repository Actions permissions
-allow the pinned actions, the login uses `github.actor` with
-`secrets.GITHUB_TOKEN`, and an organization policy has not denied GHCR. Do not
-change package visibility, billing, repository token defaults or organization
-policy from this runbook; those are owner decisions.
+Confirm only the publisher job has `packages: write`, the full gate remains
+read-only, repository Actions permissions allow the pinned actions, the login
+uses `github.actor` with `secrets.GITHUB_TOKEN`, and an organization policy has
+not denied GHCR. Do not change package visibility, billing, repository token
+defaults or organization policy from this runbook; those are owner decisions.
 
 ## Safe workflow rerun
 
-A rerun is safe only for the same `stage` commit and reviewed workflow. It may
-restore missing evidence or confirm the same SHA tag. After completion, compare
-the new digest with any digest already recorded for that SHA; divergence is a
-stop condition requiring investigation. Never delete evidence or retag a
-different image to hide divergence.
+A rerun is safe only while the exact SHA tag is still absent.
+An existing SHA tag fails before build; it cannot replace its digest.
+Use `oci:resolve` and read-only registry attestation inspection to confirm the
+existing artifact. Recover missing evidence only through a reviewed repair
+workflow that never rebuilds or retags the image. Digest divergence is a stop
+condition; never delete evidence or retag another image to hide it.
 
 Native GitHub artifact attestations for private repositories require Enterprise
 Cloud. Lack of that plan feature is expected here; lack of readable BuildKit

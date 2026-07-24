@@ -126,3 +126,30 @@ After merge, append or follow up with evidence for the exact `stage` merge SHA:
 6. successful `oci:resolve` output for the same merge SHA and digest.
 
 Slice 7 must not start until this existing exact digest is proven.
+
+## Review follow-up
+
+Date: 2026-07-24
+
+The PR review findings were reproduced and addressed before merge:
+
+- the stage workflow now rejects an existing immutable SHA tag before build;
+- every queued `stage` SHA is preserved with `concurrency.queue: max`;
+- the complete gate runs in a read-only job, while only its dependent publisher
+  receives `packages: write`;
+- registry SPDX and SLSA payloads require their expected top-level structures;
+- the compiled startup-failure e2e uses a separate cold-start observation
+  budget without weakening the bounded database failure deadline.
+
+Focused OCI suites passed with 146 tests. The refreshed `check:quick` passed
+with 79 unit suites / 648 tests, 3 generator suites / 52 tests, 2 golden suites
+/ 2 tests and 1 architecture suite / 44 tests. The full integration, e2e and
+coverage phases also passed: 13 suites / 58 tests, 26 suites / 82 tests and 118
+suites / 788 tests respectively, with the same aggregate coverage thresholds.
+
+The final local Docker phase could not be repeated on this date because both
+the complete gate and an isolated `docker build --check` stalled while resolving
+the pinned `docker/dockerfile` frontend from Docker Hub, before any project
+stage executed. Both waits were stopped explicitly. The existing successful
+local image evidence above remains unchanged; a successful PR Docker gate is a
+mandatory merge condition for these follow-up changes.

@@ -153,6 +153,46 @@ describe('registry attestations', () => {
     },
   )
 
+  it.each([
+    [
+      'SPDX without SPDXID',
+      { spdxVersion: 'SPDX-2.3' },
+      {
+        buildDefinition: { buildType: 'fixture' },
+        runDetails: { builder: { id: 'fixture' } },
+      },
+    ],
+    [
+      'SPDX without spdxVersion',
+      { SPDXID: 'SPDXRef-DOCUMENT' },
+      {
+        buildDefinition: { buildType: 'fixture' },
+        runDetails: { builder: { id: 'fixture' } },
+      },
+    ],
+    [
+      'SLSA without buildDefinition',
+      { SPDXID: 'SPDXRef-DOCUMENT', spdxVersion: 'SPDX-2.3' },
+      { runDetails: { builder: { id: 'fixture' } } },
+    ],
+    [
+      'SLSA without runDetails',
+      { SPDXID: 'SPDXRef-DOCUMENT', spdxVersion: 'SPDX-2.3' },
+      { buildDefinition: { buildType: 'fixture' } },
+    ],
+  ])('rejects structurally invalid %s', async (_name, sbom, provenance) => {
+    const command: RegistryInspectCommand = (_file, arguments_) =>
+      Promise.resolve({
+        stdout: JSON.stringify(
+          arguments_.at(-1) === '{{json .SBOM.SPDX}}' ? sbom : provenance,
+        ),
+      })
+
+    await expect(
+      readRegistryAttestations(`${image}@${digest}`, command),
+    ).rejects.toThrow('Invalid registry attestation')
+  })
+
   it('rejects a mutable registry reference before invoking Docker', async () => {
     const command = jest.fn<
       ReturnType<RegistryInspectCommand>,

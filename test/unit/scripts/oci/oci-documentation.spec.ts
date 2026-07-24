@@ -19,6 +19,7 @@ Native GitHub artifact attestations for private repositories require GitHub Ente
   architecture: `
 Build arguments are public metadata, never secrets.
 SHA tags are non-deployment pointers; the GHCR digest is normative.
+The read-only gate job precedes packages: write and uses concurrency.queue: max.
 BuildKit registry attestations contain the SPDX SBOM and SLSA provenance.
 Trivy exceptions are explicit and reviewable.
 The stage publisher performs no Dokploy mutation.
@@ -30,6 +31,7 @@ The stage publisher performs no Dokploy mutation.
 ## Evidence upload failure
 ## Package permission diagnostics
 Safe workflow rerun uses the same commit. Operators must not rebuild for promotion.
+An existing SHA tag fails before build.
 corepack pnpm@11.15.1 oci:resolve -- --image ghcr.io/owner/repository --revision <40-hex>
 `,
   foundationScope: `
@@ -55,6 +57,8 @@ const documentationRequirements: Readonly<
     'Build arguments are public metadata',
     'SHA tags are non-deployment pointers',
     'GHCR digest is normative',
+    'read-only gate job',
+    'concurrency.queue: max',
     'BuildKit registry attestations',
     'Trivy exceptions are explicit and reviewable',
     'no Dokploy mutation',
@@ -66,6 +70,7 @@ const documentationRequirements: Readonly<
     'Evidence upload failure',
     'Package permission diagnostics',
     'Safe workflow rerun',
+    'existing SHA tag fails before build',
     'must not rebuild',
     'oci:resolve',
   ],

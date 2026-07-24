@@ -315,6 +315,8 @@ export function validateOciDocumentation(input: OciDocumentationInput): void {
       'Build arguments are public metadata',
       'SHA tags are non-deployment pointers',
       'GHCR digest is normative',
+      'read-only gate job',
+      'concurrency.queue: max',
       'BuildKit registry attestations',
       'Trivy exceptions are explicit and reviewable',
       'no Dokploy mutation',
@@ -326,6 +328,7 @@ export function validateOciDocumentation(input: OciDocumentationInput): void {
       'Evidence upload failure',
       'Package permission diagnostics',
       'Safe workflow rerun',
+      'existing SHA tag fails before build',
       'must not rebuild',
       'oci:resolve',
     ],
@@ -491,9 +494,24 @@ function validateStageWorkflow(
   const permissions = workflow['permissions']
   const concurrency = workflow['concurrency']
   const jobs = workflow['jobs']
+  const gate = isRecord(jobs) ? jobs['gate'] : undefined
   const publish = isRecord(jobs) ? jobs['publish'] : undefined
+  const rawGateSteps = isRecord(gate) ? gate['steps'] : undefined
+  const gateSteps = isUnknownArray(rawGateSteps) ? rawGateSteps : []
   const rawSteps = isRecord(publish) ? publish['steps'] : undefined
   const steps = isUnknownArray(rawSteps) ? rawSteps : []
+
+  const gateCheckout = findStepByAction(gateSteps, 'actions/checkout', pins)
+  const gateSetupNode = findStepByAction(gateSteps, 'actions/setup-node', pins)
+  const gateInstall = gateSteps.find(
+    (step): step is UnknownRecord =>
+      isRecord(step) &&
+      step['run'] === 'corepack pnpm@11.15.1 install --frozen-lockfile',
+  )
+  const fullGate = gateSteps.find(
+    (step): step is UnknownRecord =>
+      isRecord(step) && step['run'] === 'corepack pnpm@11.15.1 run check',
+  )
   const checkout = findStepByAction(steps, 'actions/checkout', pins)
   const setupNode = findStepByAction(steps, 'actions/setup-node', pins)
   const setupBuildx = findStepByAction(
@@ -516,12 +534,14 @@ function validateStageWorkflow(
       isRecord(step) &&
       step['run'] === 'corepack pnpm@11.15.1 install --frozen-lockfile',
   )
-  const fullGate = steps.find(
-    (step): step is UnknownRecord =>
-      isRecord(step) && step['run'] === 'corepack pnpm@11.15.1 run check',
-  )
   const imageMetadata = steps.find(
     (step): step is UnknownRecord => isRecord(step) && step['id'] === 'image',
+  )
+  const tagGuard = steps.find(
+    (step): step is UnknownRecord =>
+      isRecord(step) &&
+      step['run'] ===
+        'corepack pnpm@11.15.1 exec tsx scripts/oci/assert-image-tag-available.ts --image "${{ steps.image.outputs.name }}" --revision "${{ github.sha }}"',
   )
   const attestationReader = steps.find(
     (step): step is UnknownRecord =>
@@ -535,9 +555,18 @@ function validateStageWorkflow(
       typeof step['run'] === 'string' &&
       step['run'].includes('scripts/oci/write-image-evidence.ts'),
   )
+  const gateCheckoutWith = isRecord(gateCheckout)
+    ? gateCheckout['with']
+    : undefined
+  const gateSetupNodeWith = isRecord(gateSetupNode)
+    ? gateSetupNode['with']
+    : undefined
   const checkoutWith = isRecord(checkout) ? checkout['with'] : undefined
   const setupNodeWith = isRecord(setupNode) ? setupNode['with'] : undefined
   const fullGateEnvironment = isRecord(fullGate) ? fullGate['env'] : undefined
+  const publishPermissions = isRecord(publish)
+    ? publish['permissions']
+    : undefined
   const loginWith = isRecord(login) ? login['with'] : undefined
   const buildWith = isRecord(build) ? build['with'] : undefined
   const trivyWith = isRecord(trivy) ? trivy['with'] : undefined
@@ -551,8 +580,8 @@ function validateStageWorkflow(
   const uploadedPaths = isRecord(uploadWith)
     ? splitMultiline(uploadWith['path'])
     : []
-  const fullGateIndex = steps.indexOf(fullGate)
   const loginIndex = steps.indexOf(login)
+  const tagGuardIndex = steps.indexOf(tagGuard)
   const buildIndex = steps.indexOf(build)
 
   const valid =
@@ -560,29 +589,47 @@ function validateStageWorkflow(
     branches.length === 1 &&
     branches[0] === 'stage' &&
     isRecord(permissions) &&
-    hasExactKeys(permissions, ['contents', 'packages']) &&
+    hasExactKeys(permissions, ['contents']) &&
     permissions['contents'] === 'read' &&
-    permissions['packages'] === 'write' &&
     isRecord(concurrency) &&
     concurrency['group'] === 'stage-image-${{ github.ref }}' &&
-    concurrency['cancel-in-progress'] === false &&
-    isRecord(publish) &&
-    publish['runs-on'] === 'ubuntu-latest' &&
-    publish['timeout-minutes'] === 60 &&
-    !('environment' in publish) &&
-    isRecord(checkoutWith) &&
-    checkoutWith['fetch-depth'] === 0 &&
-    isRecord(setupNodeWith) &&
-    setupNodeWith['node-version-file'] === '.node-version' &&
-    setupNodeWith['check-latest'] === false &&
-    install !== undefined &&
+    concurrency['queue'] === 'max' &&
+    !('cancel-in-progress' in concurrency) &&
+    isRecord(gate) &&
+    gate['runs-on'] === 'ubuntu-latest' &&
+    gate['timeout-minutes'] === 45 &&
+    !('permissions' in gate) &&
+    !('environment' in gate) &&
+    isRecord(gateCheckoutWith) &&
+    gateCheckoutWith['fetch-depth'] === 0 &&
+    isRecord(gateSetupNodeWith) &&
+    gateSetupNodeWith['node-version-file'] === '.node-version' &&
+    gateSetupNodeWith['check-latest'] === false &&
+    gateInstall !== undefined &&
     isRecord(fullGateEnvironment) &&
     fullGateEnvironment['OPENAPI_BREAKING_BASE_REF'] ===
       '${{ github.event.before }}' &&
     fullGateEnvironment['TESTCONTAINERS_REUSE_ENABLE'] === 'false' &&
-    fullGateIndex >= 0 &&
-    fullGateIndex < loginIndex &&
-    fullGateIndex < buildIndex &&
+    isRecord(publish) &&
+    publish['needs'] === 'gate' &&
+    isRecord(publishPermissions) &&
+    hasExactKeys(publishPermissions, ['contents', 'packages']) &&
+    publishPermissions['contents'] === 'read' &&
+    publishPermissions['packages'] === 'write' &&
+    publish['runs-on'] === 'ubuntu-latest' &&
+    publish['timeout-minutes'] === 45 &&
+    !('environment' in publish) &&
+    isRecord(checkoutWith) &&
+    checkoutWith['fetch-depth'] === 0 &&
+    checkoutWith['persist-credentials'] === false &&
+    isRecord(setupNodeWith) &&
+    setupNodeWith['node-version-file'] === '.node-version' &&
+    setupNodeWith['check-latest'] === false &&
+    install !== undefined &&
+    !steps.some(
+      (step) =>
+        isRecord(step) && step['run'] === 'corepack pnpm@11.15.1 run check',
+    ) &&
     isRecord(imageMetadata) &&
     imageMetadata['shell'] === 'bash' &&
     typeof imageMetadataSource === 'string' &&
@@ -594,6 +641,10 @@ function validateStageWorkflow(
     loginWith['registry'] === 'ghcr.io' &&
     loginWith['username'] === '${{ github.actor }}' &&
     loginWith['password'] === '${{ secrets.GITHUB_TOKEN }}' &&
+    tagGuard !== undefined &&
+    loginIndex >= 0 &&
+    loginIndex < tagGuardIndex &&
+    tagGuardIndex < buildIndex &&
     buildSteps.length === 1 &&
     build?.['id'] === 'build' &&
     isRecord(buildWith) &&
