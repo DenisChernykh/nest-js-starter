@@ -17,8 +17,8 @@
     "build": "corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run build:compiled",
     "build:clean": "tsx scripts/build/clean-dist.ts",
     "build:compiled": "corepack pnpm@11.15.1 run build:clean && tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
-    "check": "corepack pnpm@11.15.1 run check:quick && corepack pnpm@11.15.1 run openapi:breaking && corepack pnpm@11.15.1 run openapi:client:check && corepack pnpm@11.15.1 run openapi:conformance && corepack pnpm@11.15.1 run test:integration:run && corepack pnpm@11.15.1 run test:e2e:run && corepack pnpm@11.15.1 run test:coverage:run",
-    "check:quick": "corepack pnpm@11.15.1 run format:check && corepack pnpm@11.15.1 run toolchain:check && corepack pnpm@11.15.1 run prisma:validate && corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run openapi:drift && corepack pnpm@11.15.1 run openapi:generate && corepack pnpm@11.15.1 run openapi:lint && corepack pnpm@11.15.1 run openapi:operations && corepack pnpm@11.15.1 run lint && corepack pnpm@11.15.1 run lint:generator:golden && corepack pnpm@11.15.1 run typecheck:compiled && corepack pnpm@11.15.1 run test:run && corepack pnpm@11.15.1 run architecture:check:run && corepack pnpm@11.15.1 run architecture:generator:golden && corepack pnpm@11.15.1 run manifest:check && corepack pnpm@11.15.1 run build:compiled",
+    "check": "corepack pnpm@11.15.1 run check:quick && corepack pnpm@11.15.1 run openapi:breaking && corepack pnpm@11.15.1 run openapi:client:check && corepack pnpm@11.15.1 run openapi:conformance && corepack pnpm@11.15.1 run test:integration:run && corepack pnpm@11.15.1 run test:e2e:run && corepack pnpm@11.15.1 run test:coverage:run && corepack pnpm@11.15.1 run oci:check",
+    "check:quick": "corepack pnpm@11.15.1 run format:check && corepack pnpm@11.15.1 run oci:validate && corepack pnpm@11.15.1 run toolchain:check && corepack pnpm@11.15.1 run prisma:validate && corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run openapi:drift && corepack pnpm@11.15.1 run openapi:generate && corepack pnpm@11.15.1 run openapi:lint && corepack pnpm@11.15.1 run openapi:operations && corepack pnpm@11.15.1 run lint && corepack pnpm@11.15.1 run lint:generator:golden && corepack pnpm@11.15.1 run typecheck:compiled && corepack pnpm@11.15.1 run test:run && corepack pnpm@11.15.1 run architecture:check:run && corepack pnpm@11.15.1 run architecture:generator:golden && corepack pnpm@11.15.1 run manifest:check && corepack pnpm@11.15.1 run build:compiled",
     "db:migrate:dev": "prisma migrate dev --config prisma.config.ts",
     "dev:api": "corepack pnpm@11.15.1 run prisma:generate && tsx watch src/bootstrap/api/main.ts",
     "format": "prettier . --write",
@@ -27,6 +27,11 @@
     "lint": "eslint . --max-warnings=0",
     "lint:generator:golden": "eslint --config eslint.generator-golden.config.mjs --max-warnings=0 \"test/fixtures/module-generator/expected/**/*.ts\"",
     "manifest:check": "tsx scripts/manifest/check-starter-manifest.ts",
+    "oci:build": "docker buildx build --load --target runtime --tag nest-js-starter:smoke --build-arg BUILD_REVISION=0000000000000000000000000000000000000000 --build-arg BUILD_SOURCE=https://github.com/DenisChernykh/nest-js-starter --build-arg BUILD_CREATED=2026-07-22T00:00:00Z .",
+    "oci:check": "corepack pnpm@11.15.1 run oci:validate && docker build --check . && corepack pnpm@11.15.1 run oci:build && corepack pnpm@11.15.1 run oci:smoke -- --image nest-js-starter:smoke --revision 0000000000000000000000000000000000000000",
+    "oci:resolve": "tsx scripts/oci/resolve-image-digest.ts",
+    "oci:smoke": "tsx scripts/oci/run-image-smoke.ts",
+    "oci:validate": "tsx scripts/oci/validate-supply-chain.ts",
     "openapi:drift": "tsx scripts/openapi/check-openapi-drift.ts",
     "openapi:breaking": "tsx scripts/openapi/check-breaking-openapi.ts",
     "openapi:client:check": "tsx scripts/openapi/check-generated-client.ts",
@@ -124,6 +129,7 @@
     "tsc-alias": "1.9.1",
     "tsx": "4.23.1",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "typescript-eslint": "8.65.0"
+    "typescript-eslint": "8.65.0",
+    "yaml": "2.9.0"
   }
 }

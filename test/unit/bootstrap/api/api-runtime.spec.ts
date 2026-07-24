@@ -129,9 +129,13 @@ describe('ApiRuntime', () => {
   it('cleans partial handles when startup fails', async () => {
     const { runtime, application, startupRegistry, lifecycle, connecting } =
       harness()
+    const failure = new Error('secret driver failure')
     const starting = runtime.start()
-    connecting.reject(new Error('secret driver failure'))
-    await expect(starting).rejects.toThrow('API startup failed')
+    connecting.reject(failure)
+    await expect(starting).rejects.toMatchObject({
+      message: 'API startup failed',
+      cause: failure,
+    })
     expect(lifecycle.markReady).not.toHaveBeenCalled()
     expect(application.close).toHaveBeenCalledTimes(1)
     expect(startupRegistry.stopStarted).toHaveBeenCalledTimes(1)

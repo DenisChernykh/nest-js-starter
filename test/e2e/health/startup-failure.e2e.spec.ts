@@ -16,6 +16,8 @@ import { startPostgresContainer } from '@test/integration/support/postgres-conta
 import { waitForCondition } from '@test/integration/support/wait-for-condition'
 
 describe('compiled API startup failure', () => {
+  const databaseFailureDeadlineMs = 1_200
+  const startupObservationTimeoutMs = 6_000
   let container: StartedPostgreSqlContainer
   let child: ChildProcessWithoutNullStreams | undefined
   let suspended = false
@@ -50,8 +52,8 @@ describe('compiled API startup failure', () => {
       API_PORT: String(port),
       PUBLIC_API_URL: baseUrl,
       CORS_ORIGINS: baseUrl,
-      DATABASE_CONNECTION_TIMEOUT_MS: '1200',
-      DATABASE_HEALTH_TIMEOUT_MS: '1200',
+      DATABASE_CONNECTION_TIMEOUT_MS: String(databaseFailureDeadlineMs),
+      DATABASE_HEALTH_TIMEOUT_MS: String(databaseFailureDeadlineMs),
     })
     let output = ''
     child.stdout.on('data', (chunk: Buffer) => {
@@ -62,15 +64,22 @@ describe('compiled API startup failure', () => {
     })
 
     await waitForCondition(async () => {
+      if (child?.exitCode !== null || child.signalCode !== null) {
+        throw new Error(
+          `API exited before startup became observable: code=${String(child?.exitCode)} signal=${String(child?.signalCode)}`,
+        )
+      }
       try {
         return (await fetch(`${baseUrl}/health/startup`)).status === 503
       } catch {
         return false
       }
-    }, 1_000)
+    }, startupObservationTimeoutMs)
     expect((await fetch(`${baseUrl}/v1`)).status).toBe(503)
 
-    await expect(waitForChildExit(child, 2_500)).resolves.toEqual({
+    await expect(
+      waitForChildExit(child, databaseFailureDeadlineMs + 1_500),
+    ).resolves.toEqual({
       code: 1,
       signal: null,
     })

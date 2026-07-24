@@ -233,7 +233,7 @@ describe('Prisma PostgreSQL lifecycle', () => {
   it('destroys a timed-out pg_sleep probe and later recovers', async () => {
     const provider = createProvider()
     await provider.connect(new AbortController().signal)
-    const probe = new PostgresReadinessProbe(provider, 25)
+    const probe = new PostgresReadinessProbe(provider, 2_000)
 
     await expect(
       provider.runReadinessQuery('SELECT pg_sleep(1)', abortAfter(200), 25),

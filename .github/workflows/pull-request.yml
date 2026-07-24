@@ -1,0 +1,30 @@
+name: Pull request
+
+on:
+  pull_request:
+    branches: [stage]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  full-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          check-latest: false
+      - run: corepack pnpm@11.15.1 install --frozen-lockfile
+      - run: corepack pnpm@11.15.1 run check
+        env:
+          OPENAPI_BREAKING_BASE_REF: origin/stage
+          TESTCONTAINERS_REUSE_ENABLE: 'false'

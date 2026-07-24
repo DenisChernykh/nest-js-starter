@@ -64,11 +64,11 @@ export class StartupRegistry {
         await participant.start(signal)
         this.started.push(participant)
       }
-    } catch {
+    } catch (error: unknown) {
       await this.stopStarted(new AbortController().signal).catch(
         () => undefined,
       )
-      throw new Error('Startup participant failed')
+      throw new Error('Startup participant failed', { cause: error })
     }
   }
 }

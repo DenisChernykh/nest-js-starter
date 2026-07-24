@@ -17,6 +17,26 @@ import { updateHttpServerSpan } from '@/bootstrap/observability/start-observabil
 import { createApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { SanitizingSpanExporter } from '@/platform/observability/sanitizing-span.exporter'
 
+interface CompiledApiRuntime {
+  start(): Promise<unknown>
+  stop(): Promise<void>
+}
+
+interface CompiledApiRuntimeModule {
+  ApiRuntime: new (factory: () => Promise<object>) => CompiledApiRuntime
+}
+
+interface CompiledConfigureApiModule {
+  configureApi: (
+    config: ReturnType<typeof createApiRuntimeConfig>,
+  ) => Promise<object>
+}
+
+const COMPILED_API_RUNTIME_PATH =
+  '../../../../../dist/bootstrap/api/api-runtime.js'
+const COMPILED_CONFIGURE_API_PATH =
+  '../../../../../dist/bootstrap/api/configure-api.js'
+
 const spanExporter = new InMemorySpanExporter()
 const metricExporter = new InMemoryMetricExporter(
   AggregationTemporality.CUMULATIVE,
@@ -46,10 +66,14 @@ void start()
 
 async function start(): Promise<void> {
   sdk.start()
-  const [{ ApiRuntime }, { configureApi }] = await Promise.all([
-    import('../../../../../dist/bootstrap/api/api-runtime.js'),
-    import('../../../../../dist/bootstrap/api/configure-api.js'),
-  ])
+  const apiRuntimeModule = (await import(
+    COMPILED_API_RUNTIME_PATH
+  )) as unknown as CompiledApiRuntimeModule
+  const configureApiModule = (await import(
+    COMPILED_CONFIGURE_API_PATH
+  )) as unknown as CompiledConfigureApiModule
+  const { ApiRuntime } = apiRuntimeModule
+  const { configureApi } = configureApiModule
   const config = createApiRuntimeConfig()
   const runtime = new ApiRuntime(() => configureApi(config))
   await runtime.start()
