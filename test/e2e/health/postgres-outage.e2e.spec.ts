@@ -15,6 +15,7 @@ import { waitForCondition } from '@test/integration/support/wait-for-condition'
 import { startRedisContainer } from '@test/integration/support/redis-container'
 
 describe('PostgreSQL outage readiness', () => {
+  const databaseProbeTimeoutMs = 1_000
   let container: StartedPostgreSqlContainer
   let redis: StartedRedisContainer
   let suspended = false
@@ -23,8 +24,8 @@ describe('PostgreSQL outage readiness', () => {
     container = await startPostgresContainer()
     redis = await startRedisContainer()
     const { runtime, baseUrl } = await startTestRuntime(container, redis, {
-      DATABASE_HEALTH_TIMEOUT_MS: '250',
-      DATABASE_CONNECTION_TIMEOUT_MS: '250',
+      DATABASE_HEALTH_TIMEOUT_MS: String(databaseProbeTimeoutMs),
+      DATABASE_CONNECTION_TIMEOUT_MS: String(databaseProbeTimeoutMs),
     })
     try {
       await assertPostgresSignalSupport(container)

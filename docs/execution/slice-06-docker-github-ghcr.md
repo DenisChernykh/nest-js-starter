@@ -153,3 +153,11 @@ the pinned `docker/dockerfile` frontend from Docker Hub, before any project
 stage executed. Both waits were stopped explicitly. The existing successful
 local image evidence above remains unchanged; a successful PR Docker gate is a
 mandatory merge condition for these follow-up changes.
+
+PR run `30068565735` then reproduced one remaining coverage-only startup race:
+the PostgreSQL outage scenario allowed only `250 ms` for its initial Prisma
+connection. The test now retains a bounded `1,000 ms` connection/readiness
+budget and passed twice with the exact V8 coverage instrumentation. Startup
+wrappers also preserve the original error through `Error.cause` while keeping
+their stable public messages; the safe logger continues to discard message and
+cause data. The refreshed `check:quick` passed before the follow-up push.

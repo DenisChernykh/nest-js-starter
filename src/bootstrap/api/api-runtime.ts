@@ -82,11 +82,11 @@ export class ApiRuntime {
       this.ensureStartupAllowed(signal)
       this.resources.lifecycle.markReady()
       return this.resources.application.address()
-    } catch {
+    } catch (error: unknown) {
       this.resources?.lifecycle.beginDrain()
       this.startupController?.abort()
       await this.cleanupPartialResources()
-      throw new Error('API startup failed')
+      throw new Error('API startup failed', { cause: error })
     }
   }
 

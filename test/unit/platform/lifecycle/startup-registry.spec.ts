@@ -45,18 +45,20 @@ describe('StartupRegistry', () => {
   it('cleans only completed participants and aborts later startup after failure', async () => {
     const events: string[] = []
     const registry = new StartupRegistry()
+    const failure = new Error('secret redis URL')
     registry.register(participant('database', 100, events))
     registry.register(
-      participant('redis', 200, events, () =>
-        Promise.reject(new Error('secret redis URL')),
-      ),
+      participant('redis', 200, events, () => Promise.reject(failure)),
     )
     registry.register(participant('later', 300, events))
     registry.seal()
 
     await expect(
       registry.startAll(new AbortController().signal),
-    ).rejects.toThrow('Startup participant failed')
+    ).rejects.toMatchObject({
+      message: 'Startup participant failed',
+      cause: failure,
+    })
     expect(events).toEqual(['start:database', 'start:redis', 'stop:database'])
     expect(registry.completedNames).toEqual([])
   })
