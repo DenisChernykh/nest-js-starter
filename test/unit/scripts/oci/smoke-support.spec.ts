@@ -207,4 +207,22 @@ describe('OCI smoke support', () => {
       }),
     ).not.toThrow()
   })
+
+  it('rejects a runtime image retaining bundled npm', () => {
+    expect(() =>
+      assertRuntimeProbe({
+        devBinaries: [],
+        forbiddenPaths: ['/usr/local/lib/node_modules/npm'],
+        gid: 1000,
+        requiredPaths: [
+          '/app/dist',
+          '/app/node_modules',
+          '/app/package.json',
+          '/app/prisma',
+          '/app/prisma.config.ts',
+        ],
+        uid: 1000,
+      }),
+    ).toThrow('Invalid OCI image runtime filesystem')
+  })
 })

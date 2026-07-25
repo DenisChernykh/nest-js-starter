@@ -52,6 +52,12 @@ const packageJson = {
   },
 }
 
+const pnpmWorkspace = {
+  overrides: {
+    'find-my-way': '9.7.0',
+  },
+}
+
 const dockerfile = `# syntax=${pins.dockerfileFrontend}
 # check=error=true
 
@@ -70,7 +76,7 @@ FROM \${NODE_IMAGE} AS runtime
 ARG BUILD_REVISION
 ARG BUILD_SOURCE
 ARG BUILD_CREATED
-RUN corepack install --global pnpm@11.15.1
+RUN corepack install --global pnpm@11.15.1 && rm -rf /usr/local/lib/node_modules/npm && rm -f /usr/local/bin/npm /usr/local/bin/npx
 RUN node -e 'const [revision, source] = process.argv.slice(1); if (!/^[0-9a-f]{40}$/.test(revision)) throw new Error("BUILD_REVISION must be 40 lowercase hex"); const url = new URL(source); if (url.protocol !== "https:" || url.username !== "" || url.password !== "") throw new Error("BUILD_SOURCE must be a credential-free HTTPS URL")' "$BUILD_REVISION" "$BUILD_SOURCE"
 LABEL org.opencontainers.image.title="nest-js-starter" org.opencontainers.image.source="\${BUILD_SOURCE}" org.opencontainers.image.revision="\${BUILD_REVISION}" org.opencontainers.image.created="\${BUILD_CREATED}"
 ENV NODE_ENV=production API_HOST=0.0.0.0 pnpm_config_verify_deps_before_run=false
@@ -239,6 +245,7 @@ function validate(
     readonly dockerfile?: string
     readonly dockerignore?: string
     readonly packageJson?: unknown
+    readonly pnpmWorkspace?: unknown
     readonly workflows?: Readonly<Record<string, string>>
   } = {},
 ): void {
@@ -247,6 +254,7 @@ function validate(
     dockerignore: overrides.dockerignore ?? dockerignore,
     packageJson: overrides.packageJson ?? packageJson,
     pins,
+    pnpmWorkspace: overrides.pnpmWorkspace ?? pnpmWorkspace,
     workflows: overrides.workflows ?? {
       'pull-request.yml': pullRequestWorkflow,
       'stage-image.yml': stageWorkflow,
@@ -338,6 +346,24 @@ describe('validateSupplyChainFiles', () => {
       ).toThrow('Dockerfile install/build/prune contract is incomplete')
     },
   )
+
+  it('requires the reviewed find-my-way security override', () => {
+    expect(() =>
+      validate({
+        pnpmWorkspace: { overrides: { 'find-my-way': '9.6.0' } },
+      }),
+    ).toThrow('find-my-way security override must be exact stable 9.7.0')
+  })
+
+  it.each([
+    '/usr/local/lib/node_modules/npm',
+    '/usr/local/bin/npm',
+    '/usr/local/bin/npx',
+  ])('requires removal of runtime npm path %s', (path) => {
+    expect(() =>
+      validate({ dockerfile: dockerfile.replace(path, `${path}-retained`) }),
+    ).toThrow('Dockerfile runtime npm removal policy is incomplete')
+  })
 
   it('requires non-interactive production pruning', () => {
     expect(() =>

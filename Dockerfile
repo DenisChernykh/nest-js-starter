@@ -18,7 +18,9 @@ FROM ${NODE_IMAGE} AS runtime
 ARG BUILD_REVISION
 ARG BUILD_SOURCE
 ARG BUILD_CREATED
-RUN corepack install --global pnpm@11.15.1
+RUN corepack install --global pnpm@11.15.1 && \
+    rm -rf /usr/local/lib/node_modules/npm && \
+    rm -f /usr/local/bin/npm /usr/local/bin/npx
 RUN node -e 'const [revision, source] = process.argv.slice(1); if (!/^[0-9a-f]{40}$/.test(revision)) throw new Error("BUILD_REVISION must be 40 lowercase hex"); let url; try { url = new URL(source) } catch { throw new Error("BUILD_SOURCE must be a credential-free HTTPS URL") } if (url.protocol !== "https:" || url.username !== "" || url.password !== "") throw new Error("BUILD_SOURCE must be a credential-free HTTPS URL")' "$BUILD_REVISION" "$BUILD_SOURCE"
 LABEL org.opencontainers.image.title="nest-js-starter" \
       org.opencontainers.image.source="${BUILD_SOURCE}" \
