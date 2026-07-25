@@ -21,7 +21,7 @@ describe('OTLP collector outage isolation', () => {
       OTEL_EXPORTER_OTLP_TIMEOUT: '50',
       OTEL_METRIC_EXPORT_INTERVAL: '1000',
       OTEL_METRIC_EXPORT_TIMEOUT: '50',
-      OTEL_BSP_SCHEDULE_DELAY: '10',
+      OTEL_BSP_SCHEDULE_DELAY: '60000',
       OTEL_BSP_EXPORT_TIMEOUT: '50',
     })
     const instance = runtime.instances[0]
@@ -51,6 +51,7 @@ describe('OTLP collector outage isolation', () => {
       4_000,
     )
     expect((await fetch(`${instance.baseUrl}/health/ready`)).status).toBe(200)
+    expect((await fetch(`${instance.baseUrl}/health/live`)).status).toBe(200)
 
     const shutdownStartedAt = performance.now()
     expect(instance.child.kill('SIGTERM')).toBe(true)
