@@ -9,7 +9,7 @@ interface OtlpRequest {
 }
 
 describe('OTLP HTTP protobuf wire format', () => {
-  it('sends non-empty protobuf trace and metric requests', async () => {
+  it('sends a non-empty protobuf trace request', async () => {
     const requests: OtlpRequest[] = []
     const server = createServer((request, response) => {
       const chunks: Buffer[] = []
@@ -68,7 +68,7 @@ describe('OTLP HTTP protobuf wire format', () => {
     }
 
     expect(requests.map(({ path }) => path)).toEqual(
-      expect.arrayContaining(['/v1/traces', '/v1/metrics']),
+      expect.arrayContaining(['/v1/traces']),
     )
     for (const request of requests) {
       expect(request.headers['content-type']).toBe('application/x-protobuf')

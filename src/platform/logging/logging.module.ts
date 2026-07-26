@@ -3,8 +3,6 @@ import { Global, Module, type DynamicModule } from '@nestjs/common'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { CorrelationFieldsProvider } from '@/platform/http/context/correlation-fields.provider'
 import { RequestContext } from '@/platform/http/context/request-context'
-import { HttpMetrics } from '@/platform/observability/http-metrics'
-import { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
 
 import { STRUCTURED_LOGGER } from './logging.contracts'
 import { NestLoggerAdapter } from './nest-logger.adapter'
@@ -22,7 +20,6 @@ export class LoggingModule {
       providers: [
         RequestContext,
         CorrelationFieldsProvider,
-        { provide: HttpMetrics, useFactory: () => new HttpMetrics() },
         {
           provide: PinoLogSink,
           inject: [RuntimeConfigService, CorrelationFieldsProvider],
@@ -35,19 +32,6 @@ export class LoggingModule {
             }),
         },
         { provide: STRUCTURED_LOGGER, useExisting: PinoLogSink },
-        {
-          provide: RuntimeMetrics,
-          inject: [STRUCTURED_LOGGER],
-          useFactory: (logger: PinoLogSink): RuntimeMetrics =>
-            new RuntimeMetrics(undefined, (code) =>
-              logger.write({
-                level: 'warn',
-                event: 'telemetry.adapter.failure',
-                module: 'Observability',
-                attributes: { code },
-              }),
-            ),
-        },
         {
           provide: AuthAuditLogger,
           inject: [STRUCTURED_LOGGER],
@@ -62,8 +46,6 @@ export class LoggingModule {
         NestLoggerAdapter,
         RequestContext,
         CorrelationFieldsProvider,
-        HttpMetrics,
-        RuntimeMetrics,
         AuthAuditLogger,
       ],
     }

@@ -24,11 +24,11 @@ import {
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
+import { runtimeDefaults } from '@/platform/config/runtime-defaults'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
-import { PROBLEM_REGISTRY } from '@/platform/http/errors/problem-registry'
-import { HealthRegistry } from '@/platform/http/health/health-registry'
+import { PROBLEM_CATALOG } from '@/platform/http/errors/problem-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import { STRUCTURED_LOGGER } from '@/platform/logging/logging.contracts'
 import { LoggingModule } from '@/platform/logging/logging.module'
@@ -76,7 +76,6 @@ describe('OpenAPI RFC 9457 conformance', () => {
     const runtimeConfig = buildApiRuntimeConfig(
       requiredRuntimeEnvironment({
         DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
-        HTTP_JSON_BODY_LIMIT_BYTES: '64',
       }),
     )
     const moduleRef = await Test.createTestingModule({
@@ -95,7 +94,6 @@ describe('OpenAPI RFC 9457 conformance', () => {
       bodyParser: false,
     })
     const lifecycle = expressApp.get(ApplicationLifecycleState)
-    expressApp.get(HealthRegistry).seal()
     lifecycle.markReady()
     configureHttpApplication(
       expressApp,
@@ -136,7 +134,7 @@ describe('OpenAPI RFC 9457 conformance', () => {
 
     const oversized = await request(server)
       .post('/v1/technical/openapi-problems/validate')
-      .send({ value: 'x'.repeat(100) })
+      .send({ value: 'x'.repeat(runtimeDefaults.http.jsonBodyLimitBytes) })
       .expect(413)
     await assertProblemResponseConforms(oversized)
 
@@ -163,12 +161,10 @@ describe('OpenAPI RFC 9457 conformance', () => {
     const documentedCodes = (codeSchema.enum ?? [])
       .filter((value): value is string => typeof value === 'string')
       .sort()
-    const registryCodes = PROBLEM_REGISTRY.definitions
-      .map(({ code }) => code)
-      .sort()
+    const registryCodes = PROBLEM_CATALOG.map(({ code }) => code).sort()
 
     expect(documentedCodes).toEqual(registryCodes)
-    for (const definition of PROBLEM_REGISTRY.definitions) {
+    for (const definition of PROBLEM_CATALOG) {
       expect(markdown).toContain(definition.type)
       expect(markdown).toContain(definition.code)
     }

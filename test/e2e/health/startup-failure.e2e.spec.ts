@@ -14,9 +14,11 @@ import {
 } from '@test/integration/support/postgres-outage'
 import { startPostgresContainer } from '@test/integration/support/postgres-container'
 import { waitForCondition } from '@test/integration/support/wait-for-condition'
+import { runtimeDefaults } from '@/platform/config/runtime-defaults'
 
 describe('compiled API startup failure', () => {
-  const databaseFailureDeadlineMs = 1_200
+  const databaseFailureDeadlineMs = runtimeDefaults.database.connectionTimeoutMs
+  const startupExitDeadlineMs = databaseFailureDeadlineMs + 5_000
   const startupObservationTimeoutMs = 6_000
   let container: StartedPostgreSqlContainer
   let child: ChildProcessWithoutNullStreams | undefined
@@ -43,17 +45,15 @@ describe('compiled API startup failure', () => {
       ...process.env,
       DATABASE_URL: container.getConnectionUri(),
       REDIS_COORDINATION_URL: 'redis://127.0.0.1:1',
+      OTEL_SDK_DISABLED: 'true',
       AUTH_SESSION_KEY_SECRET: Buffer.alloc(32, 1).toString('base64url'),
       AUTH_CSRF_SECRET: Buffer.alloc(32, 2).toString('base64url'),
       AUTH_RATE_LIMIT_KEY_SECRET: Buffer.alloc(32, 3).toString('base64url'),
       AUTH_NETWORK_METADATA_SECRET: Buffer.alloc(32, 4).toString('base64url'),
-      AUTH_CSRF_ORIGINS: baseUrl,
       API_HOST: '127.0.0.1',
       API_PORT: String(port),
       PUBLIC_API_URL: baseUrl,
       CORS_ORIGINS: baseUrl,
-      DATABASE_CONNECTION_TIMEOUT_MS: String(databaseFailureDeadlineMs),
-      DATABASE_HEALTH_TIMEOUT_MS: String(databaseFailureDeadlineMs),
     })
     let output = ''
     child.stdout.on('data', (chunk: Buffer) => {
@@ -78,7 +78,7 @@ describe('compiled API startup failure', () => {
     expect((await fetch(`${baseUrl}/v1`)).status).toBe(503)
 
     await expect(
-      waitForChildExit(child, databaseFailureDeadlineMs + 1_500),
+      waitForChildExit(child, startupExitDeadlineMs),
     ).resolves.toEqual({
       code: 1,
       signal: null,

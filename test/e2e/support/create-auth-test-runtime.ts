@@ -50,7 +50,6 @@ function authEnvironment(
     API_PORT: new URL(baseUrl).port,
     PUBLIC_API_URL: baseUrl,
     CORS_ORIGINS: origins,
-    AUTH_CSRF_ORIGINS: origins,
     AUTH_SESSION_KEY_SECRET: Buffer.alloc(32, 11).toString('base64url'),
     AUTH_CSRF_SECRET: Buffer.alloc(32, 12).toString('base64url'),
     AUTH_RATE_LIMIT_KEY_SECRET: Buffer.alloc(32, 13).toString('base64url'),

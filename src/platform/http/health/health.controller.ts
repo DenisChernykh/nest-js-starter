@@ -7,9 +7,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger'
 
-import { SafeEndpoint } from '@/platform/http/policy/safe-endpoint.decorator'
 import { PublicEndpoint } from '@/platform/http/policy/public-endpoint.decorator'
-import { RequestOperationContext } from '@/platform/http/bootstrap/request-operation.context'
 
 import { HealthService } from './health.service'
 import type { HealthHttpResult } from './health.types'
@@ -25,14 +23,10 @@ import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.
 @PublicEndpoint()
 @ApiTags('health')
 export class HealthController {
-  public constructor(
-    private readonly health: HealthService,
-    private readonly operationContext: RequestOperationContext,
-  ) {}
+  public constructor(private readonly health: HealthService) {}
 
   /** Serves unconditional process liveness. */
   @Get('live')
-  @SafeEndpoint()
   @ApiOperation({
     operationId: 'healthLive',
     summary: 'Check process liveness',
@@ -51,7 +45,6 @@ export class HealthController {
 
   /** Serves the irreversible startup latch. */
   @Get('startup')
-  @SafeEndpoint()
   @ApiOperation({
     operationId: 'healthStartup',
     summary: 'Check the irreversible startup latch',
@@ -75,7 +68,6 @@ export class HealthController {
 
   /** Serves bounded dependency readiness tied to transport cancellation. */
   @Get('ready')
-  @SafeEndpoint()
   @ApiOperation({
     operationId: 'healthReady',
     summary: 'Check bounded dependency readiness',
@@ -100,10 +92,7 @@ export class HealthController {
     request.once('aborted', abort)
     response.once('close', abort)
     try {
-      return this.write(
-        response,
-        await this.health.ready(this.operationContext.signal ?? parent.signal),
-      )
+      return this.write(response, await this.health.ready(parent.signal))
     } finally {
       request.off('aborted', abort)
       response.off('close', abort)

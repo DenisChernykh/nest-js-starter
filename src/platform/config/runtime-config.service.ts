@@ -63,7 +63,6 @@ export class RuntimeConfigService {
       trustedProxyCount: this.httpConfig.trustedProxyCidrs.length,
       databasePoolMax: this.databaseConfig.poolMax,
       redisCoordinationConfigured: true,
-      redisCacheConfigured: this.redisConfig.cacheUrl !== undefined,
       authCookieName: this.authConfig.sessionCookieName,
     })
   }

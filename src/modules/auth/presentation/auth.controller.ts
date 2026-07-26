@@ -46,7 +46,6 @@ import { AuthRequestContext } from './auth-request.context'
 import { CsrfTokenExempt } from './session-csrf.guard'
 import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.decorator'
 import { PublicEndpoint } from '@/platform/http/policy/public-endpoint.decorator'
-import { SafeEndpoint } from '@/platform/http/policy/safe-endpoint.decorator'
 
 /** Dependency-injection token for redacted login request metadata. */
 export const AUTH_LOGIN_METADATA_FACTORY = Symbol('auth:login-metadata-factory')
@@ -171,7 +170,6 @@ export class AuthController {
   }
 
   @Get('me')
-  @SafeEndpoint()
   @ApiOperation({
     operationId: 'authGetMe',
     summary: 'Get the current authenticated identity',
@@ -192,7 +190,6 @@ export class AuthController {
   }
 
   @Get('csrf')
-  @SafeEndpoint()
   @ApiOperation({
     operationId: 'authGetCsrfToken',
     summary: 'Get the current session-bound CSRF token',
@@ -253,7 +250,6 @@ export class AuthController {
   }
 
   @Get('sessions')
-  @SafeEndpoint()
   @ApiOperation({
     operationId: 'authListSessions',
     summary: 'List browser sessions owned by the current user',

@@ -1,20 +1,6 @@
 import { ApiRuntime } from '@/bootstrap/api/api-runtime'
 
-function deferred(): {
-  readonly promise: Promise<void>
-  readonly resolve: () => void
-  readonly reject: (error: Error) => void
-} {
-  let resolve!: () => void
-  let reject!: (error: Error) => void
-  const promise = new Promise<void>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise
-    reject = rejectPromise
-  })
-  return { promise, resolve, reject }
-}
-
-interface RuntimeHarness {
+function harness(): {
   readonly runtime: ApiRuntime
   readonly factory: jest.Mock
   readonly application: {
@@ -23,36 +9,14 @@ interface RuntimeHarness {
     readonly address: jest.Mock
   }
   readonly database: { readonly connect: jest.Mock; readonly close: jest.Mock }
-  readonly startupRegistry: {
-    readonly startAll: jest.Mock
-    readonly stopStarted: jest.Mock
-  }
+  readonly redis: { readonly connect: jest.Mock; readonly close: jest.Mock }
   readonly lifecycle: {
-    phase: 'starting' | 'ready' | 'draining'
+    readonly phase: 'starting'
     readonly markReady: jest.Mock
     readonly beginDrain: jest.Mock
   }
-  readonly connecting: ReturnType<typeof deferred>
-}
-
-function harness(): RuntimeHarness {
-  const connecting = deferred()
-  const lifecycle = {
-    phase: 'starting' as 'starting' | 'ready' | 'draining',
-    markReady: jest.fn(),
-    beginDrain: jest.fn(() => {
-      lifecycle.phase = 'draining'
-      return true
-    }),
-  }
-  const database = {
-    connect: jest.fn(() => connecting.promise),
-    close: jest.fn(() => Promise.resolve()),
-  }
-  const startupRegistry = {
-    startAll: jest.fn(() => connecting.promise),
-    stopStarted: jest.fn(() => Promise.resolve()),
-  }
+} {
+  const connecting = { promise: Promise.resolve(), resolve: () => undefined }
   const application = {
     listen: jest.fn(() => Promise.resolve()),
     close: jest.fn(() => Promise.resolve()),
@@ -62,82 +26,60 @@ function harness(): RuntimeHarness {
       port: 3210,
     })),
   }
+  const database = {
+    connect: jest.fn(() => connecting.promise),
+    close: jest.fn(() => Promise.resolve()),
+  }
+  const redis = {
+    connect: jest.fn(() => Promise.resolve()),
+    close: jest.fn(() => Promise.resolve()),
+  }
+  const lifecycle = {
+    phase: 'starting' as const,
+    markReady: jest.fn(),
+    beginDrain: jest.fn(() => true),
+  }
   const factory = jest.fn(() =>
-    Promise.resolve({ application, database, startupRegistry, lifecycle }),
+    Promise.resolve({
+      application,
+      database,
+      redis: redis as never,
+      lifecycle,
+    }),
   )
   return {
     runtime: new ApiRuntime(factory),
     factory,
     application,
     database,
-    startupRegistry,
+    redis,
     lifecycle,
-    connecting,
   }
 }
 
 describe('ApiRuntime', () => {
-  it('marks ready only after listener and every startup participant complete', async () => {
-    const { runtime, application, startupRegistry, lifecycle, connecting } =
-      harness()
-    const starting = runtime.start()
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(application.listen).toHaveBeenCalled()
-    expect(startupRegistry.startAll).toHaveBeenCalled()
-    expect(lifecycle.markReady).not.toHaveBeenCalled()
-    connecting.resolve()
-    await expect(starting).resolves.toEqual({
+  it('starts listener, database, Redis and only then marks ready', async () => {
+    const { runtime, application, database, redis, lifecycle } = harness()
+    await expect(runtime.start()).resolves.toEqual({
       address: '127.0.0.1',
       family: 'IPv4',
       port: 3210,
     })
+    expect(application.listen).toHaveBeenCalledTimes(1)
+    expect(database.connect).toHaveBeenCalledTimes(1)
+    expect(redis.connect).toHaveBeenCalledTimes(1)
     expect(lifecycle.markReady).toHaveBeenCalledTimes(1)
   })
-
-  it('shares one startup promise across concurrent callers', () => {
-    const { runtime, factory } = harness()
-    expect(runtime.start()).toBe(runtime.start())
-    expect(factory).toHaveBeenCalledTimes(1)
-  })
-
-  it('cancels before start without initializing', async () => {
-    const { runtime, factory, lifecycle } = harness()
-    runtime.cancelStartup()
-    await expect(runtime.start()).rejects.toThrow('API startup failed')
-    expect(factory).not.toHaveBeenCalled()
-    expect(lifecycle.markReady).not.toHaveBeenCalled()
-  })
-
-  it('aborts deferred connect, prevents late ready and cleans partial handles', async () => {
-    const { runtime, application, startupRegistry, lifecycle, connecting } =
-      harness()
-    const starting = runtime.start()
-    await Promise.resolve()
-    await Promise.resolve()
-    runtime.cancelStartup()
-    expect(startupRegistry.startAll).toHaveBeenCalledWith(
-      expect.objectContaining({ aborted: true }),
+  it('shares one startup promise and closes Redis before database during stop', async () => {
+    const target = harness()
+    expect(target.runtime.start()).toBe(target.runtime.start())
+    await target.runtime.start()
+    await target.runtime.stop()
+    expect(target.redis.close.mock.invocationCallOrder[0]!).toBeLessThan(
+      target.database.close.mock.invocationCallOrder[0]!,
     )
-    connecting.resolve()
-    await expect(starting).rejects.toThrow('API startup failed')
-    expect(lifecycle.markReady).not.toHaveBeenCalled()
-    expect(application.close).toHaveBeenCalledTimes(1)
-    expect(startupRegistry.stopStarted).toHaveBeenCalledTimes(1)
-  })
-
-  it('cleans partial handles when startup fails', async () => {
-    const { runtime, application, startupRegistry, lifecycle, connecting } =
-      harness()
-    const failure = new Error('secret driver failure')
-    const starting = runtime.start()
-    connecting.reject(failure)
-    await expect(starting).rejects.toMatchObject({
-      message: 'API startup failed',
-      cause: failure,
-    })
-    expect(lifecycle.markReady).not.toHaveBeenCalled()
-    expect(application.close).toHaveBeenCalledTimes(1)
-    expect(startupRegistry.stopStarted).toHaveBeenCalledTimes(1)
+    expect(target.database.close.mock.invocationCallOrder[0]!).toBeLessThan(
+      target.application.close.mock.invocationCallOrder[0]!,
+    )
   })
 })

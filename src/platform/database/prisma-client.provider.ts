@@ -7,7 +7,6 @@ import { Pool } from 'pg'
 import { PrismaClient, type Prisma } from '@/generated/prisma/client'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import type { DatabaseRuntimeConfig } from '@/platform/config/runtime-config.types'
-import { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
 
 import { runBoundedPostgresQuery } from './bounded-postgres-query'
 import { DatabaseUnavailableError } from './database.contracts'
@@ -100,7 +99,6 @@ export class PrismaClientProvider {
   private cleanupPromise: Promise<void> | undefined
   private readonly activeOperations = new Set<Promise<unknown>>()
   private errorListenerInstalled = true
-  private readonly metrics: RuntimeMetrics
   private readonly poolErrorHandler = (): void => {
     this.degraded = true
   }
@@ -111,14 +109,10 @@ export class PrismaClientProvider {
     @Inject(PrismaTransactionContext)
     @Optional()
     transactionContext?: PrismaTransactionContext,
-    @Inject(RuntimeMetrics)
-    @Optional()
-    metrics?: RuntimeMetrics,
   ) {
     this.transactionContext =
       transactionContext ?? new PrismaTransactionContext()
     this.connectionTimeoutMs = config.database.connectionTimeoutMs
-    this.metrics = metrics ?? new RuntimeMetrics()
     this.pool = new Pool({
       connectionString: config.database.url,
       max: config.database.poolMax,
@@ -228,7 +222,6 @@ export class PrismaClientProvider {
     if (this.state !== 'connected' || !this.admissionOpen) {
       return Promise.reject(new DatabaseUnavailableError())
     }
-    const startedAt = performance.now()
     let result: Promise<T>
     try {
       result = Promise.resolve(
@@ -239,43 +232,20 @@ export class PrismaClientProvider {
         error instanceof Error ? error : new Error('Database operation failed'),
       )
     }
-    const measured = result.then(
-      (value) => {
-        this.recordDatabaseOutcome('success', startedAt)
-        return value
-      },
-      (error: unknown) => {
-        this.recordDatabaseOutcome('error', startedAt)
-        throw error
-      },
+    this.activeOperations.add(result)
+    void result.then(
+      () => this.activeOperations.delete(result),
+      () => this.activeOperations.delete(result),
     )
-    this.activeOperations.add(measured)
-    void measured.then(
-      () => this.activeOperations.delete(measured),
-      () => this.activeOperations.delete(measured),
-    )
-    return measured
-  }
-
-  private recordDatabaseOutcome(
-    outcome: 'success' | 'error',
-    startedAt: number,
-  ): void {
-    try {
-      this.metrics.recordDependency(
-        'postgres',
-        outcome,
-        Math.max(0, performance.now() - startedAt),
-      )
-    } catch {
-      // Telemetry cannot replace the admitted database operation settlement.
-    }
+    return result
   }
 
   /** Stops admission, waits admitted work and closes Prisma then Pool. */
   public close(signal: AbortSignal): Promise<void> {
     if (this.state === 'closed') {
-      return Promise.resolve()
+      return this.cleanupPromise === undefined
+        ? Promise.resolve()
+        : waitForSettledBeforeAbort(this.cleanupPromise, signal)
     }
     if (this.closePromise !== undefined) {
       return this.closePromise
@@ -328,21 +298,16 @@ export class PrismaClientProvider {
 
   private async performCleanup(): Promise<void> {
     const failures: unknown[] = []
-    try {
-      await this.prisma.$disconnect()
-    } catch (error: unknown) {
-      failures.push(error)
-    } finally {
-      if (this.errorListenerInstalled) {
-        this.pool.off('error', this.poolErrorHandler)
-        this.errorListenerInstalled = false
-      }
-      try {
-        await this.pool.end()
-      } catch (error: unknown) {
-        failures.push(error)
-      }
+    const [prismaCleanup, poolCleanup] = await Promise.allSettled([
+      this.prisma.$disconnect(),
+      this.pool.end(),
+    ])
+    if (this.errorListenerInstalled) {
+      this.pool.off('error', this.poolErrorHandler)
+      this.errorListenerInstalled = false
     }
+    if (prismaCleanup.status === 'rejected') failures.push(prismaCleanup.reason)
+    if (poolCleanup.status === 'rejected') failures.push(poolCleanup.reason)
     if (failures.length > 0) {
       throw new AggregateError(failures, 'Database cleanup failed')
     }

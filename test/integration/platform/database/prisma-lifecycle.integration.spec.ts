@@ -73,8 +73,6 @@ describe('Prisma PostgreSQL lifecycle', () => {
     const environment = buildApiRuntimeConfig(
       requiredRuntimeEnvironment({
         DATABASE_URL: databaseUrl,
-        DATABASE_CONNECTION_TIMEOUT_MS: '2000',
-        DATABASE_HEALTH_TIMEOUT_MS: '2000',
         ...overrides,
       }),
     )
@@ -192,32 +190,26 @@ describe('Prisma PostgreSQL lifecycle', () => {
   })
 
   it('bounds connect and initial probe with one absolute deadline', async () => {
-    const provider = createProvider({
-      DATABASE_CONNECTION_TIMEOUT_MS: '50',
-      DATABASE_HEALTH_TIMEOUT_MS: '50',
-    })
+    const provider = createProvider()
     jest
       .spyOn(resourcesOf(provider).prisma, '$connect')
       .mockImplementationOnce(
         () => new Promise((resolve) => setTimeout(resolve, 75)),
       )
 
-    await expect(
-      provider.connect(new AbortController().signal),
-    ).rejects.toThrow(DatabaseUnavailableError)
+    await expect(provider.connect(abortAfter(50))).rejects.toThrow(
+      DatabaseUnavailableError,
+    )
   })
 
   it('rejects a timed-out startup without awaiting a stuck Prisma connect', async () => {
-    const provider = createProvider({
-      DATABASE_CONNECTION_TIMEOUT_MS: '25',
-      DATABASE_HEALTH_TIMEOUT_MS: '25',
-    })
+    const provider = createProvider()
     const connect = deferred()
     jest
       .spyOn(resourcesOf(provider).prisma, '$connect')
       .mockImplementationOnce(() => connect.promise)
 
-    const connecting = provider.connect(new AbortController().signal)
+    const connecting = provider.connect(abortAfter(25))
     const settlement = await settlementWithin(connecting, 75)
     connect.resolve()
     await connecting.catch(() => undefined)

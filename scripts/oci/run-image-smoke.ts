@@ -1,20 +1,183 @@
 import { execFile } from 'node:child_process'
-import { homedir, tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { randomBytes } from 'node:crypto'
+import { tmpdir } from 'node:os'
+import { dirname, join, relative, resolve } from 'node:path'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { setTimeout as delay } from 'node:timers/promises'
 
-import {
-  type ComposeCommandInput,
-  type RuntimeProbe,
-  assertRuntimeProbe,
-  assertSafeTemporaryDirectory,
-  createComposeArgs,
-  createSmokeSecrets,
-  parseImageInspection,
-  validateComposeProjectName,
-  validateImageReference,
-  waitForHttpReady,
-} from './smoke-support'
+interface ComposeCommandInput {
+  readonly composeFiles: readonly string[]
+  readonly envFilePath: string
+  readonly projectName: string
+}
+interface RuntimeProbe {
+  readonly devBinaries: readonly string[]
+  readonly forbiddenPaths: readonly string[]
+  readonly gid: number
+  readonly requiredPaths: readonly string[]
+  readonly uid: number
+}
+interface SmokeSecrets {
+  readonly authCsrfSecret: string
+  readonly authNetworkMetadataSecret: string
+  readonly authRateLimitKeySecret: string
+  readonly authSessionKeySecret: string
+  readonly postgresPassword: string
+  readonly redisPassword: string
+}
+
+const projectPattern = /^nest-js-starter-smoke-[1-9]\d*$/u
+const imagePattern =
+  /^[A-Za-z0-9][A-Za-z0-9._/-]*(?::[A-Za-z0-9][A-Za-z0-9._-]*|@sha256:[0-9a-f]{64})$/u
+
+function validateComposeProjectName(value: string): string {
+  if (!projectPattern.test(value))
+    throw new Error('Invalid OCI smoke Compose project name')
+  return value
+}
+function validateImageReference(value: string): string {
+  if (!imagePattern.test(value) || value.endsWith(':latest'))
+    throw new Error('Invalid OCI smoke image reference')
+  return value
+}
+function assertSafeTemporaryDirectory(
+  path: string,
+  temporaryRoot: string,
+): void {
+  const absolute = resolve(path)
+  const temporaryRootPath = resolve(temporaryRoot)
+  const rel = relative(temporaryRootPath, absolute)
+  if (
+    absolute === '/' ||
+    absolute === temporaryRootPath ||
+    rel === '' ||
+    rel.startsWith('..') ||
+    rel.startsWith('/') ||
+    !/^nest-js-starter-smoke-[1-9]\d*-[A-Za-z0-9_-]+$/u.test(
+      absolute.split('/').at(-1) ?? '',
+    )
+  )
+    throw new Error('Unsafe OCI smoke temporary directory')
+}
+function createSmokeSecrets(): SmokeSecrets {
+  const values = Array.from({ length: 6 }, () =>
+    randomBytes(32).toString('base64url'),
+  )
+  if (new Set(values).size !== values.length)
+    throw new Error('OCI smoke secret generator produced duplicates')
+  const [
+    postgresPassword,
+    authSessionKeySecret,
+    authCsrfSecret,
+    authRateLimitKeySecret,
+    authNetworkMetadataSecret,
+    redisPassword,
+  ] = values
+  if (
+    [
+      postgresPassword,
+      authSessionKeySecret,
+      authCsrfSecret,
+      authRateLimitKeySecret,
+      authNetworkMetadataSecret,
+      redisPassword,
+    ].some((value) => value === undefined)
+  )
+    throw new Error('OCI smoke secret generator returned incomplete output')
+  return {
+    authCsrfSecret: authCsrfSecret!,
+    authNetworkMetadataSecret: authNetworkMetadataSecret!,
+    authRateLimitKeySecret: authRateLimitKeySecret!,
+    authSessionKeySecret: authSessionKeySecret!,
+    postgresPassword: postgresPassword!,
+    redisPassword: redisPassword!,
+  }
+}
+function createComposeArgs(
+  input: ComposeCommandInput,
+  command: readonly string[],
+): string[] {
+  const directory = dirname(input.envFilePath).split('/').at(-1)
+  if (
+    !projectPattern.test(input.projectName) ||
+    input.composeFiles.length === 0 ||
+    (directory !== input.projectName &&
+      !directory?.startsWith(`${input.projectName}-`)) ||
+    command.length === 0
+  )
+    throw new Error('Invalid OCI smoke Compose command inputs')
+  return [
+    'compose',
+    '--env-file',
+    input.envFilePath,
+    '--project-name',
+    input.projectName,
+    ...input.composeFiles.flatMap((file) => ['--file', file]),
+    ...command,
+  ]
+}
+async function waitForHttpReady(url: string): Promise<void> {
+  const deadline = Date.now() + 30_000
+  while (Date.now() <= deadline) {
+    try {
+      if (
+        (await fetch(url, { signal: AbortSignal.timeout(500) })).status === 200
+      )
+        return
+    } catch {
+      /* retry */
+    }
+    await delay(500)
+  }
+  throw new Error('OCI image did not become ready within 30000ms')
+}
+function parseImageInspection(value: unknown, revision: string): void {
+  const record =
+    Array.isArray(value) && typeof value[0] === 'object' && value[0] !== null
+      ? (value[0] as Record<string, unknown>)
+      : undefined
+  const config = record?.['Config']
+  const c =
+    typeof config === 'object' && config !== null
+      ? (config as Record<string, unknown>)
+      : undefined
+  const labels =
+    typeof c?.['Labels'] === 'object' && c['Labels'] !== null
+      ? (c['Labels'] as Record<string, unknown>)
+      : undefined
+  const cmd = c?.['Cmd']
+  const user = c?.['User']
+  if (
+    user !== 'node' ||
+    !Array.isArray(cmd) ||
+    cmd.length !== 2 ||
+    cmd[0] !== 'node' ||
+    cmd[1] !== 'dist/bootstrap/api/main.js' ||
+    labels?.['org.opencontainers.image.revision'] !== revision ||
+    typeof labels?.['org.opencontainers.image.source'] !== 'string' ||
+    !/^https:\/\//u.test(labels['org.opencontainers.image.source'])
+  )
+    throw new Error('Invalid OCI image runtime configuration')
+}
+function assertRuntimeProbe(probe: RuntimeProbe): void {
+  const required = [
+    '/app/dist',
+    '/app/node_modules',
+    '/app/package.json',
+    '/app/prisma',
+    '/app/prisma.config.ts',
+  ]
+  if (
+    !Number.isInteger(probe.uid) ||
+    probe.uid <= 0 ||
+    !Number.isInteger(probe.gid) ||
+    probe.gid <= 0 ||
+    probe.forbiddenPaths.length > 0 ||
+    probe.devBinaries.length > 0 ||
+    required.some((path) => !probe.requiredPaths.includes(path))
+  )
+    throw new Error('Invalid OCI image runtime filesystem')
+}
 
 interface CommandOutcome {
   readonly exitCode: number
@@ -117,12 +280,9 @@ function createEnvironment(
     API_DOCS_MODE: 'off',
     API_HOST: '0.0.0.0',
     API_PORT: '3000',
-    AUTH_COOKIE_SECURE: 'true',
-    AUTH_CSRF_ORIGINS: publicOrigin,
     AUTH_CSRF_SECRET: secrets.authCsrfSecret,
     AUTH_NETWORK_METADATA_SECRET: secrets.authNetworkMetadataSecret,
     AUTH_RATE_LIMIT_KEY_SECRET: secrets.authRateLimitKeySecret,
-    AUTH_SESSION_COOKIE_NAME: '__Host-session',
     AUTH_SESSION_KEY_SECRET: secrets.authSessionKeySecret,
     CORS_ORIGINS: publicOrigin,
     DATABASE_URL: `postgresql://${postgresUser}:${secrets.postgresPassword}@postgres:5432/${postgresDatabase}?schema=public`,
@@ -179,7 +339,7 @@ async function main(): Promise<void> {
     `nest-js-starter-smoke-${process.pid}`,
   )
   const temporaryDirectory = await mkdtemp(join(tmpdir(), `${projectName}-`))
-  assertSafeTemporaryDirectory(temporaryDirectory, homedir())
+  assertSafeTemporaryDirectory(temporaryDirectory, tmpdir())
   const envFilePath = join(temporaryDirectory, 'runtime.env')
   const composeInput: ComposeCommandInput = {
     composeFiles: [
@@ -280,10 +440,7 @@ async function main(): Promise<void> {
       ).stdout,
     )
     const baseUrl = `http://127.0.0.1:${publishedPort}`
-    await waitForHttpReady(`${baseUrl}/health/ready`, {
-      intervalMs: 500,
-      timeoutMs: 30_000,
-    })
+    await waitForHttpReady(`${baseUrl}/health/ready`)
     await assertAuthContract(baseUrl)
 
     const apiId = (
@@ -336,7 +493,7 @@ async function main(): Promise<void> {
         '--remove-orphans',
       ]),
     )
-    assertSafeTemporaryDirectory(temporaryDirectory, homedir())
+    assertSafeTemporaryDirectory(temporaryDirectory, tmpdir())
     await rm(temporaryDirectory, { recursive: true })
     if (failure === undefined && cleanup.exitCode !== 0) {
       failure = new Error(`OCI smoke cleanup failed: ${cleanup.stderr}`)

@@ -26,7 +26,5 @@ export function createOpenApiRuntimeConfig(): ApplicationRuntimeConfig {
     AUTH_CSRF_SECRET: contractSecrets[1],
     AUTH_RATE_LIMIT_KEY_SECRET: contractSecrets[2],
     AUTH_NETWORK_METADATA_SECRET: contractSecrets[3],
-    AUTH_CSRF_ORIGINS:
-      'https://app.example.invalid,https://api.example.invalid',
   })
 }

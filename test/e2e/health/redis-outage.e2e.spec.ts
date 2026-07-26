@@ -23,11 +23,7 @@ describe('coordination Redis outage readiness', () => {
       startPostgresContainer(),
       startRedisContainer(),
     ])
-    const { runtime, baseUrl } = await startTestRuntime(postgres, redis, {
-      REDIS_CONNECT_TIMEOUT_MS: '250',
-      REDIS_COMMAND_TIMEOUT_MS: '250',
-      REDIS_HEALTH_TIMEOUT_MS: '350',
-    })
+    const { runtime, baseUrl } = await startTestRuntime(postgres, redis)
     try {
       expect((await fetch(`${baseUrl}/health/ready`)).status).toBe(200)
       await suspendRedis(redis)

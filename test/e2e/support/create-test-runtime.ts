@@ -33,7 +33,6 @@ export async function startTestRuntime(
     AUTH_CSRF_SECRET: Buffer.alloc(32, 2).toString('base64url'),
     AUTH_RATE_LIMIT_KEY_SECRET: Buffer.alloc(32, 3).toString('base64url'),
     AUTH_NETWORK_METADATA_SECRET: Buffer.alloc(32, 4).toString('base64url'),
-    AUTH_CSRF_ORIGINS: baseUrl,
     API_HOST: '127.0.0.1',
     API_PORT: String(port),
     PUBLIC_API_URL: baseUrl,
@@ -54,13 +53,10 @@ export function clearTestRuntimeEnvironment(): void {
     'AUTH_CSRF_SECRET',
     'AUTH_RATE_LIMIT_KEY_SECRET',
     'AUTH_NETWORK_METADATA_SECRET',
-    'AUTH_CSRF_ORIGINS',
     'API_HOST',
     'API_PORT',
     'PUBLIC_API_URL',
     'CORS_ORIGINS',
-    'DATABASE_CONNECTION_TIMEOUT_MS',
-    'DATABASE_HEALTH_TIMEOUT_MS',
   ]) {
     delete process.env[key]
   }

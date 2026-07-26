@@ -13,7 +13,6 @@ describe('ApiModule composition', () => {
       AUTH_CSRF_SECRET: Buffer.alloc(32, 2).toString('base64url'),
       AUTH_RATE_LIMIT_KEY_SECRET: Buffer.alloc(32, 3).toString('base64url'),
       AUTH_NETWORK_METADATA_SECRET: Buffer.alloc(32, 4).toString('base64url'),
-      AUTH_CSRF_ORIGINS: 'http://localhost:3000',
       OTEL_SDK_DISABLED: 'true',
     }
     const config = buildApiRuntimeConfig(rawEnvironment)

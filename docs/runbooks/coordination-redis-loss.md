@@ -8,8 +8,9 @@
 - login и cookie-auth endpoints возвращают безопасный
   `AUTH_DEPENDENCY_UNAVAILABLE` без connection URL/driver details.
 
-Это ожидаемый fail-closed режим. Не переключайте auth на cache Redis и не
-отключайте readiness check.
+Это ожидаемый fail-closed режим. Не отключайте readiness check и не подменяйте
+authoritative coordination instance другим Redis без принятого решения о
+принудительном logout всех пользователей.
 
 ## Проверка и восстановление
 
@@ -17,8 +18,7 @@
    eviction policy для coordination instance. Не печатайте URL с credentials.
 2. Проверьте CPU, память, диск/AOF и сетевой путь Redis.
 3. Восстановите тот же authoritative instance или согласованно восстановленный
-   набор данных. Не подменяйте его пустым cache instance без принятого решения о
-   принудительном logout всех пользователей.
+   набор данных.
 4. Дождитесь bounded reconnect и `/health/ready` = `200`.
 5. Проверьте login и существующую session. При утрате session data пользователи
    войдут заново; durable users/passwords остаются в PostgreSQL.

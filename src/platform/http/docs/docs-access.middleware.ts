@@ -2,7 +2,7 @@ import type { RequestHandler } from 'express'
 
 import type { RequestContext } from '../context/request-context'
 import type { ProblemDocument } from '../errors/problem.contracts'
-import { PROBLEM_REGISTRY } from '../errors/problem-registry'
+import { getProblemDefinition } from '../errors/problem-registry'
 import type {
   DocsAccessDecision,
   DocsAccessPolicy,
@@ -25,7 +25,7 @@ function writeDenial(
   requestContext: RequestContext,
   response: Parameters<RequestHandler>[1],
 ): void {
-  const definition = PROBLEM_REGISTRY.get(decision.problemCode)
+  const definition = getProblemDefinition(decision.problemCode)
   const requestId = requestContext.getRequestId()
   if (requestId === undefined) {
     throw new Error('Docs access middleware requires an active request context')

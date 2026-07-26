@@ -2,6 +2,7 @@ import {
   createAuthTestRuntime,
   type AuthE2eRuntime,
 } from '@test/e2e/support/create-auth-test-runtime'
+import { runtimeDefaults } from '@/platform/config/runtime-defaults'
 
 interface LoginResult {
   readonly cookie: string
@@ -61,10 +62,7 @@ describe('multi-instance browser authentication', () => {
   let apiB: string
 
   beforeAll(async () => {
-    runtime = await createAuthTestRuntime(2, {
-      AUTH_LOGIN_IP_LIMIT: '100',
-      AUTH_LOGIN_ACCOUNT_LIMIT: '2',
-    })
+    runtime = await createAuthTestRuntime(2)
     ;[apiA, apiB] = runtime.instances.map(({ baseUrl }) => baseUrl) as [
       string,
       string,
@@ -172,8 +170,12 @@ describe('multi-instance browser authentication', () => {
   it('shares one atomic account limit across concurrent instance requests', async () => {
     const email = 'rate-limit@example.com'
     await runtime.createUser(email)
+    const instanceUrls = [apiA, apiB] as const
     const statuses = await Promise.all(
-      [apiA, apiB, apiA, apiB].map(async (baseUrl) => {
+      Array.from(
+        { length: runtimeDefaults.auth.loginAccountLimit + 2 },
+        (_, index) => instanceUrls[index % instanceUrls.length]!,
+      ).map(async (baseUrl) => {
         const response = await fetch(`${baseUrl}/v1/auth/login`, {
           method: 'POST',
           headers: { 'content-type': 'application/json', origin: baseUrl },
@@ -183,7 +185,9 @@ describe('multi-instance browser authentication', () => {
       }),
     )
 
-    expect(statuses.filter((status) => status === 200)).toHaveLength(2)
+    expect(statuses.filter((status) => status === 200)).toHaveLength(
+      runtimeDefaults.auth.loginAccountLimit,
+    )
     expect(statuses.filter((status) => status === 429)).toHaveLength(2)
   })
 })

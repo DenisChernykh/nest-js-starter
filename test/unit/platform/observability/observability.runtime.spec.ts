@@ -6,7 +6,7 @@ describe('ObservabilityRuntime', () => {
     await expect(
       runtime.close(new AbortController().signal),
     ).resolves.toBeUndefined()
-    expect(runtime).toMatchObject({ name: 'opentelemetry', order: 400 })
+    expect(runtime).toBeInstanceOf(ObservabilityRuntime)
   })
 
   it('shares one SDK shutdown across callers', async () => {

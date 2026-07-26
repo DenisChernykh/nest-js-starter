@@ -6,27 +6,12 @@ import type { NestExpressApplication } from '@nestjs/platform-express'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import type { ApplicationRuntimeConfig } from '@/platform/config/runtime-config.types'
 import { createApiRuntimeConfig } from '@/platform/config/runtime-environment'
-import type {
-  DatabaseLifecycle,
-  DatabaseReadinessProbe,
-} from '@/platform/database/database.contracts'
-import {
-  DATABASE_LIFECYCLE,
-  DATABASE_READINESS_PROBE,
-} from '@/platform/database/database.tokens'
+import type { DatabaseLifecycle } from '@/platform/database/database.contracts'
+import { DATABASE_LIFECYCLE } from '@/platform/database/database.tokens'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
-import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
-import { ShutdownRegistry } from '@/platform/lifecycle/shutdown-registry'
-import { StartupRegistry } from '@/platform/lifecycle/startup-registry'
 import type { RedisLifecycle } from '@/platform/redis/redis-lifecycle'
-import type { RedisReadinessIndicator } from '@/platform/redis/redis-readiness.indicator'
-import {
-  REDIS_LIFECYCLE,
-  REDIS_READINESS_INDICATOR,
-} from '@/platform/redis/redis.tokens'
-import type { ShutdownParticipant } from '@/platform/lifecycle/shutdown-participant'
-import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
+import { REDIS_LIFECYCLE } from '@/platform/redis/redis.tokens'
 import { ActiveRequestTracker } from '@/platform/http/bootstrap/active-request-tracker'
 import { RequestContext } from '@/platform/http/context/request-context'
 import {
@@ -41,7 +26,6 @@ import {
   STRUCTURED_LOGGER,
   type StructuredLogger,
 } from '@/platform/logging/logging.contracts'
-import { HttpMetrics } from '@/platform/observability/http-metrics'
 import type { ObservabilityRuntime } from '@/platform/observability/observability.runtime'
 
 import { ApiModule } from './api.module'
@@ -67,20 +51,14 @@ export interface ApiLifecycleHandle {
 }
 
 /** Startup operations required by runtime orchestration without DI internals. */
-export interface ApiStartupHandle {
-  startAll(signal: AbortSignal): Promise<void>
-  stopStarted(signal: AbortSignal): Promise<void>
-}
-
 /** Resources created before the explicit database startup step. */
 export interface ApiRuntimeResources {
   readonly application: ApiApplicationHandle
   readonly database: DatabaseLifecycle
   readonly lifecycle: ApiLifecycleHandle
   readonly requestTracker?: ActiveRequestTracker
-  readonly operationTracker?: ActiveOperationTracker
-  readonly shutdownRegistry?: ShutdownRegistry
-  readonly startupRegistry?: ApiStartupHandle
+  readonly redis: RedisLifecycle
+  readonly observability?: ObservabilityRuntime
   readonly httpDrainTimeoutMs?: number
   readonly shutdownGraceMs?: number
 }
@@ -104,39 +82,12 @@ export async function configureApi(
   app.useLogger(app.get(NestLoggerAdapter))
   const config = app.get(RuntimeConfigService)
   const lifecycle = app.get(ApplicationLifecycleState)
-  const registry = app.get(HealthRegistry)
-  const probe = app.get<DatabaseReadinessProbe>(DATABASE_READINESS_PROBE)
   const database = app.get<DatabaseLifecycle>(DATABASE_LIFECYCLE)
   const requestTracker = app.get(ActiveRequestTracker)
   const requestContext = app.get(RequestContext)
   const correlation = app.get(CorrelationFieldsProvider)
   const logger = app.get<StructuredLogger>(STRUCTURED_LOGGER)
-  const httpMetrics = app.get(HttpMetrics)
-  const operationTracker = app.get(ActiveOperationTracker)
-  const shutdownRegistry = app.get(ShutdownRegistry)
-  const startupRegistry = app.get(StartupRegistry)
   const redis = app.get<RedisLifecycle>(REDIS_LIFECYCLE)
-  const redisProbe = app.get<RedisReadinessIndicator>(REDIS_READINESS_INDICATOR)
-  registry.register(probe)
-  registry.register(redisProbe)
-  registry.seal()
-  startupRegistry.register({
-    name: 'database',
-    order: 100,
-    start: (signal) => database.connect(signal),
-    stop: (signal) => database.close(signal),
-  })
-  startupRegistry.register({
-    name: 'redis',
-    order: 200,
-    start: (signal) => redis.connect(signal),
-    stop: (signal) => redis.close(signal),
-  })
-  startupRegistry.seal()
-  shutdownRegistry.register(redis)
-  shutdownRegistry.register(database as DatabaseLifecycle & ShutdownParticipant)
-  if (observability !== undefined) shutdownRegistry.register(observability)
-  shutdownRegistry.seal()
   configureHttpApplication(
     app,
     config,
@@ -145,7 +96,6 @@ export async function configureApi(
     requestTracker,
     createHttpAccessLogMiddleware({
       logger,
-      metrics: httpMetrics,
       correlation,
     }),
   )
@@ -158,11 +108,10 @@ export async function configureApi(
 
   return {
     database,
+    redis,
     lifecycle,
     requestTracker,
-    operationTracker,
-    shutdownRegistry,
-    startupRegistry,
+    ...(observability === undefined ? {} : { observability }),
     httpDrainTimeoutMs: config.http.drainTimeoutMs,
     shutdownGraceMs: config.http.shutdownGraceMs,
     application: {

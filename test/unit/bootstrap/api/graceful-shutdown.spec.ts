@@ -2,20 +2,17 @@ import { GracefulShutdownCoordinator } from '@/bootstrap/api/graceful-shutdown'
 import type { ApiRuntime } from '@/bootstrap/api/api-runtime'
 
 describe('GracefulShutdownCoordinator', () => {
-  it('drains before listener close, then participants and app, and shares result', async () => {
+  it('drains HTTP and closes Redis, database, OTel in order', async () => {
     const calls: string[] = []
     const resources = {
       lifecycle: {
         phase: 'ready',
-        markReady: jest.fn(),
         beginDrain: jest.fn(() => {
           calls.push('drain')
           return true
         }),
       },
       application: {
-        listen: jest.fn(),
-        address: jest.fn(),
         closeListener: jest.fn(() => {
           calls.push('server.close')
           return Promise.resolve()
@@ -27,20 +24,23 @@ describe('GracefulShutdownCoordinator', () => {
           return Promise.resolve()
         }),
       },
-      database: { connect: jest.fn(), close: jest.fn() },
       requestTracker: { waitForIdle: jest.fn(() => Promise.resolve(true)) },
-      operationTracker: {
-        waitForIdle: jest.fn(() => Promise.resolve(true)),
-        abortAll: jest.fn(),
+      redis: {
+        close: jest.fn(() => {
+          calls.push('redis.close')
+          return Promise.resolve()
+        }),
       },
-      shutdownRegistry: {
-        closeAll: jest.fn(() => {
-          calls.push('participants')
-          return Promise.resolve({
-            completed: ['database'],
-            failed: [],
-            timedOut: false,
-          })
+      database: {
+        close: jest.fn(() => {
+          calls.push('database.close')
+          return Promise.resolve()
+        }),
+      },
+      observability: {
+        close: jest.fn(() => {
+          calls.push('otel.close')
+          return Promise.resolve()
         }),
       },
       httpDrainTimeoutMs: 50,
@@ -58,30 +58,26 @@ describe('GracefulShutdownCoordinator', () => {
       'drain',
       'server.close',
       'idle.close',
-      'participants',
+      'redis.close',
+      'database.close',
+      'otel.close',
       'app.close',
     ])
   })
-
-  it('aborts operations, force-closes transport and exits 1 after HTTP deadline', async () => {
-    const abortAll = jest.fn()
+  it('force-closes transport when active requests miss the drain deadline', async () => {
     const closeAllConnections = jest.fn()
     const runtime = {
       cancelStartup: jest.fn(),
       currentResources: {
-        lifecycle: { phase: 'draining' },
         application: {
           closeListener: () => Promise.resolve(),
           closeIdleConnections: jest.fn(),
           closeAllConnections,
           close: () => Promise.resolve(),
         },
-        database: { close: () => Promise.resolve() },
         requestTracker: { waitForIdle: () => Promise.resolve(false) },
-        operationTracker: {
-          waitForIdle: () => Promise.resolve(false),
-          abortAll,
-        },
+        redis: { close: () => Promise.resolve() },
+        database: { close: () => Promise.resolve() },
         httpDrainTimeoutMs: 5,
         shutdownGraceMs: 20,
       },
@@ -89,7 +85,6 @@ describe('GracefulShutdownCoordinator', () => {
     await expect(
       new GracefulShutdownCoordinator(runtime).shutdown('SIGTERM'),
     ).resolves.toEqual({ exitCode: 1, forced: true })
-    expect(abortAll).toHaveBeenCalledTimes(1)
     expect(closeAllConnections).toHaveBeenCalledTimes(1)
   })
 })

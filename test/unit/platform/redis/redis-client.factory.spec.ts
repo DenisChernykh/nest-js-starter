@@ -1,5 +1,5 @@
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'
-import type { RedisManagedClient } from '@/platform/redis/redis-capability'
+import type { RedisManagedClient } from '@/platform/redis/redis-client.factory'
 
 function managedClient(): RedisManagedClient {
   return {

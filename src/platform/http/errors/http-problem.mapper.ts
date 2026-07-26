@@ -4,7 +4,7 @@ import type {
   ProblemFieldError,
   RegisteredProblemDefinition,
 } from './problem.contracts'
-import { PROBLEM_REGISTRY, type ProblemCode } from './problem-registry'
+import { getProblemDefinition, type ProblemCode } from './problem-registry'
 import { RequestValidationError } from './request-validation.error'
 
 /** Exhaustive transport translation table verified against AuthFailureCode. */
@@ -49,7 +49,7 @@ export interface MappedHttpProblem {
 export function mapHttpProblem(error: unknown): MappedHttpProblem {
   if (error instanceof RequestValidationError) {
     return {
-      definition: PROBLEM_REGISTRY.get('VALIDATION_FAILED'),
+      definition: getProblemDefinition('VALIDATION_FAILED'),
       errors: error.errors,
       unexpected: false,
     }
@@ -59,7 +59,7 @@ export function mapHttpProblem(error: unknown): MappedHttpProblem {
   if (authCode !== undefined) {
     const problemCode = AUTH_FAILURE_PROBLEM_CODES[authCode]
     return {
-      definition: PROBLEM_REGISTRY.get(problemCode),
+      definition: getProblemDefinition(problemCode),
       ...(authCode === 'AUTH_RATE_LIMITED'
         ? { retryAfterSeconds: readRetryAfterSeconds(error) }
         : {}),
@@ -69,7 +69,7 @@ export function mapHttpProblem(error: unknown): MappedHttpProblem {
 
   if (isPayloadTooLargeError(error)) {
     return {
-      definition: PROBLEM_REGISTRY.get('PAYLOAD_TOO_LARGE'),
+      definition: getProblemDefinition('PAYLOAD_TOO_LARGE'),
       unexpected: false,
     }
   }
@@ -78,14 +78,14 @@ export function mapHttpProblem(error: unknown): MappedHttpProblem {
     const problemCode = httpProblemCodes[error.getStatus()]
     if (problemCode !== undefined) {
       return {
-        definition: PROBLEM_REGISTRY.get(problemCode),
+        definition: getProblemDefinition(problemCode),
         unexpected: false,
       }
     }
   }
 
   return {
-    definition: PROBLEM_REGISTRY.get('INTERNAL_ERROR'),
+    definition: getProblemDefinition('INTERNAL_ERROR'),
     unexpected: true,
   }
 }

@@ -4,8 +4,6 @@ import type {
 } from './problem.contracts'
 
 const problemBaseUri = 'https://nest-js-starter.invalid/problems'
-const validSlug = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u
-const validCode = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/u
 
 const problemDefinitions = [
   {
@@ -90,74 +88,33 @@ const problemDefinitions = [
 /** Stable machine codes owned by the starter problem catalogue. */
 export type ProblemCode = (typeof problemDefinitions)[number]['code']
 
-/** Validated immutable lookup for starter-owned problem definitions. */
-export class ProblemRegistry {
-  public readonly definitions: readonly RegisteredProblemDefinition[]
-  private readonly definitionsByCode: ReadonlyMap<
-    string,
-    RegisteredProblemDefinition
-  >
+/** Immutable RFC 9457 definitions used by every HTTP error mapper. */
+export const PROBLEM_CATALOG: readonly RegisteredProblemDefinition[] =
+  Object.freeze(
+    problemDefinitions.map((definition) =>
+      Object.freeze({
+        ...definition,
+        type: `${problemBaseUri}/${definition.slug}`,
+      }),
+    ),
+  )
 
-  /**
-   * Validates and freezes a complete set of problem definitions.
-   *
-   * @param definitions - Candidate definitions from the committed catalogue.
-   * @throws Error when any field is invalid or slug/code uniqueness is broken.
-   */
-  public constructor(definitions: readonly ProblemDefinition[]) {
-    const slugs = new Set<string>()
-    const codes = new Set<string>()
-    const registered = definitions.map((definition) => {
-      const type = `${problemBaseUri}/${definition.slug}`
-      if (
-        !validSlug.test(definition.slug) ||
-        !validCode.test(definition.code) ||
-        !Number.isInteger(definition.status) ||
-        definition.status < 400 ||
-        definition.status > 599 ||
-        definition.title.length === 0 ||
-        definition.detail.length === 0 ||
-        slugs.has(definition.slug) ||
-        codes.has(definition.code) ||
-        !isAbsoluteHttpsUrl(type)
-      ) {
-        throw new Error('Invalid problem registry')
-      }
-      slugs.add(definition.slug)
-      codes.add(definition.code)
-      return Object.freeze({ ...definition, type })
-    })
+const definitionsByCode: ReadonlyMap<ProblemCode, RegisteredProblemDefinition> =
+  new Map<ProblemCode, RegisteredProblemDefinition>(
+    PROBLEM_CATALOG.map(
+      (definition) =>
+        [definition.code as ProblemCode, definition] as readonly [
+          ProblemCode,
+          RegisteredProblemDefinition,
+        ],
+    ),
+  )
 
-    this.definitions = Object.freeze(registered)
-    this.definitionsByCode = new Map(
-      this.definitions.map((definition) => [definition.code, definition]),
-    )
-    Object.freeze(this)
-  }
-
-  /**
-   * Resolves one known definition without a fallback that could hide drift.
-   *
-   * @param code - Stable machine code to resolve.
-   * @returns The frozen registered definition.
-   * @throws Error when code is absent from the committed catalogue.
-   */
-  public get(code: string): RegisteredProblemDefinition {
-    const definition = this.definitionsByCode.get(code)
-    if (definition === undefined) {
-      throw new Error(`Unknown problem code: ${code}`)
-    }
-    return definition
-  }
+/** Returns one known immutable problem definition without a wire fallback. */
+export function getProblemDefinition(
+  code: ProblemCode,
+): RegisteredProblemDefinition {
+  const definition = definitionsByCode.get(code)
+  if (definition === undefined) throw new Error(`Unknown problem code: ${code}`)
+  return definition
 }
-
-function isAbsoluteHttpsUrl(value: string): boolean {
-  try {
-    return new URL(value).protocol === 'https:'
-  } catch {
-    return false
-  }
-}
-
-/** Process-wide immutable canonical problem registry. */
-export const PROBLEM_REGISTRY = new ProblemRegistry(problemDefinitions)

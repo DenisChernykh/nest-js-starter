@@ -1,8 +1,7 @@
 import type { StartedRedisContainer } from '@testcontainers/redis'
 
-import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'
-import { RedisConnectionRegistry } from '@/platform/redis/redis-connection.registry'
+import { RedisCoordinationConnectionManager } from '@/platform/redis/redis-coordination.connection'
 import { RedisLifecycle } from '@/platform/redis/redis-lifecycle'
 import { RedisReadinessIndicator } from '@/platform/redis/redis-readiness.indicator'
 import { startRedisContainer } from '@test/integration/support/redis-container'
@@ -20,25 +19,22 @@ describe('Redis lifecycle', () => {
   })
 
   function createRuntime(commandTimeoutMs = 250): {
-    readonly registry: RedisConnectionRegistry
+    readonly connection: RedisCoordinationConnectionManager
     readonly lifecycle: RedisLifecycle
     readonly readiness: RedisReadinessIndicator
   } {
-    const registry = new RedisConnectionRegistry(
+    const connection = new RedisCoordinationConnectionManager(
       new RedisClientFactory({ connectTimeoutMs: 1_000, commandTimeoutMs }),
-      new ActiveOperationTracker(),
       {
         coordinationUrl: container.getConnectionUrl(),
         connectTimeoutMs: 1_000,
         commandTimeoutMs,
       },
     )
-    registry.register('coordination', true)
-    registry.seal()
     return {
-      registry,
-      lifecycle: new RedisLifecycle(registry, 1_000),
-      readiness: new RedisReadinessIndicator(registry, commandTimeoutMs),
+      connection,
+      lifecycle: new RedisLifecycle(connection, 1_000),
+      readiness: new RedisReadinessIndicator(connection, commandTimeoutMs),
     }
   }
 
@@ -61,27 +57,24 @@ describe('Redis lifecycle', () => {
   })
 
   it('settles a paused command by destroying its socket and reconnects', async () => {
-    const { registry, lifecycle, readiness } = createRuntime(25)
+    const { connection, lifecycle, readiness } = createRuntime(25)
     await lifecycle.connect(AbortSignal.timeout(2_000))
-    await registry
-      .executor('coordination')
-      .execute('pause', (client) =>
-        client.sendCommand(['CLIENT', 'PAUSE', '150']),
-      )
+    await connection.commandExecutor.execute('pause', (client) =>
+      client.sendCommand(['CLIENT', 'PAUSE', '150']),
+    )
 
     await expect(
-      registry
-        .executor('coordination')
-        .execute('ping-during-pause', (client) => client.ping()),
+      connection.commandExecutor.execute('ping-during-pause', (client) =>
+        client.ping(),
+      ),
     ).rejects.toThrow('Redis command deadline exceeded')
-    expect(registry.client('coordination').isOpen).toBe(false)
 
     await waitForCondition(async () => {
       try {
         return (
-          (await registry
-            .executor('coordination')
-            .execute('recovery-ping', (client) => client.ping())) === 'PONG'
+          (await connection.commandExecutor.execute('recovery-ping', (client) =>
+            client.ping(),
+          )) === 'PONG'
         )
       } catch {
         return false

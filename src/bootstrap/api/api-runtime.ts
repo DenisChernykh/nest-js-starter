@@ -74,11 +74,8 @@ export class ApiRuntime {
       this.ensureStartupAllowed(signal)
       await this.resources.application.listen()
       this.ensureStartupAllowed(signal)
-      if (this.resources.startupRegistry !== undefined) {
-        await this.resources.startupRegistry.startAll(signal)
-      } else {
-        await this.resources.database.connect(signal)
-      }
+      await this.resources.database.connect(signal)
+      await this.resources.redis.connect(signal)
       this.ensureStartupAllowed(signal)
       this.resources.lifecycle.markReady()
       return this.resources.application.address()
@@ -95,11 +92,9 @@ export class ApiRuntime {
     if (resources === undefined) return
     this.cleanupPromise ??= (async () => {
       const cleanupSignal = new AbortController().signal
-      await Promise.allSettled([
-        resources.application.close(),
-        resources.startupRegistry?.stopStarted(cleanupSignal) ??
-          resources.database.close(cleanupSignal),
-      ])
+      await resources.redis.close(cleanupSignal).catch(() => undefined)
+      await resources.database.close(cleanupSignal).catch(() => undefined)
+      await resources.application.close().catch(() => undefined)
     })()
     await this.cleanupPromise
   }
