@@ -33,6 +33,8 @@ Before a change window:
    compatible with the schema after this promotion.
 
 ```sh
+set -eu
+
 test -n "$CANDIDATE_IMAGE_REF" || {
   echo 'CANDIDATE_IMAGE_REF is required' >&2
   exit 1
@@ -50,6 +52,10 @@ test -n "$PUBLIC_API_URL" || {
   exit 1
 }
 candidate_revision='ddfacb316ecb721e4e0a7d2967816b8bbfd875f0'
+printf '%s' "$CANDIDATE_IMAGE_REF" | grep -Eq '@sha256:[[:xdigit:]]{64}$' || {
+  echo 'CANDIDATE_IMAGE_REF must be an immutable digest reference' >&2
+  exit 1
+}
 
 docker pull "$CANDIDATE_IMAGE_REF"
 docker image inspect "$CANDIDATE_IMAGE_REF" \
@@ -100,11 +106,20 @@ All three health endpoints must return <code>200</code>;
 authentication problem, not a redirect or HTML page.
 
 ```sh
+set -eu
+
 public_api_url="$(printf '%s' "$PUBLIC_API_URL" | sed 's:/$::')"
 
-curl --fail-with-body --silent --show-error "$public_api_url/health/live"
-curl --fail-with-body --silent --show-error "$public_api_url/health/startup"
-curl --fail-with-body --silent --show-error "$public_api_url/health/ready"
+check_health() {
+  local status
+  status="$(curl --silent --show-error --output /dev/null \
+    --write-out '%{http_code}' "$public_api_url$1")"
+  test "$status" = '200'
+}
+
+check_health /health/live
+check_health /health/startup
+check_health /health/ready
 
 auth_body="$(mktemp)"
 auth_headers="$(mktemp)"

@@ -25,6 +25,7 @@ consumer of <code>MIGRATION_DATABASE_URL</code>.
 
 ```sh
 # Disable tracing before expanding any secret variable.
+set -eu
 set +x
 
 test -n "$DOKPLOY_BASE_URL" || {
@@ -67,6 +68,10 @@ test -n "$GHCR_PASSWORD" || {
 dokploy_base_url="$(printf '%s' "$DOKPLOY_BASE_URL" | sed 's:/$::')"
 candidate_revision='ddfacb316ecb721e4e0a7d2967816b8bbfd875f0'
 deployment_title="stage-$candidate_revision"
+printf '%s' "$CANDIDATE_IMAGE_REF" | grep -Eq '@sha256:[[:xdigit:]]{64}$' || {
+  echo 'CANDIDATE_IMAGE_REF must be an immutable digest reference' >&2
+  exit 1
+}
 
 # Keep the API key out of curl's argv and logs. The config file is removed on
 # normal exit and signals.

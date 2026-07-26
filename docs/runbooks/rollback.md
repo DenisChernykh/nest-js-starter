@@ -53,11 +53,17 @@ if the public contract is unhealthy.
    <code>AUTHENTICATION_REQUIRED</code> and JSON <code>status: 401</code>.
 
 ```sh
+set -eu
+
 test -n "$PREVIOUS_IMAGE_REF" || {
   echo 'PREVIOUS_IMAGE_REF is required' >&2
   exit 1
 }
 previous_revision='913fef3124b5ec3b2aee3505dcc7ad96052d24e2'
+printf '%s' "$PREVIOUS_IMAGE_REF" | grep -Eq '@sha256:[[:xdigit:]]{64}$' || {
+  echo 'PREVIOUS_IMAGE_REF must be an immutable digest reference' >&2
+  exit 1
+}
 
 docker pull "$PREVIOUS_IMAGE_REF"
 docker image inspect "$PREVIOUS_IMAGE_REF" \
