@@ -42,10 +42,16 @@ there. The API does not run migrations; run the migrator role first.
 
 ## Repository guide
 
+- `docs/roadmap.md` — accepted foundation, remaining operational milestones and capability adoption rules;
 - `docs/architecture/module-boundaries.md` — five module layers and allowed dependencies;
 - `docs/architecture/runtime-lifecycle.md` — startup, readiness and shutdown;
 - `docs/architecture/openapi-contracts.md` — committed wire contract;
 - `docs/runbooks/` — local PostgreSQL, Redis loss, telemetry and image publication.
+
+The core grows only from a concrete consumer and failure model. Queues, object
+storage, self-service auth and frontend cache invalidation are documented as
+independent candidates; they do not justify a generator, manifest, recipe
+engine or global Redis/cache service.
 
 Feature branches start from `stage`, use Conventional Commits and merge to
 `stage` through pull requests. No deployment is performed by local checks.
