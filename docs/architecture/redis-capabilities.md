@@ -14,3 +14,10 @@ command.
 
 Cache and pub/sub abstractions are intentionally absent. Redis logical
 database numbers, `KEYS` and unchecked JSON remain prohibited.
+
+Future queues, durable events or application caching do not automatically use
+this connection. They require an adopted use case and an explicit availability,
+persistence, eviction and lifecycle contract. For example, BullMQ would own
+separate connections and a separate queue URL rather than extending the
+coordination manager. See `docs/roadmap.md` for the capability acceptance
+protocol.
