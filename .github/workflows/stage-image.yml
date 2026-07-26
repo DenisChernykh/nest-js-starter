@@ -81,6 +81,8 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: 1
+      - name: Pull published image for smoke
+        run: docker pull "${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}"
       - name: Smoke published image
         run: corepack pnpm@11.15.1 exec tsx scripts/oci/run-image-smoke.ts -- --image "${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}" --revision "${{ github.sha }}"
       - name: Print immutable digest
