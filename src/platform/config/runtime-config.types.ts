@@ -23,16 +23,11 @@ export interface LoggingRuntimeConfig {
   readonly serviceRevision: string
 }
 
-/** Immutable standard OpenTelemetry SDK and OTLP HTTP exporter settings. */
+/** Immutable OpenTelemetry SDK and OTLP trace exporter settings. */
 export interface OpenTelemetryRuntimeConfig {
   readonly disabled: boolean
   readonly endpoint?: string
-  readonly tracesEndpoint?: string
-  readonly metricsEndpoint?: string
-  readonly protocol: 'http/protobuf'
   readonly exporterTimeoutMs: number
-  readonly metricExportIntervalMs: number
-  readonly metricExportTimeoutMs: number
   readonly batchSpanScheduleDelayMs: number
   readonly batchSpanExportTimeoutMs: number
 }
@@ -68,11 +63,10 @@ export interface DatabaseRuntimeConfig {
 }
 
 /**
- * Immutable Redis capability URLs and bounded lifecycle deadlines.
+ * Immutable coordination Redis URL and bounded lifecycle deadlines.
  */
 export interface RedisRuntimeConfig {
   readonly coordinationUrl: string
-  readonly cacheUrl?: string
   readonly connectTimeoutMs: number
   readonly commandTimeoutMs: number
   readonly healthTimeoutMs: number
@@ -138,7 +132,6 @@ export interface SafeRuntimeConfigSummary {
   readonly trustedProxyCount: number
   readonly databasePoolMax: number
   readonly redisCoordinationConfigured: boolean
-  readonly redisCacheConfigured: boolean
   readonly authCookieName: string
 }
 
@@ -187,54 +180,19 @@ export interface ValidatedRuntimeEnvironment {
   readonly SERVICE_REVISION: string
   readonly OTEL_SDK_DISABLED: boolean
   readonly OTEL_EXPORTER_OTLP_ENDPOINT?: string
-  readonly OTEL_EXPORTER_OTLP_TRACES_ENDPOINT?: string
-  readonly OTEL_EXPORTER_OTLP_METRICS_ENDPOINT?: string
-  readonly OTEL_EXPORTER_OTLP_PROTOCOL: 'http/protobuf'
-  readonly OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: 'http/protobuf'
-  readonly OTEL_EXPORTER_OTLP_METRICS_PROTOCOL: 'http/protobuf'
-  readonly OTEL_EXPORTER_OTLP_TIMEOUT: number
-  readonly OTEL_METRIC_EXPORT_INTERVAL: number
-  readonly OTEL_METRIC_EXPORT_TIMEOUT: number
-  readonly OTEL_BSP_SCHEDULE_DELAY: number
-  readonly OTEL_BSP_EXPORT_TIMEOUT: number
   readonly API_HOST: string
   readonly API_PORT: number
   readonly PUBLIC_API_URL: string
   readonly CORS_ORIGINS: readonly string[]
   readonly TRUST_PROXY_CIDRS: readonly string[]
-  readonly HTTP_JSON_BODY_LIMIT_BYTES: number
-  readonly HTTP_REQUEST_TIMEOUT_MS: number
-  readonly HTTP_HEADERS_TIMEOUT_MS: number
-  readonly HTTP_KEEP_ALIVE_TIMEOUT_MS: number
-  readonly HTTP_DRAIN_TIMEOUT_MS: number
-  readonly SHUTDOWN_GRACE_MS: number
   readonly DATABASE_URL: string
   readonly DATABASE_POOL_MAX: number
-  readonly DATABASE_CONNECTION_TIMEOUT_MS: number
-  readonly DATABASE_IDLE_TIMEOUT_MS: number
-  readonly DATABASE_HEALTH_TIMEOUT_MS: number
-  readonly DATABASE_TRANSACTION_MAX_WAIT_MS: number
-  readonly DATABASE_TRANSACTION_TIMEOUT_MS: number
   readonly REDIS_COORDINATION_URL: string
-  readonly REDIS_CACHE_URL?: string
-  readonly REDIS_CONNECT_TIMEOUT_MS: number
-  readonly REDIS_COMMAND_TIMEOUT_MS: number
-  readonly REDIS_HEALTH_TIMEOUT_MS: number
-  readonly REDIS_SHUTDOWN_TIMEOUT_MS: number
   readonly REDIS_KEY_PREFIX: string
-  readonly AUTH_SESSION_COOKIE_NAME: string
-  readonly AUTH_COOKIE_SECURE: boolean
-  readonly AUTH_SESSION_IDLE_TIMEOUT_MS: number
-  readonly AUTH_SESSION_ABSOLUTE_TIMEOUT_MS: number
-  readonly AUTH_SESSION_TOUCH_INTERVAL_MS: number
   readonly AUTH_SESSION_KEY_SECRET: Uint8Array
   readonly AUTH_CSRF_SECRET: Uint8Array
   readonly AUTH_RATE_LIMIT_KEY_SECRET: Uint8Array
   readonly AUTH_NETWORK_METADATA_SECRET: Uint8Array
-  readonly AUTH_CSRF_ORIGINS: readonly string[]
-  readonly AUTH_LOGIN_IP_LIMIT: number
-  readonly AUTH_LOGIN_ACCOUNT_LIMIT: number
-  readonly AUTH_LOGIN_WINDOW_MS: number
 }
 
 /** Normalized environment keys accepted by a PostgreSQL-only command. */
@@ -246,9 +204,4 @@ export interface ValidatedPostgresCommandEnvironment {
   readonly SERVICE_REVISION: string
   readonly DATABASE_URL: string
   readonly DATABASE_POOL_MAX: number
-  readonly DATABASE_CONNECTION_TIMEOUT_MS: number
-  readonly DATABASE_IDLE_TIMEOUT_MS: number
-  readonly DATABASE_HEALTH_TIMEOUT_MS: number
-  readonly DATABASE_TRANSACTION_MAX_WAIT_MS: number
-  readonly DATABASE_TRANSACTION_TIMEOUT_MS: number
 }

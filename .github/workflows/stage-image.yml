@@ -27,7 +27,6 @@ jobs:
       - name: Run full gate
         run: corepack pnpm@11.15.1 run check
         env:
-          OPENAPI_BREAKING_BASE_REF: ${{ github.event.before }}
           TESTCONTAINERS_REUSE_ENABLE: 'false'
 
   publish:
@@ -60,8 +59,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Reject an existing SHA tag
-        run: corepack pnpm@11.15.1 exec tsx scripts/oci/assert-image-tag-available.ts --image "${{ steps.image.outputs.name }}" --revision "${{ github.sha }}"
       - id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -74,8 +71,6 @@ jobs:
             BUILD_REVISION=${{ github.sha }}
             BUILD_SOURCE=${{ github.server_url }}/${{ github.repository }}
             BUILD_CREATED=${{ steps.image.outputs.created }}
-          sbom: true
-          provenance: mode=max,version=v1
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Scan immutable digest
@@ -86,24 +81,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: 1
-          format: json
-          output: trivy.json
-      - name: Read registry attestations
-        if: ${{ !cancelled() }}
-        run: corepack pnpm@11.15.1 exec tsx scripts/oci/read-registry-attestations.ts --reference "${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}" --sbom-output sbom.spdx.json --provenance-output provenance.json
-      - name: Write image evidence
-        if: ${{ !cancelled() }}
-        run: corepack pnpm@11.15.1 exec tsx scripts/oci/write-image-evidence.ts --image "${{ steps.image.outputs.name }}" --digest "${{ steps.build.outputs.digest }}" --revision "${{ github.sha }}" --openapi docs/api/openapi.json --output image-evidence.json
-      - name: Upload stage evidence
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: stage-image-${{ github.sha }}
-          path: |
-            image-evidence.json
-            sbom.spdx.json
-            provenance.json
-            trivy.json
-            docs/api/openapi.json
-          if-no-files-found: error
-          retention-days: 30
+      - name: Smoke published image
+        run: corepack pnpm@11.15.1 exec tsx scripts/oci/run-image-smoke.ts -- --image "${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}" --revision "${{ github.sha }}"
+      - name: Print immutable digest
+        run: echo "digest=${{ steps.build.outputs.digest }}"

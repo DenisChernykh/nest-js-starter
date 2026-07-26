@@ -3,7 +3,6 @@ import { performance } from 'node:perf_hooks'
 import type { RequestHandler } from 'express'
 
 import type { CorrelationFieldsProvider } from '@/platform/http/context/correlation-fields.provider'
-import type { HttpMetrics } from '@/platform/observability/http-metrics'
 
 import type { StructuredLogger } from './logging.contracts'
 import { resolveHttpRouteTemplate } from './http-route-template'
@@ -11,15 +10,14 @@ import { resolveHttpRouteTemplate } from './http-route-template'
 /** Injectable effects owned by the HTTP completion finalizer. */
 export interface HttpAccessLogDependencies {
   readonly logger: StructuredLogger
-  readonly metrics: Pick<HttpMetrics, 'record'>
   readonly correlation: Pick<CorrelationFieldsProvider, 'getFields'>
   readonly now?: () => number
 }
 
 /**
- * Creates one idempotent finish/close finalizer for access logs and metrics.
+ * Creates one idempotent finish/close finalizer for structured access logs.
  *
- * @param dependencies - Logger, metrics, correlation snapshot and monotonic clock.
+ * @param dependencies - Logger, correlation snapshot and monotonic clock.
  * @returns Express middleware that attaches both completion listeners before next.
  */
 export function createHttpAccessLogMiddleware(
@@ -52,7 +50,6 @@ export function createHttpAccessLogMiddleware(
         correlation,
         attributes: measurement,
       })
-      dependencies.metrics.record(measurement)
     }
     const onFinish = (): void => finalize(false)
     const onClose = (): void => finalize(true)

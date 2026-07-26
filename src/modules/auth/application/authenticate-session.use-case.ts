@@ -7,10 +7,6 @@ import type { AuthPersistencePort } from './auth-persistence.port'
 import type { AuthenticatedPrincipal } from './auth.types'
 import type { RoleRegistry } from './role-registry'
 import type { SessionStorePort } from './session-store.port'
-import {
-  NOOP_AUTH_TELEMETRY,
-  type AuthTelemetryPort,
-} from './auth-telemetry.port'
 
 /** Authenticates one opaque token against fresh durable account state. */
 export class AuthenticateSessionUseCase {
@@ -18,16 +14,13 @@ export class AuthenticateSessionUseCase {
     private readonly sessions: SessionStorePort,
     private readonly persistence: AuthPersistencePort,
     private readonly roles: RoleRegistry,
-    private readonly telemetry: AuthTelemetryPort = NOOP_AUTH_TELEMETRY,
   ) {}
 
   public async execute(
     rawToken: string,
     nowMs: number,
   ): Promise<AuthenticatedPrincipal> {
-    return this.telemetry.runAuthOperation('authenticate', () =>
-      this.performAuthentication(rawToken, nowMs),
-    )
+    return this.performAuthentication(rawToken, nowMs)
   }
 
   private async performAuthentication(
@@ -60,22 +53,17 @@ export class AuthenticateSessionUseCase {
         roleKeys: Object.freeze([...projection.roleKeys]),
         permissions,
       })
-      this.telemetry.recordAuthOutcome('authenticate', 'success')
       return principal
     } catch (error: unknown) {
       if (error instanceof AuthenticationRequiredError) {
-        this.telemetry.recordAuthOutcome('authenticate', 'denied')
         throw error
       }
       if (error instanceof AuthDependencyUnavailableError) {
-        this.telemetry.recordAuthOutcome('authenticate', 'dependency_error')
         throw error
       }
       if (error instanceof AuthError) {
-        this.telemetry.recordAuthOutcome('authenticate', 'denied')
         throw new AuthenticationRequiredError()
       }
-      this.telemetry.recordAuthOutcome('authenticate', 'dependency_error')
       throw new AuthDependencyUnavailableError()
     }
   }

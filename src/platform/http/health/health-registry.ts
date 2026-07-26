@@ -3,8 +3,6 @@ import { Injectable } from '@nestjs/common'
 import type { HealthCheckResult, HealthIndicatorStatus } from './health.types'
 import type { ReadinessIndicator } from './readiness-indicator'
 
-const reservedNames = new Set(['draining', 'startup'])
-
 function stableRecord<T>(
   entries: readonly (readonly [string, T])[],
 ): Record<string, T> {
@@ -13,46 +11,40 @@ function stableRecord<T>(
   )
 }
 
-/** Registers readiness indicators once and executes sealed snapshots. */
+/** Executes the fixed PostgreSQL and Redis readiness probe set. */
 @Injectable()
 export class HealthRegistry {
-  private readonly indicators = new Map<string, ReadinessIndicator>()
-  private sealed = false
+  private readonly indicators: readonly ReadinessIndicator[]
 
-  /** Registers one uniquely named non-reserved indicator before sealing. */
-  public register(indicator: ReadinessIndicator): void {
-    if (
-      this.sealed ||
-      reservedNames.has(indicator.name) ||
-      this.indicators.has(indicator.name)
-    ) {
-      throw new Error('Health indicator registration rejected')
+  public constructor(indicators: readonly ReadinessIndicator[] = []) {
+    const names = new Set<string>()
+    for (const indicator of indicators) {
+      if (
+        names.has(indicator.name) ||
+        indicator.name === 'draining' ||
+        indicator.name === 'startup'
+      ) {
+        throw new Error('Health indicator configuration rejected')
+      }
+      names.add(indicator.name)
     }
-    this.indicators.set(indicator.name, indicator)
-  }
-
-  /** Permanently closes registration. */
-  public seal(): void {
-    this.sealed = true
+    this.indicators = Object.freeze([...indicators])
   }
 
   /** Returns stable skipped statuses without starting dependency work. */
   public skippedChecks(): Readonly<Record<string, HealthIndicatorStatus>> {
     return stableRecord(
-      [...this.indicators.keys()].map((name) => [name, 'skipped'] as const),
+      this.indicators.map(({ name }) => [name, 'skipped'] as const),
     )
   }
 
-  /** Runs sealed indicators concurrently without awaiting late timed-out work. */
+  /** Runs the fixed indicators concurrently within their individual deadlines. */
   public async checkAll(parentSignal: AbortSignal): Promise<HealthCheckResult> {
-    if (!this.sealed) {
-      throw new Error('Health registry is not sealed')
-    }
     const results = await Promise.all(
-      [...this.indicators.values()].map(async (indicator) => {
-        const status = await this.checkOne(indicator, parentSignal)
-        return { indicator, status }
-      }),
+      this.indicators.map(async (indicator) => ({
+        indicator,
+        status: await this.checkOne(indicator, parentSignal),
+      })),
     )
     return {
       checks: stableRecord(
@@ -72,11 +64,8 @@ export class HealthRegistry {
   ): Promise<'up' | 'down'> {
     const child = new AbortController()
     const abortChild = (): void => child.abort()
-    if (parentSignal.aborted) {
-      child.abort()
-    } else {
-      parentSignal.addEventListener('abort', abortChild, { once: true })
-    }
+    if (parentSignal.aborted) child.abort()
+    else parentSignal.addEventListener('abort', abortChild, { once: true })
     const timeout = setTimeout(abortChild, indicator.timeoutMs)
     const aborted = new Promise<'down'>((resolve) => {
       if (child.signal.aborted) {
@@ -87,14 +76,9 @@ export class HealthRegistry {
         once: true,
       })
     })
-    let checking: Promise<'up' | 'down'>
-    try {
-      checking = Promise.resolve(indicator.check(child.signal)).catch(
-        () => 'down' as const,
-      )
-    } catch {
-      checking = Promise.resolve('down')
-    }
+    const checking = Promise.resolve(indicator.check(child.signal)).catch(
+      () => 'down' as const,
+    )
     try {
       return await Promise.race([checking, aborted])
     } finally {

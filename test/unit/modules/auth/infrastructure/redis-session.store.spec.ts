@@ -1,13 +1,13 @@
 import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
 import { NodeAuthCryptoAdapter } from '@/modules/auth/infrastructure/node-auth-crypto.adapter'
 import { RedisSessionStore } from '@/modules/auth/infrastructure/redis-session.store'
-import type { RedisCapabilityExecutor } from '@/platform/redis/redis-capability'
+import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 
 describe('RedisSessionStore dependency boundary', () => {
   it('maps a session-create Redis failure to a safe auth dependency error', async () => {
-    const executor = {
+    const executor: RedisCommandExecutorPort = {
       execute: jest.fn(() => Promise.reject(new Error('redis driver detail'))),
-    } as unknown as RedisCapabilityExecutor
+    } as RedisCommandExecutorPort
     const target = new RedisSessionStore(
       executor,
       new NodeAuthCryptoAdapter(),

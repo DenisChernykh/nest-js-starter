@@ -45,16 +45,6 @@ describe('HTTP access log finalizer', () => {
           },
         ],
       ])
-      expect(fixture.metrics.record.mock.calls).toEqual([
-        [
-          {
-            route: '/v1/items/:itemId',
-            method: 'GET',
-            status: event === 'close' ? 499 : statusCode,
-            durationMs: 15,
-          },
-        ],
-      ])
     },
   )
 
@@ -88,7 +78,6 @@ describe('HTTP access log finalizer', () => {
         'Invalid HTTP access duration',
       )
       expect(fixture.logger.write).not.toHaveBeenCalled()
-      expect(fixture.metrics.record).not.toHaveBeenCalled()
     },
   )
 })
@@ -101,10 +90,8 @@ function createFixture(clock = [10, 25]): {
     writableFinished: boolean
   }
   readonly logger: { readonly write: jest.Mock }
-  readonly metrics: { readonly record: jest.Mock }
 } {
   const logger = { write: jest.fn() }
-  const metrics = { record: jest.fn() }
   const correlation = {
     getFields: jest.fn(() => ({
       requestId: 'request-a',
@@ -120,7 +107,6 @@ function createFixture(clock = [10, 25]): {
   return {
     middleware: createHttpAccessLogMiddleware({
       logger,
-      metrics,
       correlation,
       now: () => values.shift() ?? 25,
     }),
@@ -131,6 +117,5 @@ function createFixture(clock = [10, 25]): {
     } as unknown as Request,
     response,
     logger,
-    metrics,
   }
 }

@@ -1,4 +1,4 @@
-import type { RedisCapabilityExecutor } from './redis-capability'
+import type { RedisCommandExecutorPort } from './redis-command.executor'
 
 /** Immutable registration for one reviewed atomic Redis script. */
 export interface RedisScriptDefinition {
@@ -16,7 +16,7 @@ interface RegisteredScript {
 export class RedisScriptRunner {
   private readonly scripts = new Map<string, RegisteredScript>()
 
-  public constructor(private readonly executor: RedisCapabilityExecutor) {}
+  public constructor(private readonly executor: RedisCommandExecutorPort) {}
 
   /**
    * Registers one unique script before it is used.

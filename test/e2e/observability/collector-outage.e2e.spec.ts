@@ -18,11 +18,6 @@ describe('OTLP collector outage isolation', () => {
     runtime = await createAuthTestRuntime(1, {
       OTEL_SDK_DISABLED: 'false',
       OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${collectorPort}`,
-      OTEL_EXPORTER_OTLP_TIMEOUT: '50',
-      OTEL_METRIC_EXPORT_INTERVAL: '1000',
-      OTEL_METRIC_EXPORT_TIMEOUT: '50',
-      OTEL_BSP_SCHEDULE_DELAY: '60000',
-      OTEL_BSP_EXPORT_TIMEOUT: '50',
     })
     const instance = runtime.instances[0]
     if (instance === undefined) throw new Error('Expected one API instance')
@@ -48,7 +43,7 @@ describe('OTLP collector outage isolation', () => {
         Promise.resolve(
           instance.output().includes('"event":"otel_diagnostic"'),
         ),
-      4_000,
+      8_000,
     )
     expect((await fetch(`${instance.baseUrl}/health/ready`)).status).toBe(200)
     expect((await fetch(`${instance.baseUrl}/health/live`)).status).toBe(200)

@@ -37,14 +37,7 @@ describe('auth dependency failure policy', () => {
   let postgresStopped = false
 
   beforeAll(async () => {
-    runtime = await createAuthTestRuntime(1, {
-      REDIS_CACHE_URL: 'redis://127.0.0.1:1',
-      REDIS_CONNECT_TIMEOUT_MS: '300',
-      REDIS_COMMAND_TIMEOUT_MS: '300',
-      REDIS_HEALTH_TIMEOUT_MS: '400',
-      DATABASE_CONNECTION_TIMEOUT_MS: '300',
-      DATABASE_HEALTH_TIMEOUT_MS: '400',
-    })
+    runtime = await createAuthTestRuntime(1)
     baseUrl = runtime.instances[0]?.baseUrl ?? ''
     await runtime.createUser('dependency@example.com')
   })
@@ -60,7 +53,7 @@ describe('auth dependency failure policy', () => {
     await runtime.stop()
   })
 
-  it('does not connect configured cache or include it in readiness', async () => {
+  it('keeps readiness limited to required coordination dependencies', async () => {
     const readiness = await fetch(`${baseUrl}/health/ready`)
     expect(readiness.status).toBe(200)
     const body = (await readiness.json()) as {

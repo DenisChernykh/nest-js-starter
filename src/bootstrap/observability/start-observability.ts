@@ -1,12 +1,11 @@
 import { diag, DiagLogLevel, type Span } from '@opentelemetry/api'
-import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto'
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto'
+import { registerInstrumentations } from '@opentelemetry/instrumentation'
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http'
 import { PgInstrumentation } from '@opentelemetry/instrumentation-pg'
 import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis'
+import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node'
 import { resourceFromAttributes } from '@opentelemetry/resources'
-import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics'
-import { NodeSDK } from '@opentelemetry/sdk-node'
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import type { ClientRequest, IncomingMessage } from 'node:http'
 import type { Request } from 'express'
@@ -31,16 +30,11 @@ export function startObservability(
   diag.setLogger(new OtelDiagLogger(logger), DiagLogLevel.WARN)
   const traceExporter = new SanitizingSpanExporter(
     new OTLPTraceExporter({
-      ...endpointOption(config, 'traces'),
+      ...traceEndpoint(config),
       timeoutMillis: config.observability.exporterTimeoutMs,
     }),
   )
-  const metricExporter = new OTLPMetricExporter({
-    ...endpointOption(config, 'metrics'),
-    timeoutMillis: config.observability.exporterTimeoutMs,
-  })
-  const sdk = new NodeSDK({
-    autoDetectResources: false,
+  const provider = new NodeTracerProvider({
     resource: resourceFromAttributes({
       'service.name': config.logging.serviceName,
       'service.version': config.logging.serviceVersion,
@@ -53,13 +47,9 @@ export function startObservability(
         exportTimeoutMillis: config.observability.batchSpanExportTimeoutMs,
       }),
     ],
-    metricReaders: [
-      new PeriodicExportingMetricReader({
-        exporter: metricExporter,
-        exportIntervalMillis: config.observability.metricExportIntervalMs,
-        exportTimeoutMillis: config.observability.metricExportTimeoutMs,
-      }),
-    ],
+  })
+  provider.register()
+  const unregisterInstrumentations = registerInstrumentations({
     instrumentations: [
       new HttpInstrumentation({
         applyCustomAttributesOnSpan: updateHttpServerSpan,
@@ -70,8 +60,15 @@ export function startObservability(
       }),
     ],
   })
-  sdk.start()
-  return { runtime: new ObservabilityRuntime(sdk), enabled: true }
+  return {
+    runtime: new ObservabilityRuntime({
+      shutdown: async () => {
+        unregisterInstrumentations()
+        await provider.shutdown()
+      },
+    }),
+    enabled: true,
+  }
 }
 
 /** Applies the same bounded route template to an ending HTTP server span. */
@@ -85,18 +82,12 @@ export function updateHttpServerSpan(
   span.updateName(`${request.method ?? 'HTTP'} ${route}`)
 }
 
-function endpointOption(
-  config: ApplicationRuntimeConfig,
-  signal: 'traces' | 'metrics',
-): { readonly url?: string } {
-  const specific =
-    signal === 'traces'
-      ? config.observability.tracesEndpoint
-      : config.observability.metricsEndpoint
-  if (specific !== undefined) return { url: specific }
+function traceEndpoint(config: ApplicationRuntimeConfig): {
+  readonly url?: string
+} {
   if (config.observability.endpoint === undefined) return {}
   const base = config.observability.endpoint.endsWith('/')
     ? config.observability.endpoint
     : `${config.observability.endpoint}/`
-  return { url: new URL(`v1/${signal}`, base).toString() }
+  return { url: new URL('v1/traces', base).toString() }
 }

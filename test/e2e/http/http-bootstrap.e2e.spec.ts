@@ -8,8 +8,8 @@ import request from 'supertest'
 
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
+import { runtimeDefaults } from '@/platform/config/runtime-defaults'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
-import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { ProblemExceptionFilter } from '@/platform/http/errors/problem-exception.filter'
@@ -34,12 +34,7 @@ describe('hardened HTTP bootstrap', () => {
       requiredRuntimeEnvironment({
         DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
         CORS_ORIGINS: 'https://allowed.example',
-        AUTH_CSRF_ORIGINS: 'https://allowed.example,http://localhost:3000',
         TRUST_PROXY_CIDRS: '10.0.0.0/8',
-        HTTP_JSON_BODY_LIMIT_BYTES: '64',
-        HTTP_REQUEST_TIMEOUT_MS: '12345',
-        HTTP_HEADERS_TIMEOUT_MS: '10000',
-        HTTP_KEEP_ALIVE_TIMEOUT_MS: '5000',
       }),
     )
     const config = new RuntimeConfigService(environment)
@@ -52,14 +47,6 @@ describe('hardened HTTP bootstrap', () => {
       ),
     )
     lifecycle = expressApp.get(ApplicationLifecycleState)
-    const registry = expressApp.get(HealthRegistry)
-    registry.register({
-      name: 'postgresql',
-      required: true,
-      timeoutMs: 100,
-      check: () => Promise.resolve('up'),
-    })
-    registry.seal()
     configureHttpApplication(expressApp, config, lifecycle, requestContext)
     await expressApp.init()
     await expressApp.listen(0, '127.0.0.1')
@@ -80,7 +67,6 @@ describe('hardened HTTP bootstrap', () => {
       }),
     )
     const trustedConfig = new RuntimeConfigService(trustedEnvironment)
-    trustedExpress.get(HealthRegistry).seal()
     trustedExpress.get(ApplicationLifecycleState).markReady()
     configureHttpApplication(
       trustedExpress,
@@ -127,7 +113,7 @@ describe('hardened HTTP bootstrap', () => {
       .expect(422)
     await request(server)
       .post('/v1/technical/echo')
-      .send({ value: 'x'.repeat(100) })
+      .send({ value: 'x'.repeat(runtimeDefaults.http.jsonBodyLimitBytes) })
       .expect(413)
   })
 
@@ -165,9 +151,11 @@ describe('hardened HTTP bootstrap', () => {
   })
 
   it('sets exact Node HTTP timeouts and gates drain traffic', async () => {
-    expect(server.requestTimeout).toBe(12345)
-    expect(server.headersTimeout).toBe(10000)
-    expect(server.keepAliveTimeout).toBe(5000)
+    expect(server.requestTimeout).toBe(runtimeDefaults.http.requestTimeoutMs)
+    expect(server.headersTimeout).toBe(runtimeDefaults.http.headersTimeoutMs)
+    expect(server.keepAliveTimeout).toBe(
+      runtimeDefaults.http.keepAliveTimeoutMs,
+    )
     lifecycle.beginDrain()
     await request(server)
       .post('/v1/technical/echo')

@@ -1,6 +1,6 @@
-/** Token for the capability-managed Redis connection registry. */
-export const REDIS_CONNECTION_REGISTRY: unique symbol = Symbol(
-  'REDIS_CONNECTION_REGISTRY',
+/** Token for the coordination Redis command executor. */
+export const REDIS_COORDINATION_COMMAND_EXECUTOR: unique symbol = Symbol(
+  'REDIS_COORDINATION_COMMAND_EXECUTOR',
 )
 
 /** Token for the Redis startup and cleanup boundary. */

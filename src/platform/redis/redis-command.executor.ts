@@ -1,5 +1,3 @@
-import { performance } from 'node:perf_hooks'
-
 import {
   SpanKind,
   SpanStatusCode,
@@ -7,10 +5,7 @@ import {
   type Tracer,
 } from '@opentelemetry/api'
 
-import type { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
-import { RuntimeMetrics } from '@/platform/observability/runtime-metrics'
-
-import type { RedisManagedClient } from './redis-capability'
+import type { RedisManagedClient } from './redis-client.factory'
 
 /** Stable failure for a Redis operation that outlived its absolute deadline. */
 export class RedisCommandTimeoutError extends Error {
@@ -20,13 +15,21 @@ export class RedisCommandTimeoutError extends Error {
   }
 }
 
-/** Runs Redis commands inside operation tracking and an absolute deadline. */
-export class RedisCommandExecutor {
+/** Narrow command boundary exposed to module-owned Redis adapters. */
+export interface RedisCommandExecutorPort {
+  /** Executes one bounded command through the owned coordination client. */
+  execute<T>(
+    operationName: string,
+    operation: (client: RedisManagedClient) => Promise<T>,
+    signal?: AbortSignal,
+  ): Promise<T>
+}
+
+/** Runs coordination Redis commands with tracing and absolute deadlines. */
+export class RedisCommandExecutor implements RedisCommandExecutorPort {
   public constructor(
     private readonly client: RedisManagedClient,
-    private readonly operationTracker: ActiveOperationTracker,
     private readonly timeoutMs: number,
-    private readonly metrics: RuntimeMetrics = new RuntimeMetrics(),
     private readonly tracer: Tracer = trace.getTracer(
       'nest-js-starter.redis-runtime',
     ),
@@ -45,26 +48,8 @@ export class RedisCommandExecutor {
   ): Promise<T> {
     const command = redisCommand(operationName)
     return this.runCommandSpan(command, () =>
-      this.executeTracked(operation, signal),
+      this.withDeadline(operation, [signal]),
     )
-  }
-
-  private async executeTracked<T>(
-    operation: (client: RedisManagedClient) => Promise<T>,
-    signal?: AbortSignal,
-  ): Promise<T> {
-    const startedAt = performance.now()
-    const lease = this.operationTracker.begin()
-    try {
-      const value = await this.withDeadline(operation, [lease.signal, signal])
-      this.recordOutcome('success', startedAt)
-      return value
-    } catch (error: unknown) {
-      this.recordOutcome('error', startedAt)
-      throw error
-    } finally {
-      lease.complete()
-    }
   }
 
   private async runCommandSpan<T>(
@@ -106,18 +91,6 @@ export class RedisCommandExecutor {
     } catch (error: unknown) {
       if (callbackStarted) throw error
       return work()
-    }
-  }
-
-  private recordOutcome(outcome: 'success' | 'error', startedAt: number): void {
-    try {
-      this.metrics.recordDependency(
-        'redis',
-        outcome,
-        Math.max(0, performance.now() - startedAt),
-      )
-    } catch {
-      // Telemetry cannot replace the Redis command settlement.
     }
   }
 
@@ -172,10 +145,6 @@ function redisCommand(operationName: string): string {
   const commands: Readonly<Record<string, string>> = {
     'readiness-ping': 'PING',
     ping: 'PING',
-    'cache-get': 'GET',
-    'cache-delete-invalid': 'DEL',
-    'cache-set': 'SET',
-    'cache-invalidate': 'DEL',
     'session-list-record': 'GET',
     'session-revoke-lookup': 'HGET',
     'session-owner-read': 'GET',

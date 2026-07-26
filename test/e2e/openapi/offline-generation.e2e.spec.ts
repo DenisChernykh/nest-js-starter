@@ -7,7 +7,6 @@ import { join } from 'node:path'
 import { generateOpenApiArtifact } from '@/bootstrap/contracts/generate-openapi'
 import { PrismaDatabaseLifecycle } from '@/platform/database/prisma-database.lifecycle'
 import { RedisLifecycle } from '@/platform/redis/redis-lifecycle'
-import { StartupRegistry } from '@/platform/lifecycle/startup-registry'
 import { parseOpenApiWriterArguments } from '@scripts/openapi/write-openapi'
 
 function runOpenApiWriter(arguments_: readonly string[]): {
@@ -38,7 +37,6 @@ function runOpenApiWriter(arguments_: readonly string[]): {
 describe('offline OpenAPI generation', () => {
   it('builds the complete prefixed document without runtime side effects', async () => {
     const listen = jest.spyOn(Server.prototype, 'listen')
-    const startAll = jest.spyOn(StartupRegistry.prototype, 'startAll')
     const connectDatabase = jest.spyOn(
       PrismaDatabaseLifecycle.prototype,
       'connect',
@@ -66,7 +64,6 @@ describe('offline OpenAPI generation', () => {
     )
     expect(document.paths).not.toHaveProperty('/v1/health/live')
     expect(listen).not.toHaveBeenCalled()
-    expect(startAll).not.toHaveBeenCalled()
     expect(connectDatabase).not.toHaveBeenCalled()
     expect(connectRedis).not.toHaveBeenCalled()
     expect(document.components?.securitySchemes?.['sessionCookie']?.name).toBe(

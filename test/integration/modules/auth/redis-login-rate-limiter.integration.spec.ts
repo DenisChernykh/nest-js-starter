@@ -3,10 +3,9 @@ import type { StartedRedisContainer } from '@testcontainers/redis'
 import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
 import { NodeAuthCryptoAdapter } from '@/modules/auth/infrastructure/node-auth-crypto.adapter'
 import { RedisLoginRateLimiter } from '@/modules/auth/infrastructure/redis-login-rate-limiter'
-import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
-import type { RedisCapabilityExecutor } from '@/platform/redis/redis-capability'
+import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'
-import { RedisConnectionRegistry } from '@/platform/redis/redis-connection.registry'
+import { RedisCoordinationConnectionManager } from '@/platform/redis/redis-coordination.connection'
 import { RedisLifecycle } from '@/platform/redis/redis-lifecycle'
 import { startRedisContainer } from '@test/integration/support/redis-container'
 
@@ -15,7 +14,7 @@ const hmacSecret = new Uint8Array(Buffer.alloc(32, 3))
 describe('RedisLoginRateLimiter', () => {
   let container: StartedRedisContainer
   let lifecycle: RedisLifecycle
-  let executor: RedisCapabilityExecutor
+  let executor: RedisCommandExecutorPort
   let crypto: NodeAuthCryptoAdapter
 
   beforeAll(async () => {
@@ -40,24 +39,22 @@ describe('RedisLoginRateLimiter', () => {
 
   function createRedisRuntime(target: StartedRedisContainer): {
     readonly lifecycle: RedisLifecycle
-    readonly executor: RedisCapabilityExecutor
+    readonly executor: RedisCommandExecutorPort
   } {
-    const registry = new RedisConnectionRegistry(
+    const connection = new RedisCoordinationConnectionManager(
       new RedisClientFactory({
         connectTimeoutMs: 500,
         commandTimeoutMs: 500,
       }),
-      new ActiveOperationTracker(),
       {
         coordinationUrl: target.getConnectionUrl(),
+        connectTimeoutMs: 500,
         commandTimeoutMs: 500,
       },
     )
-    registry.register('coordination', true)
-    registry.seal()
     return {
-      lifecycle: new RedisLifecycle(registry, 500),
-      executor: registry.executor('coordination'),
+      lifecycle: new RedisLifecycle(connection, 500),
+      executor: connection.commandExecutor,
     }
   }
 

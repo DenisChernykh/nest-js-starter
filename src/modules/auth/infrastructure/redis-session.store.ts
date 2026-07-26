@@ -1,5 +1,5 @@
 import type { RuntimeEnvironment } from '@/platform/config/runtime-config.types'
-import type { RedisCapabilityExecutor } from '@/platform/redis/redis-capability'
+import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisKeyBuilder } from '@/platform/redis/redis-key.builder'
 import { RedisScriptRunner } from '@/platform/redis/redis-script.runner'
 
@@ -32,7 +32,7 @@ export class RedisSessionStore implements SessionStorePort {
   private readonly scripts: RedisScriptRunner
 
   public constructor(
-    private readonly executor: RedisCapabilityExecutor,
+    private readonly executor: RedisCommandExecutorPort,
     private readonly crypto: NodeAuthCryptoAdapter,
     private readonly config: RedisSessionStoreConfig,
   ) {

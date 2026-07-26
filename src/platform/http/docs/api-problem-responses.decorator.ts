@@ -1,7 +1,10 @@
 import { applyDecorators } from '@nestjs/common'
 import { ApiExtraModels, ApiResponse, getSchemaPath } from '@nestjs/swagger'
 
-import { PROBLEM_REGISTRY, type ProblemCode } from '../errors/problem-registry'
+import {
+  getProblemDefinition,
+  type ProblemCode,
+} from '../errors/problem-registry'
 import {
   ProblemResponseDto,
   ValidationProblemResponseDto,
@@ -19,7 +22,7 @@ export function ApiProblemResponses(
   ...codes: readonly ProblemCode[]
 ): ClassDecorator & MethodDecorator {
   const responseDecorators = codes.map((code) => {
-    const definition = PROBLEM_REGISTRY.get(code)
+    const definition = getProblemDefinition(code)
     const responseType =
       code === 'VALIDATION_FAILED'
         ? ValidationProblemResponseDto

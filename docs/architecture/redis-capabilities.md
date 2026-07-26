@@ -1,31 +1,16 @@
-# Redis capabilities
+# Redis coordination
 
-## Ownership
+`platform/redis` owns the node-redis driver, one coordination connection,
+bounded commands, key construction, scripts and readiness. The composition
+root creates one `RedisCoordinationConnectionManager`; it exports the typed
+command executor, lifecycle and readiness boundaries. Auth adapters receive
+the executor directly.
 
-`platform/redis` owns driver creation, capability registration, connection
-lifecycle, bounded command execution, key construction, scripts and readiness.
-Concrete `RedisClientType` never leaves the platform boundary. Module adapters
-receive only the narrowed `RedisCapabilityExecutor`.
+Auth sessions and distributed login limits remain opaque and use the existing
+key bytes and format. Commands run with bounded deadlines, fail-fast driver
+options and traced `redis.command` spans. A deadline destroys the owned socket
+and reports dependency failure without claiming the server did not execute the
+command.
 
-Production composition registers one required `coordination` connection. It is
-authoritative for auth sessions and distributed login limits, participates in
-startup/readiness and closes before PostgreSQL. Pub/Sub is not registered.
-
-`cache` is optional and lazy. A module must explicitly register its own adapter;
-the production auth composition does not open it even when `REDIS_CACHE_URL` is
-present. The fixture contract proves read-through fallback, payload validation
-and invalidation only after commit. Cache loss must not change process
-readiness.
-
-## Keys and failure semantics
-
-Every key uses
-`<prefix>:<environment>:<capability>:v<schema>:<resource>:<id>`. Runtime code
-does not use logical Redis databases, `KEYS`, unchecked JSON or offline queues.
-Opaque session tokens and rate-limit identifiers are HMAC-digested with
-dedicated secrets before becoming key components.
-
-Connect and command deadlines are bounded. An in-flight deadline destroys the
-owned socket and reports dependency failure; it does not claim the Redis command
-was cancellable or did not execute. Readiness attempts a bounded reconnect so a
-resumed coordination service can return the process to ready.
+Cache and pub/sub abstractions are intentionally absent. Redis logical
+database numbers, `KEYS` and unchecked JSON remain prohibited.

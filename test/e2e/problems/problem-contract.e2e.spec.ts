@@ -24,10 +24,10 @@ import {
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
+import { runtimeDefaults } from '@/platform/config/runtime-defaults'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
-import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import { STRUCTURED_LOGGER } from '@/platform/logging/logging.contracts'
 import { LoggingModule } from '@/platform/logging/logging.module'
@@ -77,7 +77,6 @@ describe('RFC 9457 problem HTTP contract', () => {
     const runtimeConfig = buildApiRuntimeConfig(
       requiredRuntimeEnvironment({
         DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
-        HTTP_JSON_BODY_LIMIT_BYTES: '64',
       }),
     )
     const moduleRef = await Test.createTestingModule({
@@ -96,7 +95,6 @@ describe('RFC 9457 problem HTTP contract', () => {
       bodyParser: false,
     })
     const lifecycle = expressApp.get(ApplicationLifecycleState)
-    expressApp.get(HealthRegistry).seal()
     lifecycle.markReady()
     configureHttpApplication(
       expressApp,
@@ -145,7 +143,7 @@ describe('RFC 9457 problem HTTP contract', () => {
     const oversized = await request(server)
       .post('/v1/technical/problems/validate')
       .set('X-Request-ID', requestId)
-      .send({ value: 'x'.repeat(100) })
+      .send({ value: 'x'.repeat(runtimeDefaults.http.jsonBodyLimitBytes) })
       .expect(413)
     expectProblem(oversized, 413, 'PAYLOAD_TOO_LARGE', requestId)
   })

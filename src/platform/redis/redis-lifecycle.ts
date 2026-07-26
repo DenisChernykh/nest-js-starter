@@ -1,31 +1,24 @@
-import type { ShutdownParticipant } from '@/platform/lifecycle/shutdown-participant'
+import type { RedisCoordinationConnectionManager } from './redis-coordination.connection'
 
-import type { RedisConnectionRegistry } from './redis-connection.registry'
-
-/** Reserved shutdown order for Redis resources. */
-export const REDIS_SHUTDOWN_ORDER = 200
-
-/** Connects required Redis capabilities and owns their shared shutdown. */
-export class RedisLifecycle implements ShutdownParticipant {
-  public readonly name = 'redis' as const
-  public readonly order = REDIS_SHUTDOWN_ORDER
+/** Connects and closes the single Redis coordination dependency. */
+export class RedisLifecycle {
   private connectPromise?: Promise<void>
   private closePromise?: Promise<void>
 
   public constructor(
-    private readonly registry: RedisConnectionRegistry,
+    private readonly connection: RedisCoordinationConnectionManager,
     private readonly shutdownTimeoutMs: number,
   ) {}
 
   /** Starts all required Redis capabilities once. */
   public connect(signal: AbortSignal): Promise<void> {
-    this.connectPromise ??= this.registry.connectRequired(signal)
+    this.connectPromise ??= this.connection.connect(signal)
     return this.connectPromise
   }
 
   /** Closes all opened Redis capabilities once. */
   public close(signal: AbortSignal): Promise<void> {
-    this.closePromise ??= this.registry.closeAll(
+    this.closePromise ??= this.connection.close(
       AbortSignal.any([signal, AbortSignal.timeout(this.shutdownTimeoutMs)]),
     )
     return this.closePromise

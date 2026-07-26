@@ -21,8 +21,6 @@ describe('Prisma transaction boundary', () => {
     const environment = buildApiRuntimeConfig(
       requiredRuntimeEnvironment({
         DATABASE_URL: container.getConnectionUri(),
-        DATABASE_CONNECTION_TIMEOUT_MS: '2000',
-        DATABASE_HEALTH_TIMEOUT_MS: '2000',
       }),
     )
     const config = new RuntimeConfigService(environment)

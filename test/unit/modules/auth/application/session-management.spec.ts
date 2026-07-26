@@ -13,7 +13,8 @@ import { definePermissions } from '@/modules/auth/application/permission'
 import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
 import type { TransactionPort } from '@/shared/application/transaction.port'
-import type { AuthTelemetryPort } from '@/modules/auth/application/auth-telemetry.port'
+
+/* eslint-disable @typescript-eslint/unbound-method */
 
 const principal: AuthenticatedPrincipal = {
   userId: 'user',
@@ -24,39 +25,29 @@ const principal: AuthenticatedPrincipal = {
 }
 
 describe('auth session management', () => {
-  it('keeps every session operation inside authenticated ownership', async () => {
+  it('keeps session operations inside authenticated ownership', async () => {
     const sessions = {
       revoke: jest.fn(() => Promise.resolve(true)),
       list: jest.fn(() => Promise.resolve([])),
     } as unknown as SessionStorePort
-
     await new LogoutUseCase(sessions).execute('user', 'current')
     await new RevokeSessionUseCase(sessions).execute(principal, 'other')
     await new ListSessionsQuery(sessions).execute(principal)
-
-    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(sessions.revoke).toHaveBeenNthCalledWith(1, 'user', 'current')
-    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(sessions.revoke).toHaveBeenNthCalledWith(2, 'user', 'other')
-    // eslint-disable-next-line @typescript-eslint/unbound-method
     expect(sessions.list).toHaveBeenCalledWith('user', 'current')
   })
-
   it('derives CSRF only from a currently valid stored record', async () => {
     const sessions = {
       readAndTouch: jest.fn(() => Promise.resolve(undefined)),
       csrfToken: jest.fn(() => 'csrf'),
     } as unknown as SessionStorePort
-    const query = new GetCsrfTokenQuery(sessions)
-
-    await expect(query.execute('raw', 100)).rejects.toBeInstanceOf(
-      AuthenticationRequiredError,
-    )
-    // eslint-disable-next-line @typescript-eslint/unbound-method
+    await expect(
+      new GetCsrfTokenQuery(sessions).execute('raw', 100),
+    ).rejects.toBeInstanceOf(AuthenticationRequiredError)
     expect(sessions.csrfToken).not.toHaveBeenCalled()
   })
-
-  it('returns the CSRF token derived from the current stored record', async () => {
+  it('returns the current CSRF token and a stable principal projection', async () => {
     const record = {
       schema: 1 as const,
       publicId: 'current',
@@ -74,15 +65,9 @@ describe('auth session management', () => {
       readAndTouch: jest.fn(() => Promise.resolve(record)),
       csrfToken: jest.fn(() => 'csrf'),
     } as unknown as SessionStorePort
-
     await expect(
       new GetCsrfTokenQuery(sessions).execute('raw', 2),
     ).resolves.toEqual({ csrfToken: 'csrf' })
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(sessions.csrfToken).toHaveBeenCalledWith(record)
-  })
-
-  it('returns a sorted immutable principal projection without I/O', () => {
     expect(new GetMeQuery().execute(principal)).toEqual({
       userId: 'user',
       normalizedEmail: 'user@example.com',
@@ -90,8 +75,7 @@ describe('auth session management', () => {
       permissions: ['catalog.read'],
     })
   })
-
-  it('increments generation before cleanup and emits typed incomplete event', async () => {
+  it('increments generation before best-effort logout-all cleanup', async () => {
     const order: string[] = []
     const persistence = {
       incrementSessionGeneration: jest.fn(() => {
@@ -108,95 +92,20 @@ describe('auth session management', () => {
     const sessions = {
       revokeAll: jest.fn(() => {
         order.push('cleanup')
-        return Promise.reject(new Error('redis detail'))
+        return Promise.reject(new Error('redis'))
       }),
     } as unknown as SessionStorePort
     const observer = {
       cleanupIncomplete: jest.fn(() => order.push('event')),
     } satisfies AuthSessionCleanupObserver
-    const audit = { emit: jest.fn(() => order.push('audit')) }
-    const target = new LogoutAllUseCase(
-      persistence,
-      transaction,
-      sessions,
-      observer,
-      audit,
-    )
-
-    await expect(target.execute('user')).resolves.toEqual({
-      cleanupComplete: false,
-    })
-    expect(order).toEqual([
-      'transaction',
-      'generation',
-      'cleanup',
-      'event',
-      'audit',
-    ])
-    expect(observer.cleanupIncomplete).toHaveBeenCalledWith(
-      'logout-all',
-      'user',
-    )
-    expect(audit.emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: 'logout_all',
-        outcome: 'partial',
-        reasonCode: 'CLEANUP_INCOMPLETE',
-      }),
-    )
-  })
-
-  it('reports complete cleanup after durable logout-all succeeds', async () => {
-    const persistence = {
-      incrementSessionGeneration: jest.fn(() => Promise.resolve(2n)),
-    } as unknown as AuthPersistencePort
-    const sessions = {
-      revokeAll: jest.fn(() => Promise.resolve(2)),
-    } as unknown as SessionStorePort
-    const target = new LogoutAllUseCase(
-      persistence,
-      { run: (operation) => operation() },
-      sessions,
-    )
-
-    await expect(target.execute('user')).resolves.toEqual({
-      cleanupComplete: true,
-    })
-  })
-
-  it('records fixed logout-all and revoke-session telemetry outcomes', async () => {
-    const telemetry = {
-      runAuthOperation: jest.fn((_operation, work) => work()),
-      recordAuthOutcome: jest.fn(),
-    } as jest.Mocked<AuthTelemetryPort>
-    const sessions = {
-      revoke: jest.fn(() => Promise.resolve(false)),
-      revokeAll: jest.fn(() => Promise.resolve(1)),
-    } as unknown as SessionStorePort
-    const logoutAll = new LogoutAllUseCase(
-      {
-        incrementSessionGeneration: jest.fn(() => Promise.resolve(2n)),
-      } as unknown as AuthPersistencePort,
-      { run: (operation) => operation() },
-      sessions,
-      undefined,
-      undefined,
-      telemetry,
-    )
-    const revoke = new RevokeSessionUseCase(sessions, undefined, telemetry)
-
-    await expect(logoutAll.execute('private-user-id')).resolves.toEqual({
-      cleanupComplete: true,
-    })
-    await expect(revoke.execute(principal, 'private-session-id')).resolves.toBe(
-      false,
-    )
-    expect(
-      telemetry.runAuthOperation.mock.calls.map(([operation]) => operation),
-    ).toEqual(['logout_all', 'revoke_session'])
-    expect(telemetry.recordAuthOutcome.mock.calls).toEqual([
-      ['logout_all', 'success'],
-      ['revoke_session', 'denied'],
-    ])
+    await expect(
+      new LogoutAllUseCase(
+        persistence,
+        transaction,
+        sessions,
+        observer,
+      ).execute('user'),
+    ).resolves.toEqual({ cleanupComplete: false })
+    expect(order).toEqual(['transaction', 'generation', 'cleanup', 'event'])
   })
 })

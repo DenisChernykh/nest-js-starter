@@ -12,7 +12,6 @@ import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { ProblemExceptionFilter } from '@/platform/http/errors/problem-exception.filter'
-import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import { createHttpAccessLogMiddleware } from '@/platform/logging/http-access-log.middleware'
 import { TestHttpModule } from '@test/e2e/fixtures/http/test-http.module'
@@ -41,7 +40,6 @@ describe('final HTTP access records', () => {
   let app: INestApplication
   let server: Server
   const logger = { write: jest.fn() }
-  const metrics = { record: jest.fn() }
   const correlation = { getFields: jest.fn() }
 
   beforeAll(async () => {
@@ -64,7 +62,6 @@ describe('final HTTP access records', () => {
       ),
     )
     const lifecycle = expressApp.get(ApplicationLifecycleState)
-    expressApp.get(HealthRegistry).seal()
     lifecycle.markReady()
     expressApp.useGlobalFilters(
       new ProblemExceptionFilter(
@@ -79,7 +76,7 @@ describe('final HTTP access records', () => {
       lifecycle,
       context,
       undefined,
-      createHttpAccessLogMiddleware({ logger, metrics, correlation }),
+      createHttpAccessLogMiddleware({ logger, correlation }),
     )
     await expressApp.init()
     await expressApp.listen(0, '127.0.0.1')
@@ -89,7 +86,6 @@ describe('final HTTP access records', () => {
 
   beforeEach(() => {
     logger.write.mockClear()
-    metrics.record.mockClear()
   })
 
   afterAll(async () => app.close())

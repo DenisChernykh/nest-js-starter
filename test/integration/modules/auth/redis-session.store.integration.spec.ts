@@ -3,10 +3,9 @@ import type { StartedRedisContainer } from '@testcontainers/redis'
 import type { IssuedBrowserSession } from '@/modules/auth/application/session-store.port'
 import { NodeAuthCryptoAdapter } from '@/modules/auth/infrastructure/node-auth-crypto.adapter'
 import { RedisSessionStore } from '@/modules/auth/infrastructure/redis-session.store'
-import { ActiveOperationTracker } from '@/platform/http/bootstrap/active-operation-tracker'
-import type { RedisCapabilityExecutor } from '@/platform/redis/redis-capability'
+import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'
-import { RedisConnectionRegistry } from '@/platform/redis/redis-connection.registry'
+import { RedisCoordinationConnectionManager } from '@/platform/redis/redis-coordination.connection'
 import { RedisLifecycle } from '@/platform/redis/redis-lifecycle'
 import { startRedisContainer } from '@test/integration/support/redis-container'
 
@@ -18,28 +17,26 @@ const otherUserId = '7b93f4d8-b86b-4f68-ac4b-3d9ff0408c88'
 describe('RedisSessionStore', () => {
   let container: StartedRedisContainer
   let lifecycle: RedisLifecycle
-  let executor: RedisCapabilityExecutor
+  let executor: RedisCommandExecutorPort
   let crypto: NodeAuthCryptoAdapter
   let store: RedisSessionStore
 
   beforeAll(async () => {
     container = await startRedisContainer()
-    const registry = new RedisConnectionRegistry(
+    const connection = new RedisCoordinationConnectionManager(
       new RedisClientFactory({
         connectTimeoutMs: 1_000,
         commandTimeoutMs: 1_000,
       }),
-      new ActiveOperationTracker(),
       {
         coordinationUrl: container.getConnectionUrl(),
+        connectTimeoutMs: 1_000,
         commandTimeoutMs: 1_000,
       },
     )
-    registry.register('coordination', true)
-    registry.seal()
-    lifecycle = new RedisLifecycle(registry, 1_000)
+    lifecycle = new RedisLifecycle(connection, 1_000)
     await lifecycle.connect(AbortSignal.timeout(2_000))
-    executor = registry.executor('coordination')
+    executor = connection.commandExecutor
     crypto = new NodeAuthCryptoAdapter()
     store = createStore(executor, crypto)
   })
@@ -56,7 +53,7 @@ describe('RedisSessionStore', () => {
   })
 
   function createStore(
-    target: RedisCapabilityExecutor,
+    target: RedisCommandExecutorPort,
     authCrypto: NodeAuthCryptoAdapter,
     overrides: Partial<{
       idleTimeoutMs: number

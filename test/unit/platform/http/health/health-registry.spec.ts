@@ -11,58 +11,50 @@ function indicator(
 }
 
 describe('HealthRegistry', () => {
-  it('registers before seal and rejects duplicate, reserved and late names', () => {
-    const registry = new HealthRegistry()
-    registry.register(
-      indicator('postgresql', true, () => Promise.resolve('up')),
-    )
-    expect(() =>
-      registry.register(
-        indicator('postgresql', true, () => Promise.resolve('up')),
-      ),
+  it('takes one immutable probe list and rejects duplicate/reserved names', () => {
+    expect(
+      () =>
+        new HealthRegistry([
+          indicator('postgresql', true, () => Promise.resolve('up')),
+          indicator('postgresql', true, () => Promise.resolve('up')),
+        ]),
     ).toThrow()
-    expect(() =>
-      registry.register(
-        indicator('startup', true, () => Promise.resolve('up')),
-      ),
+    expect(
+      () =>
+        new HealthRegistry([
+          indicator('startup', true, () => Promise.resolve('up')),
+        ]),
     ).toThrow()
-    expect(() =>
-      registry.register(
-        indicator('draining', true, () => Promise.resolve('up')),
-      ),
-    ).toThrow()
-    registry.seal()
-    expect(() =>
-      registry.register(indicator('late', false, () => Promise.resolve('up'))),
+    expect(
+      () =>
+        new HealthRegistry([
+          indicator('draining', true, () => Promise.resolve('up')),
+        ]),
     ).toThrow()
   })
 
   it('runs checks concurrently, stable-sorts keys and distinguishes optional down', async () => {
-    const registry = new HealthRegistry()
-    let release: (() => void) | undefined
+    let release!: () => void
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
     const started: string[] = []
-    registry.register(
+    const registry = new HealthRegistry([
       indicator('zeta', true, async () => {
         started.push('zeta')
         await gate
         return 'up'
       }),
-    )
-    registry.register(
       indicator('auxiliary', false, async () => {
         started.push('auxiliary')
         await gate
         return 'down'
       }),
-    )
-    registry.seal()
+    ])
     const checking = registry.checkAll(new AbortController().signal)
     await Promise.resolve()
     expect(started.sort()).toEqual(['auxiliary', 'zeta'])
-    release?.()
+    release()
     await expect(checking).resolves.toEqual({
       checks: { auxiliary: 'down', zeta: 'up' },
       requiredAvailable: true,
@@ -70,14 +62,11 @@ describe('HealthRegistry', () => {
   })
 
   it('maps throws to down without exposing exception text', async () => {
-    const registry = new HealthRegistry()
-    registry.register(
+    const result = await new HealthRegistry([
       indicator('postgresql', true, () =>
         Promise.reject(new Error('secret url')),
       ),
-    )
-    registry.seal()
-    const result = await registry.checkAll(new AbortController().signal)
+    ]).checkAll(new AbortController().signal)
     expect(result).toEqual({
       checks: { postgresql: 'down' },
       requiredAvailable: false,
@@ -85,15 +74,14 @@ describe('HealthRegistry', () => {
     expect(JSON.stringify(result)).not.toContain('secret')
   })
 
-  it('aborts timed-out checks without awaiting their cleanup settlement', async () => {
-    const registry = new HealthRegistry()
+  it('aborts timed-out checks without awaiting late cleanup', async () => {
     let cleaned = false
-    registry.register(
+    const result = await new HealthRegistry([
       indicator(
         'postgresql',
         true,
         (signal) =>
-          new Promise((resolve) => {
+          new Promise((resolve) =>
             signal.addEventListener(
               'abort',
               () => {
@@ -103,15 +91,12 @@ describe('HealthRegistry', () => {
                 }, 5)
               },
               { once: true },
-            )
-          }),
+            ),
+          ),
         5,
       ),
-    )
-    registry.seal()
-    await expect(
-      registry.checkAll(new AbortController().signal),
-    ).resolves.toEqual({
+    ]).checkAll(new AbortController().signal)
+    expect(result).toEqual({
       checks: { postgresql: 'down' },
       requiredAvailable: false,
     })
@@ -120,20 +105,10 @@ describe('HealthRegistry', () => {
     expect(cleaned).toBe(true)
   })
 
-  it('returns down when an indicator ignores abort and never settles', async () => {
-    const registry = new HealthRegistry()
-    registry.register(
+  it('returns down when a probe ignores abort and never settles', async () => {
+    const result = await new HealthRegistry([
       indicator('postgresql', true, () => new Promise(() => undefined), 5),
-    )
-    registry.seal()
-
-    const result = await Promise.race([
-      registry.checkAll(new AbortController().signal),
-      new Promise<'pending'>((resolve) =>
-        setTimeout(() => resolve('pending'), 25),
-      ),
-    ])
-
+    ]).checkAll(new AbortController().signal)
     expect(result).toEqual({
       checks: { postgresql: 'down' },
       requiredAvailable: false,
@@ -141,15 +116,14 @@ describe('HealthRegistry', () => {
   })
 
   it('propagates parent abort to every running indicator', async () => {
-    const registry = new HealthRegistry()
     const aborted: string[] = []
-    for (const name of ['one', 'two']) {
-      registry.register(
+    const registry = new HealthRegistry(
+      ['one', 'two'].map((name) =>
         indicator(
           name,
           true,
           (signal) =>
-            new Promise((resolve) => {
+            new Promise((resolve) =>
               signal.addEventListener(
                 'abort',
                 () => {
@@ -157,12 +131,11 @@ describe('HealthRegistry', () => {
                   resolve('down')
                 },
                 { once: true },
-              )
-            }),
+              ),
+            ),
         ),
-      )
-    }
-    registry.seal()
+      ),
+    )
     const parent = new AbortController()
     const checking = registry.checkAll(parent.signal)
     parent.abort()

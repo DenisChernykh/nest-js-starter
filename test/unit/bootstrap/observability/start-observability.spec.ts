@@ -13,9 +13,8 @@ describe('pre-framework observability bootstrap', () => {
     )
 
     expect(source).toContain('@opentelemetry/exporter-trace-otlp-proto')
-    expect(source).toContain('@opentelemetry/exporter-metrics-otlp-proto')
+    expect(source).not.toContain('@opentelemetry/exporter-metrics-otlp-proto')
     expect(source).not.toContain('@opentelemetry/exporter-trace-otlp-http')
-    expect(source).not.toContain('@opentelemetry/exporter-metrics-otlp-http')
   })
 
   it('keeps API runtime behind a dynamic import in main', () => {

@@ -21,25 +21,30 @@ describe('committed OpenAPI response conformance', () => {
   let auth: AuthTestHarness
 
   beforeAll(async () => {
+    databaseStatus = 'up'
     const moduleRef = await Test.createTestingModule({
       imports: [TestHealthModule],
-    }).compile()
+    })
+      .overrideProvider(HealthRegistry)
+      .useFactory({
+        factory: () =>
+          new HealthRegistry([
+            {
+              name: 'postgresql',
+              required: true,
+              timeoutMs: 100,
+              check: () => Promise.resolve(databaseStatus),
+            },
+            {
+              name: 'redis-coordination',
+              required: true,
+              timeoutMs: 100,
+              check: () => Promise.resolve('up'),
+            },
+          ]),
+      })
+      .compile()
     healthApp = moduleRef.createNestApplication()
-    const registry = healthApp.get(HealthRegistry)
-    databaseStatus = 'up'
-    registry.register({
-      name: 'postgresql',
-      required: true,
-      timeoutMs: 100,
-      check: () => Promise.resolve(databaseStatus),
-    })
-    registry.register({
-      name: 'redis-coordination',
-      required: true,
-      timeoutMs: 100,
-      check: () => Promise.resolve('up'),
-    })
-    registry.seal()
     lifecycle = healthApp.get(ApplicationLifecycleState)
     await healthApp.init()
     healthServer = healthApp.getHttpServer() as Server

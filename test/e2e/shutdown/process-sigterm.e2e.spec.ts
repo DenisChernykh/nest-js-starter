@@ -38,7 +38,6 @@ describe('compiled API process SIGTERM', () => {
       AUTH_CSRF_SECRET: Buffer.alloc(32, 2).toString('base64url'),
       AUTH_RATE_LIMIT_KEY_SECRET: Buffer.alloc(32, 3).toString('base64url'),
       AUTH_NETWORK_METADATA_SECRET: Buffer.alloc(32, 4).toString('base64url'),
-      AUTH_CSRF_ORIGINS: baseUrl,
       OTEL_SDK_DISABLED: 'true',
       API_HOST: '127.0.0.1',
       API_PORT: String(port),

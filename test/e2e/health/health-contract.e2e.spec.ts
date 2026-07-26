@@ -16,26 +16,31 @@ describe('health HTTP contract', () => {
   let redisStatus: 'up' | 'down'
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [TestHealthModule],
-    }).compile()
-    app = moduleRef.createNestApplication()
-    const registry = app.get(HealthRegistry)
     databaseStatus = 'up'
     redisStatus = 'up'
-    registry.register({
-      name: 'postgresql',
-      required: true,
-      timeoutMs: 100,
-      check: () => Promise.resolve(databaseStatus),
+    const moduleRef = await Test.createTestingModule({
+      imports: [TestHealthModule],
     })
-    registry.register({
-      name: 'redis-coordination',
-      required: true,
-      timeoutMs: 100,
-      check: () => Promise.resolve(redisStatus),
-    })
-    registry.seal()
+      .overrideProvider(HealthRegistry)
+      .useFactory({
+        factory: () =>
+          new HealthRegistry([
+            {
+              name: 'postgresql',
+              required: true,
+              timeoutMs: 100,
+              check: () => Promise.resolve(databaseStatus),
+            },
+            {
+              name: 'redis-coordination',
+              required: true,
+              timeoutMs: 100,
+              check: () => Promise.resolve(redisStatus),
+            },
+          ]),
+      })
+      .compile()
+    app = moduleRef.createNestApplication()
     lifecycle = app.get(ApplicationLifecycleState)
     await app.init()
     server = app.getHttpServer() as Server

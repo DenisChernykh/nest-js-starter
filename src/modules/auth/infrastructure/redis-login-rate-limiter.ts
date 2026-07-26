@@ -1,5 +1,5 @@
 import type { RuntimeEnvironment } from '@/platform/config/runtime-config.types'
-import type { RedisCapabilityExecutor } from '@/platform/redis/redis-capability'
+import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisKeyBuilder } from '@/platform/redis/redis-key.builder'
 import { RedisScriptRunner } from '@/platform/redis/redis-script.runner'
 
@@ -49,7 +49,7 @@ export class RedisLoginRateLimiter implements LoginRateLimiterPort {
   private readonly scripts: RedisScriptRunner
 
   public constructor(
-    executor: RedisCapabilityExecutor,
+    executor: RedisCommandExecutorPort,
     private readonly crypto: NodeAuthCryptoAdapter,
     private readonly config: RedisLoginRateLimiterConfig,
   ) {

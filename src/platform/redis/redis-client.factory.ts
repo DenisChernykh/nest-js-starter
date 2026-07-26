@@ -1,6 +1,17 @@
 import { createClient } from 'redis'
 
-import type { RedisManagedClient } from './redis-capability'
+/** Narrow driver boundary retained entirely inside Redis infrastructure. */
+export interface RedisManagedClient {
+  readonly isOpen: boolean
+  readonly isReady: boolean
+  connect(): Promise<unknown>
+  ping(): Promise<string>
+  sendCommand<T>(command: readonly string[]): Promise<T>
+  close(): Promise<unknown>
+  destroy(): void
+  duplicate(): RedisManagedClient
+  onError(listener: (error: unknown) => void): void
+}
 
 /** Non-secret connection deadlines applied to each node-redis client. */
 export interface RedisClientFactoryConfig {

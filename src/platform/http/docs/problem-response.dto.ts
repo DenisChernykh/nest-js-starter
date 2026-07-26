@@ -1,10 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
 
-import { PROBLEM_REGISTRY } from '../errors/problem-registry'
+import { PROBLEM_CATALOG } from '../errors/problem-registry'
 
-const problemCodes = PROBLEM_REGISTRY.definitions.map(
-  (definition) => definition.code,
-)
+const problemCodes = PROBLEM_CATALOG.map((definition) => definition.code)
 
 /** Value-free field validation issue addressed by RFC 6901 JSON Pointer. */
 export class ProblemFieldErrorResponseDto {

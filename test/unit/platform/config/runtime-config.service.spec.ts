@@ -18,7 +18,6 @@ function createService(): RuntimeConfigService {
       AUTH_CSRF_SECRET: secret(2),
       AUTH_RATE_LIMIT_KEY_SECRET: secret(3),
       AUTH_NETWORK_METADATA_SECRET: secret(4),
-      AUTH_CSRF_ORIGINS: 'http://localhost:3000,http://admin.local:3001',
       PUBLIC_API_URL: 'http://localhost:3000/',
       CORS_ORIGINS:
         'http://localhost:3000/, http://admin.local:3001/, http://localhost:3000',
@@ -97,8 +96,9 @@ describe('RuntimeConfigService', () => {
     expect(service.observability).toEqual(
       expect.objectContaining({
         disabled: true,
-        protocol: 'http/protobuf',
         exporterTimeoutMs: 1_000,
+        batchSpanScheduleDelayMs: 5_000,
+        batchSpanExportTimeoutMs: 1_000,
       }),
     )
     expect(Object.isFrozen(service.logging)).toBe(true)
@@ -117,7 +117,6 @@ describe('RuntimeConfigService', () => {
       trustedProxyCount: 2,
       databasePoolMax: 10,
       redisCoordinationConfigured: true,
-      redisCacheConfigured: false,
       authCookieName: 'nest-js-starter-session',
     })
     expect(JSON.stringify(summary)).not.toContain('local-password')

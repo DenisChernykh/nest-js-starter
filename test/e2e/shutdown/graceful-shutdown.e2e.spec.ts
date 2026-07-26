@@ -36,7 +36,6 @@ describe('graceful shutdown runtime', () => {
       'AUTH_CSRF_SECRET',
       'AUTH_RATE_LIMIT_KEY_SECRET',
       'AUTH_NETWORK_METADATA_SECRET',
-      'AUTH_CSRF_ORIGINS',
       'API_HOST',
       'API_PORT',
       'PUBLIC_API_URL',
@@ -65,7 +64,6 @@ describe('graceful shutdown runtime', () => {
     process.env['AUTH_NETWORK_METADATA_SECRET'] = Buffer.alloc(32, 4).toString(
       'base64url',
     )
-    process.env['AUTH_CSRF_ORIGINS'] = baseUrl
     process.env['API_HOST'] = '127.0.0.1'
     process.env['API_PORT'] = String(port)
     process.env['PUBLIC_API_URL'] = baseUrl

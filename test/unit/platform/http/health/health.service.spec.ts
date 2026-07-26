@@ -8,15 +8,10 @@ function createHarness(status: 'up' | 'down' = 'up'): {
   readonly check: jest.Mock
 } {
   const lifecycle = new ApplicationLifecycleState()
-  const registry = new HealthRegistry()
   const check = jest.fn(() => Promise.resolve(status))
-  registry.register({
-    name: 'postgresql',
-    required: true,
-    timeoutMs: 100,
-    check,
-  })
-  registry.seal()
+  const registry = new HealthRegistry([
+    { name: 'postgresql', required: true, timeoutMs: 100, check },
+  ])
   return { lifecycle, service: new HealthService(lifecycle, registry), check }
 }
 
@@ -26,7 +21,6 @@ describe('HealthService', () => {
     expect(service.live()).toEqual({ statusCode: 200, body: { status: 'ok' } })
     expect(check).not.toHaveBeenCalled()
   })
-
   it('implements the irreversible startup latch', () => {
     const { lifecycle, service } = createHarness()
     expect(service.startup()).toEqual({
@@ -44,7 +38,6 @@ describe('HealthService', () => {
       body: { status: 'ok' },
     })
   })
-
   it('skips readiness checks while starting or draining', async () => {
     const { lifecycle, service, check } = createHarness()
     await expect(service.ready(new AbortController().signal)).resolves.toEqual({
@@ -64,7 +57,6 @@ describe('HealthService', () => {
     })
     expect(check).not.toHaveBeenCalled()
   })
-
   it.each([
     ['up', 200, 'ok'],
     ['down', 503, 'unavailable'],
@@ -84,26 +76,26 @@ describe('HealthService', () => {
       })
     },
   )
-
   it('re-checks drain state after an awaited indicator', async () => {
     const lifecycle = new ApplicationLifecycleState()
     lifecycle.markReady()
-    const registry = new HealthRegistry()
-    let release: (() => void) | undefined
-    registry.register({
-      name: 'postgresql',
-      required: true,
-      timeoutMs: 100,
-      check: () =>
-        new Promise((resolve) => {
-          release = () => resolve('up')
-        }),
-    })
-    registry.seal()
-    const service = new HealthService(lifecycle, registry)
-    const checking = service.ready(new AbortController().signal)
+    let release!: () => void
+    const registry = new HealthRegistry([
+      {
+        name: 'postgresql',
+        required: true,
+        timeoutMs: 100,
+        check: () =>
+          new Promise((resolve) => {
+            release = () => resolve('up')
+          }),
+      },
+    ])
+    const checking = new HealthService(lifecycle, registry).ready(
+      new AbortController().signal,
+    )
     lifecycle.beginDrain()
-    release?.()
+    release()
     await expect(checking).resolves.toEqual({
       statusCode: 503,
       body: {
@@ -112,25 +104,23 @@ describe('HealthService', () => {
       },
     })
   })
-
   it('reports optional down without blocking readiness', async () => {
     const lifecycle = new ApplicationLifecycleState()
     lifecycle.markReady()
-    const registry = new HealthRegistry()
-    registry.register({
-      name: 'postgresql',
-      required: true,
-      timeoutMs: 100,
-      check: () => Promise.resolve('up'),
-    })
-    registry.register({
-      name: 'auxiliary',
-      required: false,
-      timeoutMs: 100,
-      check: () => Promise.resolve('down'),
-    })
-    registry.seal()
-
+    const registry = new HealthRegistry([
+      {
+        name: 'postgresql',
+        required: true,
+        timeoutMs: 100,
+        check: () => Promise.resolve('up'),
+      },
+      {
+        name: 'auxiliary',
+        required: false,
+        timeoutMs: 100,
+        check: () => Promise.resolve('down'),
+      },
+    ])
     await expect(
       new HealthService(lifecycle, registry).ready(
         new AbortController().signal,

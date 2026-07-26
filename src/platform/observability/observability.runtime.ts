@@ -1,14 +1,10 @@
-import type { ShutdownParticipant } from '@/platform/lifecycle/shutdown-participant'
-
 /** Minimal SDK surface owned by bounded telemetry lifecycle. */
 export interface ObservabilitySdk {
   shutdown(): Promise<void>
 }
 
-/** Ordered bounded OpenTelemetry shutdown participant. */
-export class ObservabilityRuntime implements ShutdownParticipant {
-  public readonly name = 'opentelemetry'
-  public readonly order = 400
+/** Bounded OpenTelemetry SDK lifecycle owned by the API runtime. */
+export class ObservabilityRuntime {
   private shutdownPromise: Promise<void> | undefined
 
   public constructor(private readonly sdk?: ObservabilitySdk) {}

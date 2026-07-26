@@ -8,7 +8,6 @@ import request from 'supertest'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
-import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import { TestHttpModule } from '@test/e2e/fixtures/http/test-http.module'
@@ -46,7 +45,6 @@ describe('request correlation HTTP boundary', () => {
     )
     const lifecycle = expressApp.get(ApplicationLifecycleState)
     const requestContext = expressApp.get(RequestContext)
-    expressApp.get(HealthRegistry).seal()
     lifecycle.markReady()
     configureHttpApplication(expressApp, config, lifecycle, requestContext)
     await expressApp.init()

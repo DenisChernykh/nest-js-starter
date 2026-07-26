@@ -10,7 +10,7 @@ function deadlineSignal(milliseconds: number): AbortSignal {
   return AbortSignal.timeout(Math.max(1, milliseconds))
 }
 
-/** Coordinates one bounded drain, operation abort and ordered cleanup. */
+/** Coordinates one bounded drain and explicit Redis, database, OTel cleanup. */
 export class GracefulShutdownCoordinator {
   private shutdownPromise: Promise<GracefulShutdownResult> | undefined
 
@@ -36,34 +36,26 @@ export class GracefulShutdownCoordinator {
     })
     resources?.application.closeIdleConnections?.()
     const httpSignal = deadlineSignal(httpBudget)
-    const [requestsIdle, operationsIdle] = await Promise.all([
-      resources?.requestTracker?.waitForIdle(httpSignal) ??
-        Promise.resolve(true),
-      resources?.operationTracker?.waitForIdle(httpSignal) ??
-        Promise.resolve(true),
-    ])
-    if (!requestsIdle || !operationsIdle) {
+    const requestsIdle = await (resources?.requestTracker?.waitForIdle(
+      httpSignal,
+    ) ?? Promise.resolve(true))
+    if (!requestsIdle) {
       forced = true
       failed = true
-      resources?.operationTracker?.abortAll()
       resources?.application.closeAllConnections?.()
     }
     const cleanupSignal = deadlineSignal(
       Math.max(1, overallBudget - httpBudget),
     )
-    if (resources?.operationTracker !== undefined) {
-      const settled =
-        await resources.operationTracker.waitForIdle(cleanupSignal)
-      if (!settled) failed = true
-    }
-    if (resources?.shutdownRegistry !== undefined) {
-      const result = await resources.shutdownRegistry.closeAll(cleanupSignal)
-      if (result.failed.length > 0 || result.timedOut) failed = true
-    } else {
-      await resources?.database.close(cleanupSignal).catch(() => {
-        failed = true
-      })
-    }
+    await resources?.redis.close(cleanupSignal).catch(() => {
+      failed = true
+    })
+    await resources?.database.close(cleanupSignal).catch(() => {
+      failed = true
+    })
+    await resources?.observability?.close(cleanupSignal).catch(() => {
+      failed = true
+    })
     await resources?.application.close().catch(() => {
       failed = true
     })
