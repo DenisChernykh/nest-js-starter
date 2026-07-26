@@ -112,13 +112,15 @@ aws s3 cp --only-show-errors \
 
 PGSERVICE=restore-admin psql --no-psqlrc --set=ON_ERROR_STOP=1 \
   --set=restore_db="$restore_db" <<'SQL'
-SELECT CASE
-  WHEN EXISTS (SELECT 1 FROM pg_database WHERE datname = :'restore_db') THEN 1
-  ELSE 0
-END AS restore_exists \gset
-\if :restore_exists
-  \quit
-\endif
+SELECT format($guard$
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_database WHERE datname = %L) THEN
+    RAISE EXCEPTION 'restore target already exists';
+  END IF;
+END
+$$;
+$guard$, :'restore_db') \gexec
 SELECT format('CREATE DATABASE %I TEMPLATE template0 ENCODING ''UTF8''', :'restore_db') \gexec
 SQL
 
@@ -126,6 +128,7 @@ SQL
 PGSERVICE=restore-admin psql --no-psqlrc --set=ON_ERROR_STOP=1 \
   --dbname="$restore_db" <<'SQL'
 SELECT format('GRANT CONNECT ON DATABASE %I TO app_migrator, app_runtime', current_database()) \gexec
+SELECT format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database()) \gexec
 SELECT format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM app_runtime', current_database()) \gexec
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 ALTER SCHEMA public OWNER TO app_migrator;
@@ -161,10 +164,11 @@ REVOKE ALL ON TABLE public._prisma_migrations FROM app_runtime;
 SQL
 ```
 
-The generated restore_db name has a UTC suffix and the SQL refuses an existing
-target. Never substitute the source database name, add --clean, or run
-pg_restore with a source service entry. --clean is intentionally absent because
-the restore target is newly created.
+The generated restore_db name has a UTC suffix. The guard raises a PostgreSQL
+exception for an existing target, so `ON_ERROR_STOP` returns non-zero and the
+`CREATE DATABASE`/restore commands do not run. Never substitute the source
+database name, add --clean, or run pg_restore with a source service entry.
+--clean is intentionally absent because the restore target is newly created.
 
 ## Representative verification
 
