@@ -9,10 +9,11 @@ The one-shot migrator and API use different PostgreSQL login roles:
 | app_migrator | Runs corepack pnpm@11.15.1 start:migrate before an API rollout. | Owns public, Prisma migration metadata, and every schema object created by migrations.                                                  |
 | app_runtime  | Runs the API revision that passed the migration gate.           | SELECT, INSERT, UPDATE, and DELETE on current and future application tables; USAGE, SELECT, and UPDATE on current and future sequences. |
 
-app_runtime must not receive CREATE on the database or public, any role or
-database administration attribute, ownership of application objects, or any
-privilege on public._prisma_migrations. It therefore cannot run DDL or modify
-Prisma's migration history. The API never runs prisma migrate deploy.
+app_runtime must not receive CREATE or TEMPORARY on the database or CREATE on
+public, any role or database administration attribute, ownership of application
+objects, or any privilege on public._prisma_migrations. It therefore cannot run
+DDL or modify Prisma's migration history. The API never runs prisma migrate
+deploy.
 
 The secret manager supplies separate credentials for these roles. This runbook
 never displays or stores a connection URL. The canonical deployment inputs are
@@ -67,6 +68,7 @@ an operator ever changes ownership or ACLs outside a migration.
 set -eu
 set +x
 PGSERVICE=database-admin psql --no-psqlrc --set=ON_ERROR_STOP=1 <<'SQL'
+SELECT format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database()) \gexec
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_runtime;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO app_runtime;
 REVOKE ALL ON TABLE public._prisma_migrations FROM app_runtime;
@@ -95,11 +97,55 @@ entry after the schema and roles exist.
 set -eu
 set +x
 PGSERVICE=app-runtime psql --no-psqlrc --set=ON_ERROR_STOP=1 <<'SQL'
+WITH application_tables AS (
+  SELECT format('%I.%I', n.nspname, c.relname) AS relation_name
+  FROM pg_class AS c
+  JOIN pg_namespace AS n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relkind IN ('r', 'p')
+    AND c.relname <> '_prisma_migrations'
+), application_sequences AS (
+  SELECT format('%I.%I', n.nspname, c.relname) AS relation_name
+  FROM pg_class AS c
+  JOIN pg_namespace AS n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relkind = 'S'
+)
 SELECT
   has_schema_privilege('app_runtime', 'public', 'USAGE') AS runtime_can_use_schema,
   has_schema_privilege('app_runtime', 'public', 'CREATE') AS runtime_can_create_schema_objects,
-  has_table_privilege('app_runtime', 'public.users', 'SELECT,INSERT,UPDATE,DELETE') AS runtime_has_users_dml,
-  has_table_privilege('app_runtime', 'public._prisma_migrations', 'SELECT,INSERT,UPDATE,DELETE') AS runtime_has_migration_dml,
+  COALESCE((
+    SELECT bool_and(has_table_privilege('app_runtime', relation_name, 'SELECT'))
+    FROM application_tables
+  ), true) AS runtime_all_application_tables_select,
+  COALESCE((
+    SELECT bool_and(has_table_privilege('app_runtime', relation_name, 'INSERT'))
+    FROM application_tables
+  ), true) AS runtime_all_application_tables_insert,
+  COALESCE((
+    SELECT bool_and(has_table_privilege('app_runtime', relation_name, 'UPDATE'))
+    FROM application_tables
+  ), true) AS runtime_all_application_tables_update,
+  COALESCE((
+    SELECT bool_and(has_table_privilege('app_runtime', relation_name, 'DELETE'))
+    FROM application_tables
+  ), true) AS runtime_all_application_tables_delete,
+  COALESCE((
+    SELECT bool_and(has_sequence_privilege('app_runtime', relation_name, 'USAGE'))
+    FROM application_sequences
+  ), true) AS runtime_all_sequences_usage,
+  COALESCE((
+    SELECT bool_and(has_sequence_privilege('app_runtime', relation_name, 'SELECT'))
+    FROM application_sequences
+  ), true) AS runtime_all_sequences_select,
+  COALESCE((
+    SELECT bool_and(has_sequence_privilege('app_runtime', relation_name, 'UPDATE'))
+    FROM application_sequences
+  ), true) AS runtime_all_sequences_update,
+  NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'SELECT') AS runtime_cannot_select_migration_history,
+  NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'INSERT') AS runtime_cannot_insert_migration_history,
+  NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'UPDATE') AS runtime_cannot_update_migration_history,
+  NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'DELETE') AS runtime_cannot_delete_migration_history,
   has_database_privilege('app_runtime', current_database(), 'CREATE') AS runtime_can_create_database_objects,
   has_database_privilege('app_runtime', current_database(), 'TEMPORARY') AS runtime_can_create_temporary_tables;
 
@@ -117,9 +163,11 @@ ORDER BY rolname;
 SQL
 ```
 
-Expected values are true, false, true, false, false, false on the first row;
-the ownership query returns true, and all six role attributes are false for
-both roles. The `app-runtime` service alias in this example is provisioned from
+Expected values are true, false, then true for each application-table DML
+privilege, each sequence privilege, and each denied `_prisma_migrations`
+privilege, followed by false and false for database CREATE and TEMPORARY. The
+ownership query returns true, and all six role attributes are false for both
+roles. The `app-runtime` service alias in this example is provisioned from
 `RUNTIME_DATABASE_URL` through a protected service file, so the URL is not
 passed in argv.
 
