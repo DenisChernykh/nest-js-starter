@@ -9,7 +9,9 @@ and user data from the incident record.
 ## Fixed rollback candidate and decision point
 
 The approved rollback image is supplied through <code>PREVIOUS_IMAGE_REF</code>
-and must be the immutable GHCR digest for revision
+and must match the approved immutable GHCR reference byte-for-byte:
+<code>ghcr.io/denischernykh/nest-js-starter@sha256:638771d48518551401c09a3da432d0e5c5462fc4c441b0780330bee6df8fcf6e</code>.
+This reference carries revision
 <code>913fef3124b5ec3b2aee3505dcc7ad96052d24e2</code>. Never replace it with a
 mutable tag. Keep the API's existing <code>RUNTIME_DATABASE_URL</code>; an image
 rollback does not grant the runtime role migration privileges.
@@ -59,9 +61,10 @@ test -n "$PREVIOUS_IMAGE_REF" || {
   echo 'PREVIOUS_IMAGE_REF is required' >&2
   exit 1
 }
+approved_previous_image_ref='ghcr.io/denischernykh/nest-js-starter@sha256:638771d48518551401c09a3da432d0e5c5462fc4c441b0780330bee6df8fcf6e'
 previous_revision='913fef3124b5ec3b2aee3505dcc7ad96052d24e2'
-printf '%s' "$PREVIOUS_IMAGE_REF" | grep -Eq '@sha256:[[:xdigit:]]{64}$' || {
-  echo 'PREVIOUS_IMAGE_REF must be an immutable digest reference' >&2
+test "$PREVIOUS_IMAGE_REF" = "$approved_previous_image_ref" || {
+  echo 'PREVIOUS_IMAGE_REF is not the approved immutable rollback image' >&2
   exit 1
 }
 

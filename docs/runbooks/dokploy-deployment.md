@@ -66,10 +66,11 @@ test -n "$GHCR_PASSWORD" || {
 }
 
 dokploy_base_url="$(printf '%s' "$DOKPLOY_BASE_URL" | sed 's:/$::')"
+approved_candidate_image_ref='ghcr.io/denischernykh/nest-js-starter@sha256:84d0fdb162020eea35113c9b05071f61179e01a6f47a7ea088b69cead393d112'
 candidate_revision='ddfacb316ecb721e4e0a7d2967816b8bbfd875f0'
 deployment_title="stage-$candidate_revision"
-printf '%s' "$CANDIDATE_IMAGE_REF" | grep -Eq '@sha256:[[:xdigit:]]{64}$' || {
-  echo 'CANDIDATE_IMAGE_REF must be an immutable digest reference' >&2
+test "$CANDIDATE_IMAGE_REF" = "$approved_candidate_image_ref" || {
+  echo 'CANDIDATE_IMAGE_REF is not the approved immutable candidate' >&2
   exit 1
 }
 

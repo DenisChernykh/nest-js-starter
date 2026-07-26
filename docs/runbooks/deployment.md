@@ -8,7 +8,9 @@ identify the newly created deployment record.
 ## Fixed candidate and preflight
 
 The approved candidate is supplied through <code>CANDIDATE_IMAGE_REF</code> and
-must be the immutable GHCR digest for revision
+must match the approved immutable GHCR reference byte-for-byte:
+<code>ghcr.io/denischernykh/nest-js-starter@sha256:84d0fdb162020eea35113c9b05071f61179e01a6f47a7ea088b69cead393d112</code>.
+This reference carries revision
 <code>ddfacb316ecb721e4e0a7d2967816b8bbfd875f0</code>. Never substitute a tag,
 including a commit-SHA tag, for this digest. The API runtime must receive
 <code>RUNTIME_DATABASE_URL</code> as its <code>DATABASE_URL</code>; keep it
@@ -51,9 +53,10 @@ test -n "$PUBLIC_API_URL" || {
   echo 'PUBLIC_API_URL is required' >&2
   exit 1
 }
+approved_candidate_image_ref='ghcr.io/denischernykh/nest-js-starter@sha256:84d0fdb162020eea35113c9b05071f61179e01a6f47a7ea088b69cead393d112'
 candidate_revision='ddfacb316ecb721e4e0a7d2967816b8bbfd875f0'
-printf '%s' "$CANDIDATE_IMAGE_REF" | grep -Eq '@sha256:[[:xdigit:]]{64}$' || {
-  echo 'CANDIDATE_IMAGE_REF must be an immutable digest reference' >&2
+test "$CANDIDATE_IMAGE_REF" = "$approved_candidate_image_ref" || {
+  echo 'CANDIDATE_IMAGE_REF is not the approved immutable candidate' >&2
   exit 1
 }
 
