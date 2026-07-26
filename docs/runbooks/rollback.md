@@ -38,8 +38,12 @@ if the public contract is unhealthy.
 3. Set <code>CANDIDATE_IMAGE_REF</code> to the exact value of
    <code>PREVIOUS_IMAGE_REF</code> and run the environment-only
    <code>application.saveDockerProvider</code> request in
-   <code>docs/runbooks/dokploy-deployment.md</code> (using the rollback revision
-   in its local <code>candidate_revision</code> value).
+   <code>docs/runbooks/dokploy-deployment.md</code>. The adapter is pinned to
+   promotion by default: for this rollback invocation, replace its local
+   <code>approved_candidate_image_ref</code> with the approved previous image
+   reference above and its <code>candidate_revision</code> with the rollback
+   revision before running the request. This keeps the byte-for-byte guard and
+   revision verification active; do not leave the promotion constants in place.
 4. Do not invoke the migrator for an image rollback. The API runtime account
    remains unable to mutate schema.
 5. Use <code>application.deploy</code>, snapshot <code>deployment.all</code>
