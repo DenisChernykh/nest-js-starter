@@ -11,3 +11,6 @@ export interface PasswordHasherPort {
   /** Verifies a password and reports whether a matching hash is outdated. */
   verify(password: string, encodedHash: string): Promise<PasswordVerification>
 }
+
+/** Injection token for the auth password hashing boundary. */
+export const PASSWORD_HASHER: unique symbol = Symbol('PASSWORD_HASHER')

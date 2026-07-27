@@ -1,11 +1,20 @@
+import { Inject, Injectable } from '@nestjs/common'
+
+import {
+  AUTH_AUDIT,
+  NOOP_AUTH_AUDIT,
+  type AuthAuditPort,
+} from './auth-audit.port'
 import type { AuthenticatedPrincipal } from './auth.types'
-import type { SessionStorePort } from './session-store.port'
-import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
+import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Revokes one public session identifier within authenticated user ownership. */
+@Injectable()
 export class RevokeSessionUseCase {
   public constructor(
+    @Inject(SESSION_STORE)
     private readonly sessions: SessionStorePort,
+    @Inject(AUTH_AUDIT)
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}
 

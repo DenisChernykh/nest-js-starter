@@ -57,3 +57,19 @@ export interface AuthSessionCleanupObserver {
     userId: string,
   ): void
 }
+
+/** Injection token for best-effort auth cleanup failure observation. */
+export const AUTH_SESSION_CLEANUP_OBSERVER: unique symbol = Symbol(
+  'AUTH_SESSION_CLEANUP_OBSERVER',
+)
+
+/** No-op cleanup observer used when no operational sink is configured. */
+export const NOOP_AUTH_SESSION_CLEANUP_OBSERVER: AuthSessionCleanupObserver =
+  Object.freeze({
+    cleanupIncomplete: () => undefined,
+  })
+
+/** Injection token for the constant-time fallback login hash. */
+export const AUTH_DUMMY_PASSWORD_HASH: unique symbol = Symbol(
+  'AUTH_DUMMY_PASSWORD_HASH',
+)

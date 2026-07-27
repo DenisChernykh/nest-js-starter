@@ -29,6 +29,9 @@ export interface AuthPersistencePort {
   bootstrapInitialAdmin(input: InitialAdminInput): Promise<InitialAdminResult>
 }
 
+/** Injection token for durable auth identity and security-state operations. */
+export const AUTH_PERSISTENCE: unique symbol = Symbol('AUTH_PERSISTENCE')
+
 /** Integrity failure for the required singleton auth security state. */
 export class AuthPersistenceIntegrityError extends Error {
   public constructor() {

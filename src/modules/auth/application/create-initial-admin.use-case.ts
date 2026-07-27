@@ -1,7 +1,19 @@
-import type { AuthPersistencePort } from './auth-persistence.port'
+import { Inject, Injectable } from '@nestjs/common'
+
+import {
+  AUTH_AUDIT,
+  NOOP_AUTH_AUDIT,
+  type AuthAuditPort,
+} from './auth-audit.port'
+import {
+  AUTH_PERSISTENCE,
+  type AuthPersistencePort,
+} from './auth-persistence.port'
 import type { InitialAdminResult } from './auth.types'
-import type { PasswordHasherPort } from './password-hasher.port'
-import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
+import {
+  PASSWORD_HASHER,
+  type PasswordHasherPort,
+} from './password-hasher.port'
 
 /** One-shot administrator credentials supplied only by the local CLI. */
 export interface CreateInitialAdminInput {
@@ -10,10 +22,14 @@ export interface CreateInitialAdminInput {
 }
 
 /** Hashes credentials and delegates the cross-process one-shot commit. */
+@Injectable()
 export class CreateInitialAdminUseCase {
   public constructor(
+    @Inject(AUTH_PERSISTENCE)
     private readonly persistence: AuthPersistencePort,
+    @Inject(PASSWORD_HASHER)
     private readonly passwords: PasswordHasherPort,
+    @Inject(AUTH_AUDIT)
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}
 

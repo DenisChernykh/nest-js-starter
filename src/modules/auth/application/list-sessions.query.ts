@@ -1,12 +1,17 @@
+import { Inject, Injectable } from '@nestjs/common'
+
 import type { AuthenticatedPrincipal } from './auth.types'
 import type {
   BrowserSessionSummary,
-  SessionStorePort,
 } from './session-store.port'
+import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Lists safe session metadata for the authenticated owner only. */
+@Injectable()
 export class ListSessionsQuery {
-  public constructor(private readonly sessions: SessionStorePort) {}
+  public constructor(
+    @Inject(SESSION_STORE) private readonly sessions: SessionStorePort,
+  ) {}
 
   public execute(
     principal: AuthenticatedPrincipal,

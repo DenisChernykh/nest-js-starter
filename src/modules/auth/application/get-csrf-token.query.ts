@@ -1,5 +1,7 @@
+import { Inject, Injectable } from '@nestjs/common'
+
 import { AuthenticationRequiredError } from './auth-errors'
-import type { SessionStorePort } from './session-store.port'
+import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Session-bound anti-CSRF value returned only for a valid opaque token. */
 export interface CsrfTokenView {
@@ -7,8 +9,11 @@ export interface CsrfTokenView {
 }
 
 /** Revalidates a session and derives its CSRF token with the dedicated key. */
+@Injectable()
 export class GetCsrfTokenQuery {
-  public constructor(private readonly sessions: SessionStorePort) {}
+  public constructor(
+    @Inject(SESSION_STORE) private readonly sessions: SessionStorePort,
+  ) {}
 
   public async execute(
     rawToken: string,
