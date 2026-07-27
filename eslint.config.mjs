@@ -211,8 +211,7 @@ export default tseslint.config(
                 'pino',
                 'redis',
               ],
-              message:
-                'Shared application code must remain framework-free.',
+              message: 'Shared application code must remain framework-free.',
             },
             {
               group: [

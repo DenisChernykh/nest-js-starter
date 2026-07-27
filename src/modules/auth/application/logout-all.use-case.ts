@@ -32,7 +32,8 @@ export class LogoutAllUseCase {
     @Inject(SESSION_STORE)
     private readonly sessions: SessionStorePort,
     @Inject(AUTH_SESSION_CLEANUP_OBSERVER)
-    private readonly cleanupObserver: AuthSessionCleanupObserver | undefined = undefined,
+    private readonly cleanupObserver:
+      AuthSessionCleanupObserver | undefined = undefined,
     @Inject(AUTH_AUDIT)
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}

@@ -24,9 +24,7 @@ import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
 } from './password-hasher.port'
-import type {
-  IssuedBrowserSession,
-} from './session-store.port'
+import type { IssuedBrowserSession } from './session-store.port'
 import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Untrusted login fields plus safe request metadata. */

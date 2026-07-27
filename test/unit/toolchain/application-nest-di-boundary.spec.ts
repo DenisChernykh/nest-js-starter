@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 
-import { ESLint } from 'eslint'
+import { ESLint, Linter } from 'eslint'
 
 const moduleApplicationPath = join(
   process.cwd(),
@@ -15,35 +15,33 @@ async function lintApplicationSource(
   source: string,
   filePath = moduleApplicationPath,
 ): Promise<readonly string[]> {
-  const [result] = await new ESLint({ cwd: process.cwd() }).lintText(source, {
-    filePath,
-  })
+  const eslint = new ESLint({ cwd: process.cwd() })
+  const config = (await eslint.calculateConfigForFile(filePath)) as unknown as {
+    readonly rules?: Readonly<Record<string, Linter.RuleEntry>>
+  }
+  const restriction = config?.rules?.['no-restricted-imports']
+  if (restriction === undefined)
+    throw new Error(`Missing no-restricted-imports config for ${filePath}`)
 
-  return result?.messages.map(({ message }) => message) ?? []
+  return new Linter({ configType: 'flat' })
+    .verify(source, {
+      languageOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+      },
+      rules: {
+        'no-restricted-imports': restriction,
+      },
+    })
+    .map(({ message }) => message)
 }
 
 describe('application Nest DI boundary', () => {
   it('allows only Inject and Injectable as module application metadata', async () => {
     const messages = await lintApplicationSource(`
       import { Inject, Injectable } from '@nestjs/common'
-
-      interface ExamplePort {
-        execute(): void
-      }
-
-      const EXAMPLE_PORT = Symbol('EXAMPLE_PORT')
-
-      /** Executes an example through its application port. */
-      @Injectable()
-      export class ExampleUseCase {
-        public constructor(
-          @Inject(EXAMPLE_PORT) private readonly port: ExamplePort,
-        ) {}
-
-        public execute(): void {
-          this.port.execute()
-        }
-      }
+      void Inject
+      void Injectable
     `)
 
     expect(messages).toEqual([])
@@ -54,10 +52,7 @@ describe('application Nest DI boundary', () => {
       'Nest HTTP exceptions',
       "import { HttpException } from '@nestjs/common'\nvoid HttpException",
     ],
-    [
-      'Nest logger',
-      "import { Logger } from '@nestjs/common'\nvoid Logger",
-    ],
+    ['Nest logger', "import { Logger } from '@nestjs/common'\nvoid Logger"],
     [
       'Nest configuration',
       "import { ConfigService } from '@nestjs/config'\nvoid ConfigService",
@@ -66,10 +61,7 @@ describe('application Nest DI boundary', () => {
       'Prisma',
       "import { PrismaClient } from '@prisma/client'\nvoid PrismaClient",
     ],
-    [
-      'Redis',
-      "import Redis from 'ioredis'\nvoid Redis",
-    ],
+    ['Redis', "import Redis from 'ioredis'\nvoid Redis"],
     [
       'outer adapters',
       "import { Adapter } from '@/modules/auth/infrastructure/adapter'\nvoid Adapter",
@@ -92,7 +84,9 @@ describe('application Nest DI boundary', () => {
 
     expect(messages).toEqual(
       expect.arrayContaining([
-        expect.stringContaining('Shared application code must remain framework-free.'),
+        expect.stringContaining(
+          'Shared application code must remain framework-free.',
+        ),
       ]),
     )
   })

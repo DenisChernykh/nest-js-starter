@@ -1,7 +1,4 @@
-import {
-  INJECTABLE_WATERMARK,
-  MODULE_METADATA,
-} from '@nestjs/common/constants'
+import { INJECTABLE_WATERMARK, MODULE_METADATA } from '@nestjs/common/constants'
 import { Test } from '@nestjs/testing'
 
 import {

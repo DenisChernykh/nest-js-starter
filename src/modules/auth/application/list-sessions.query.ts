@@ -1,9 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common'
 
 import type { AuthenticatedPrincipal } from './auth.types'
-import type {
-  BrowserSessionSummary,
-} from './session-store.port'
+import type { BrowserSessionSummary } from './session-store.port'
 import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Lists safe session metadata for the authenticated owner only. */
