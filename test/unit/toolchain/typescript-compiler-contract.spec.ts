@@ -19,14 +19,18 @@ describe('TypeScript compiler contract', () => {
       }),
     )
 
-    for (const scriptName of [
-      'build:compiled',
-      'typecheck:src',
-      'typecheck:test',
-    ]) {
+    const expectedCompilerCommands = {
+      'build:compiled': 'tsc -p tsconfig.build.json',
+      'typecheck:src': 'tsc --noEmit -p tsconfig.json',
+      'typecheck:test': 'tsc --noEmit -p tsconfig.test.json',
+    } as const
+
+    for (const [scriptName, compilerCommand] of Object.entries(
+      expectedCompilerCommands,
+    )) {
       const script = manifest.scripts?.[scriptName]
 
-      expect(script).toContain('tsc')
+      expect(script).toContain(compilerCommand)
       expect(script).not.toContain('tsc6')
     }
   })
