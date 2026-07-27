@@ -22,7 +22,7 @@ As of 2026-07-26, the production foundation is implemented on `stage`.
 - The
   [Stage image run for `913fef3`](https://github.com/DenisChernykh/nest-js-starter/actions/runs/30192505866)
   completed successfully.
-- The current quick gate has 59 unit suites and 301 tests. Integration and e2e
+- The current quick gate has 60 unit suites and 302 tests. Integration and e2e
   suites remain in `pnpm check`; Docker verification remains in
   `pnpm oci:check` and stage publication.
 
@@ -34,7 +34,10 @@ for checking the current branch and workflow runs.
 The following contracts are complete and remain in the core:
 
 1. Five module-local layers enforced by dependency-cruiser.
-2. One TypeScript 6.0.2 toolchain and one typed runtime-defaults catalog.
+2. TypeScript 7.0.2 is the production compiler (`tsc`), while the exact
+   `typescript: npm:@typescript/typescript6@6.0.2` alias remains only for
+   tooling that still requires the TypeScript 6 API/CLI, plus one typed
+   runtime-defaults catalog.
 3. PostgreSQL with explicit lifecycle, readiness and a separate migrator role.
 4. One coordination Redis connection for opaque sessions and distributed login
    limits, preserving the existing key format.
