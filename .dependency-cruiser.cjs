@@ -58,11 +58,19 @@ module.exports = {
       },
     },
     {
-      name: 'application-must-not-import-frameworks',
+      name: 'application-must-not-import-non-di-frameworks',
       severity: 'error',
       from: { path: '(^|/)application(/|$)' },
       to: {
-        path: '(^|/)(node_modules/)?(@nestjs/|@prisma/|@opentelemetry/|express(/|$)|ioredis(/|$)|pino(/|$)|redis(/|$))',
+        path: '(^|/)(node_modules/)?(@nestjs/(?!common(/|$))|@prisma/|@opentelemetry/|express(/|$)|ioredis(/|$)|pino(/|$)|redis(/|$))',
+      },
+    },
+    {
+      name: 'shared-application-must-not-import-nest',
+      severity: 'error',
+      from: { path: '(^|/)shared/application(/|$)' },
+      to: {
+        path: '(^|/)(node_modules/)?@nestjs/',
       },
     },
     {
