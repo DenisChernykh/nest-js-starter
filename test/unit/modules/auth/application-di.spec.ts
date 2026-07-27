@@ -1,4 +1,7 @@
-import { INJECTABLE_WATERMARK } from '@nestjs/common/constants'
+import {
+  INJECTABLE_WATERMARK,
+  MODULE_METADATA,
+} from '@nestjs/common/constants'
 import { Test } from '@nestjs/testing'
 
 import {
@@ -12,6 +15,7 @@ import {
 import {
   AUTH_DUMMY_PASSWORD_HASH,
   AUTH_SESSION_CLEANUP_OBSERVER,
+  NOOP_AUTH_SESSION_CLEANUP_OBSERVER,
   type AuthenticatedPrincipal,
   type AuthSessionCleanupObserver,
 } from '@/modules/auth/application/auth.types'
@@ -46,6 +50,12 @@ import {
   TRANSACTION_PORT,
   type TransactionPort,
 } from '@/shared/application/transaction.port'
+import { Argon2PasswordHasher } from '@/modules/auth/infrastructure/argon2-password.hasher'
+import { PrismaAuthRepository } from '@/modules/auth/infrastructure/prisma-auth.repository'
+import { RedisLoginRateLimiter } from '@/modules/auth/infrastructure/redis-login-rate-limiter'
+import { RedisSessionStore } from '@/modules/auth/infrastructure/redis-session.store'
+import { AuthModule } from '@/modules/auth/composition/auth.module'
+import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
 
 const applicationClasses = [
   AuthenticateSessionUseCase,
@@ -59,6 +69,17 @@ const applicationClasses = [
   LogoutUseCase,
   RevokeSessionUseCase,
 ] as const
+
+const apiApplicationClasses = applicationClasses.filter(
+  (applicationClass) => applicationClass !== CreateInitialAdminUseCase,
+)
+
+interface ProviderDefinition {
+  readonly provide: unknown
+  readonly useExisting?: unknown
+  readonly useFactory?: unknown
+  readonly useValue?: unknown
+}
 
 describe('auth application Nest dependency injection', () => {
   it('constructs runtime application classes directly through port tokens', async () => {
@@ -132,5 +153,64 @@ describe('auth application Nest dependency injection', () => {
     expect(listSessions).toHaveBeenCalledWith('user-1', 'session-1')
 
     await moduleRef.close()
+  })
+
+  it('composes application classes directly and aliases ports to adapters', () => {
+    const providers = Reflect.getMetadata(
+      MODULE_METADATA.PROVIDERS,
+      AuthModule,
+    ) as readonly unknown[]
+    const definitions = providers.filter(
+      (provider): provider is ProviderDefinition =>
+        typeof provider === 'object' &&
+        provider !== null &&
+        'provide' in provider,
+    )
+
+    expect(providers).toEqual(expect.arrayContaining(apiApplicationClasses))
+
+    for (const applicationClass of apiApplicationClasses) {
+      expect(
+        definitions.find(
+          ({ provide, useFactory }) =>
+            provide === applicationClass && useFactory !== undefined,
+        ),
+      ).toBeUndefined()
+    }
+
+    expect(definitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          provide: AUTH_PERSISTENCE,
+          useExisting: PrismaAuthRepository,
+        }),
+        expect.objectContaining({
+          provide: PASSWORD_HASHER,
+          useExisting: Argon2PasswordHasher,
+        }),
+        expect.objectContaining({
+          provide: LOGIN_RATE_LIMITER,
+          useExisting: RedisLoginRateLimiter,
+        }),
+        expect.objectContaining({
+          provide: SESSION_STORE,
+          useExisting: RedisSessionStore,
+        }),
+        expect.objectContaining({
+          provide: AUTH_AUDIT,
+          useExisting: AuthAuditLogger,
+        }),
+      ]),
+    )
+    expect(
+      definitions.find(
+        ({ provide }) => provide === AUTH_SESSION_CLEANUP_OBSERVER,
+      )?.useValue,
+    ).toBe(NOOP_AUTH_SESSION_CLEANUP_OBSERVER)
+    expect(
+      typeof definitions.find(
+        ({ provide }) => provide === AUTH_DUMMY_PASSWORD_HASH,
+      )?.useValue,
+    ).toBe('string')
   })
 })
