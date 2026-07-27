@@ -17,8 +17,9 @@ auth secrets. При неизвестном scope считайте скомпр�
    security/secret provider. Не публикуйте значения в terminal history, logs,
    chat или evidence.
 3. Создайте в secret provider четыре новых, криптографически случайных,
-   32-byte base64url values. Каждое значение должно отличаться от остальных и
-   от всех прежних; не копируйте sample values из `.env.example`.
+   32-byte values, закодированных canonical unpadded base64url (ровно 43
+   символа). Каждое значение должно отличаться от остальных и от всех прежних;
+   не копируйте sample values из `.env.example`.
 4. Подготовьте единый configuration revision со всеми четырьмя новыми
    значениями. Не применяйте значения по одному и не допускайте replica со
    старым bundle рядом с replica с новым.

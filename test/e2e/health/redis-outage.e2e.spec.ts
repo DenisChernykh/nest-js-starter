@@ -40,9 +40,37 @@ describe('coordination Redis outage readiness', () => {
         },
       })
       expect(authentication.status).toBe(503)
-      const body = await authentication.text()
-      expect(body).not.toContain(redis.getConnectionUrl())
-      expect(body).not.toContain('redis://')
+      expect(authentication.headers.get('content-type')).toMatch(
+        /^application\/problem\+json/u,
+      )
+      const authenticationBody = (await authentication.json()) as {
+        readonly code: string
+      }
+      expect(authenticationBody.code).toBe('DEPENDENCY_UNAVAILABLE')
+      expect(JSON.stringify(authenticationBody)).not.toContain(
+        redis.getConnectionUrl(),
+      )
+      expect(JSON.stringify(authenticationBody)).not.toContain('redis://')
+
+      const login = await fetch(`${baseUrl}/v1/auth/login`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: baseUrl,
+        },
+        body: JSON.stringify({
+          email: 'missing@example.test',
+          password: 'valid-shaped-password',
+        }),
+      })
+      expect(login.status).toBe(503)
+      expect(login.headers.get('content-type')).toMatch(
+        /^application\/problem\+json/u,
+      )
+      const loginBody = (await login.json()) as { readonly code: string }
+      expect(loginBody.code).toBe('DEPENDENCY_UNAVAILABLE')
+      expect(JSON.stringify(loginBody)).not.toContain(redis.getConnectionUrl())
+      expect(JSON.stringify(loginBody)).not.toContain('redis://')
 
       await resumeRedis(redis)
       suspended = false

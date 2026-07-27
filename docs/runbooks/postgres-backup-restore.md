@@ -38,9 +38,22 @@ set +x
 : "$S3_BACKUP_PREFIX"
 
 backup_id="$(date -u +%Y%m%dT%H%M%SZ)"
-workdir="$(mktemp -d /private/tmp/nest-js-starter-pg-backup.XXXXXX)"
+workdir="$(mktemp -d "${TMPDIR:-/tmp}/nest-js-starter-pg-backup.XXXXXX")"
 archive_name="nest-js-starter-$backup_id.dump"
-trap 'rm -rf "$workdir"' EXIT HUP INT TERM
+backup_published=0
+cleanup_backup() {
+  status=$?
+  if [ "$status" -ne 0 ] && [ "$backup_published" -eq 0 ]; then
+    aws s3 rm --only-show-errors \
+      "s3://$S3_BACKUP_BUCKET/$S3_BACKUP_PREFIX/$archive_name" || true
+    aws s3 rm --only-show-errors \
+      "s3://$S3_BACKUP_BUCKET/$S3_BACKUP_PREFIX/$archive_name.sha256" || true
+  fi
+  rm -rf "$workdir"
+  trap - EXIT HUP INT TERM
+  exit "$status"
+}
+trap cleanup_backup EXIT HUP INT TERM
 
 PGSERVICE=backup-source pg_dump \
   --format=custom \
@@ -60,6 +73,7 @@ aws s3 cp --only-show-errors \
 aws s3 cp --only-show-errors \
   "$workdir/$archive_name.sha256" \
   "s3://$S3_BACKUP_BUCKET/$S3_BACKUP_PREFIX/$archive_name.sha256"
+backup_published=1
 
 printf '%s\n' "backup $backup_id uploaded with SHA-256 sidecar"
 ```
@@ -86,15 +100,43 @@ set +x
 : "$S3_BACKUP_PREFIX"
 : "$BACKUP_ID"
 
-restore_db="nest_js_starter_restore_$(date -u +%Y%m%dT%H%M%SZ)"
-workdir="$(mktemp -d /private/tmp/nest-js-starter-pg-restore.XXXXXX)"
+restore_run_id="$(date -u +%Y%m%dT%H%M%SZ)"
+restore_db="nest_js_starter_restore_$restore_run_id"
+workdir="$(mktemp -d "${TMPDIR:-/tmp}/nest-js-starter-pg-restore.XXXXXX")"
 archive_name="nest-js-starter-$BACKUP_ID.dump"
-trap 'rm -rf "$workdir"' EXIT HUP INT TERM
+restore_api_pid=''
+cleanup_restore() {
+  status=$?
+  if [ -n "$restore_api_pid" ]; then
+    kill "$restore_api_pid" 2>/dev/null || true
+    wait "$restore_api_pid" 2>/dev/null || true
+  fi
+  if [ "$status" -eq 0 ]; then
+    rm -rf "$workdir"
+  else
+    printf '%s\n' \
+      "restore failed; retain the private diagnostic log at $workdir/restore-api.log" \
+      >&2
+  fi
+  trap - EXIT HUP INT TERM
+  exit "$status"
+}
+trap cleanup_restore EXIT HUP INT TERM
 
 source_db="$(PGSERVICE=backup-source psql --no-psqlrc --tuples-only --no-align \
   --command 'SELECT current_database()')"
 [ "$restore_db" != "$source_db" ] || {
   printf '%s\n' 'refusing restore: generated target equals source database' >&2
+  exit 64
+}
+
+source_metadata="$(PGSERVICE=backup-source psql --no-psqlrc --tuples-only --no-align \
+  --field-separator='|' \
+  --command "SELECT format('%s|%s|%s|%s|%s', pg_encoding_to_char(datencoding), CASE datlocprovider WHEN 'c' THEN 'libc' WHEN 'i' THEN 'icu' WHEN 'b' THEN 'builtin' ELSE 'unknown' END, datcollate, datctype, coalesce(datlocale, '')) FROM pg_database WHERE datname = current_database()")"
+IFS='|' read -r source_encoding source_locale_provider source_lc_collate \
+  source_lc_ctype source_locale <<<"$source_metadata"
+test -n "$source_encoding" || {
+  printf '%s\n' 'refusing restore: source database locale metadata is unavailable' >&2
   exit 64
 }
 
@@ -121,8 +163,56 @@ BEGIN
 END
 $$;
 $guard$, :'restore_db') \gexec
-SELECT format('CREATE DATABASE %I TEMPLATE template0 ENCODING ''UTF8''', :'restore_db') \gexec
 SQL
+
+case "$source_locale_provider" in
+  libc)
+    PGSERVICE=restore-admin psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+      --set=restore_db="$restore_db" \
+      --set=source_encoding="$source_encoding" \
+      --set=source_lc_collate="$source_lc_collate" \
+      --set=source_lc_ctype="$source_lc_ctype" <<'SQL'
+SELECT format(
+  'CREATE DATABASE %I TEMPLATE template0 ENCODING %L LOCALE_PROVIDER libc LC_COLLATE %L LC_CTYPE %L',
+  :'restore_db', :'source_encoding', :'source_lc_collate', :'source_lc_ctype'
+) \gexec
+SQL
+    ;;
+  icu)
+    test -n "$source_locale" || {
+      printf '%s\n' 'refusing restore: ICU locale is unavailable' >&2
+      exit 64
+    }
+    PGSERVICE=restore-admin psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+      --set=restore_db="$restore_db" \
+      --set=source_encoding="$source_encoding" \
+      --set=source_locale="$source_locale" <<'SQL'
+SELECT format(
+  'CREATE DATABASE %I TEMPLATE template0 ENCODING %L LOCALE_PROVIDER icu ICU_LOCALE %L',
+  :'restore_db', :'source_encoding', :'source_locale'
+) \gexec
+SQL
+    ;;
+  builtin)
+    test -n "$source_locale" || {
+      printf '%s\n' 'refusing restore: builtin locale is unavailable' >&2
+      exit 64
+    }
+    PGSERVICE=restore-admin psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+      --set=restore_db="$restore_db" \
+      --set=source_encoding="$source_encoding" \
+      --set=source_locale="$source_locale" <<'SQL'
+SELECT format(
+  'CREATE DATABASE %I TEMPLATE template0 ENCODING %L LOCALE_PROVIDER builtin BUILTIN_LOCALE %L',
+  :'restore_db', :'source_encoding', :'source_locale'
+) \gexec
+SQL
+    ;;
+  *)
+    printf '%s\n' 'refusing restore: unsupported source locale provider' >&2
+    exit 64
+    ;;
+esac
 
 # Prepare the new target only. The source connection is never used below.
 PGSERVICE=restore-admin psql --no-psqlrc --set=ON_ERROR_STOP=1 \
@@ -161,6 +251,10 @@ PGSERVICE=restore-admin psql --no-psqlrc --set=ON_ERROR_STOP=1 \
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_runtime;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO app_runtime;
 REVOKE ALL ON TABLE public._prisma_migrations FROM app_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE app_migrator IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_runtime;
+ALTER DEFAULT PRIVILEGES FOR ROLE app_migrator IN SCHEMA public
+  GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO app_runtime;
 SQL
 ```
 
@@ -217,13 +311,15 @@ set +x
 : "$RESTORE_AUTH_NETWORK_METADATA_SECRET"
 
 restore_port=3101
-restore_prefix="restore-$(printf '%s' "$BACKUP_ID" | tr '[:upper:]' '[:lower:]')"
+restore_prefix="restore-$(printf '%s' "$BACKUP_ID-$restore_run_id" | tr '[:upper:]' '[:lower:]')"
 if lsof -nP -iTCP:"$restore_port" -sTCP:LISTEN >/dev/null 2>&1; then
   printf '%s\n' "refusing restore API: loopback port $restore_port is in use" >&2
   exit 64
 fi
 
-export NODE_ENV=production
+# The API is loopback-only for this isolated drill. Development mode is
+# required because production configuration rejects HTTP origins.
+export NODE_ENV=development
 export API_HOST=127.0.0.1
 export API_PORT="$restore_port"
 export API_DOCS_MODE=off
@@ -232,7 +328,7 @@ export CORS_ORIGINS="http://127.0.0.1:$restore_port"
 export TRUST_PROXY_CIDRS=127.0.0.1/32
 export OTEL_SDK_DISABLED=true
 export SERVICE_VERSION=restore-drill
-export SERVICE_REVISION="$BACKUP_ID"
+export SERVICE_REVISION="$restore_run_id"
 export DATABASE_URL="$RESTORE_RUNTIME_DATABASE_URL"
 export REDIS_COORDINATION_URL="$RESTORE_REDIS_COORDINATION_URL"
 export REDIS_KEY_PREFIX="$restore_prefix"
@@ -242,10 +338,10 @@ export AUTH_RATE_LIMIT_KEY_SECRET="$RESTORE_AUTH_RATE_LIMIT_KEY_SECRET"
 export AUTH_NETWORK_METADATA_SECRET="$RESTORE_AUTH_NETWORK_METADATA_SECRET"
 corepack pnpm@11.15.1 start:api >"$workdir/restore-api.log" 2>&1 &
 restore_api_pid=$!
-trap 'kill "$restore_api_pid" 2>/dev/null || true; wait "$restore_api_pid" 2>/dev/null || true; rm -rf "$workdir"' EXIT HUP INT TERM
 
 for attempt in $(seq 1 30); do
-  if curl --fail --silent --show-error --output /dev/null \
+  if curl --fail --silent --show-error --connect-timeout 2 --max-time 5 \
+    --output /dev/null \
     "http://127.0.0.1:$restore_port/health/ready"; then
     printf '%s\n' 'isolated restore API is ready'
     break
@@ -259,6 +355,7 @@ done
 
 kill "$restore_api_pid"
 wait "$restore_api_pid" || true
+restore_api_pid=''
 ```
 
 Record the selected backup ID, SHA-256 verification result, restore target
@@ -267,3 +364,9 @@ the environment-owned drill record. Delete the separately restored database
 only under its explicit UTC-suffixed name and only after that record is
 accepted; deletion is outside this runbook. The source database is never
 cleared, replaced, or restored over.
+
+On a failed drill the work directory is intentionally retained with mode 0700
+so the startup log remains available for redacted incident evidence. After the
+evidence is accepted, remove only that generated work directory and its
+separately restored database; never delete the source database or a shared
+temporary directory.
