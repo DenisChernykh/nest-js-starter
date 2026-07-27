@@ -82,13 +82,30 @@ start an API deployment.
    its terminal state.
 6. Run the external smoke checks below.
 
-The repository's Prisma config reads <code>DATABASE_URL</code>, so the operator
-maps the canonical migration input only for the one-shot command:
+The repository's Prisma config reads <code>DATABASE_URL</code>. Run the
+migrator from the exact image that was pulled and label-verified above, so the
+migration files and application revision cannot come from an unrelated
+checkout. The operator maps the canonical migration input only inside this
+one-shot container:
 
 ```sh
-DATABASE_URL="$MIGRATION_DATABASE_URL" \
-  corepack pnpm@11.15.1 start:migrate
+(
+  # Pass only the exported variable name to Docker. The value is not placed in
+  # the docker command's argv or in a process-listing argument.
+  export DATABASE_URL="$MIGRATION_DATABASE_URL"
+  docker run --rm \
+    --env DATABASE_URL \
+    --entrypoint corepack \
+    "$CANDIDATE_IMAGE_REF" \
+    pnpm@11.15.1 start:migrate
+)
 ```
+
+Attach the operator's isolated migration network to this command when the
+database is not reachable from the Docker default network. The image itself is
+the only source of <code>prisma.config.ts</code>, migration files and the
+<code>start:migrate</code> script; never substitute a host checkout or a
+mutable image tag.
 
 The API image must not be changed after any migrator failure. Preserve the
 failed migrator logs and diagnose the database or migration; do not retry by

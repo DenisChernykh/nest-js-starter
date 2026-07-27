@@ -32,7 +32,8 @@ set +x
 }
 
 # Prove the current revision is ready before the failed one-shot operation.
-curl --fail --silent --show-error --output /dev/null \
+curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+  --output /dev/null \
   "$PUBLIC_API_URL/health/ready"
 
 # The failure is expected. Output is intentionally discarded so a driver cannot
@@ -45,7 +46,8 @@ if corepack pnpm@11.15.1 start:migrate >/dev/null 2>&1; then
 fi
 
 # The same already-running API revision must still be ready afterwards.
-curl --fail --silent --show-error --output /dev/null \
+curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+  --output /dev/null \
   "$PUBLIC_API_URL/health/ready"
 printf '%s\n' 'controlled migration failure isolated; previous API stayed ready'
 ```

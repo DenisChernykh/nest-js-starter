@@ -45,6 +45,23 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
     CREATE ROLE app_runtime LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
   END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM pg_roles
+    WHERE rolname IN ('app_migrator', 'app_runtime')
+      AND (
+        NOT rolcanlogin
+        OR rolinherit
+        OR rolsuper
+        OR rolcreatedb
+        OR rolcreaterole
+        OR rolreplication
+        OR rolbypassrls
+      )
+  ) THEN
+    RAISE EXCEPTION
+      'refusing provisioning: an application role has unsafe attributes';
+  END IF;
 END
 $$;
 
@@ -147,14 +164,61 @@ SELECT
   NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'UPDATE') AS runtime_cannot_update_migration_history,
   NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'DELETE') AS runtime_cannot_delete_migration_history,
   has_database_privilege('app_runtime', current_database(), 'CREATE') AS runtime_can_create_database_objects,
-  has_database_privilege('app_runtime', current_database(), 'TEMPORARY') AS runtime_can_create_temporary_tables;
+  has_database_privilege('app_runtime', current_database(), 'TEMPORARY') AS runtime_can_create_temporary_tables,
+  (
+    SELECT bool_and(check_value)
+    FROM unnest(ARRAY[
+      has_schema_privilege('app_runtime', 'public', 'USAGE'),
+      NOT has_schema_privilege('app_runtime', 'public', 'CREATE'),
+      COALESCE((SELECT bool_and(has_table_privilege('app_runtime', relation_name, 'SELECT')) FROM application_tables), true),
+      COALESCE((SELECT bool_and(has_table_privilege('app_runtime', relation_name, 'INSERT')) FROM application_tables), true),
+      COALESCE((SELECT bool_and(has_table_privilege('app_runtime', relation_name, 'UPDATE')) FROM application_tables), true),
+      COALESCE((SELECT bool_and(has_table_privilege('app_runtime', relation_name, 'DELETE')) FROM application_tables), true),
+      COALESCE((SELECT bool_and(has_sequence_privilege('app_runtime', relation_name, 'USAGE')) FROM application_sequences), true),
+      COALESCE((SELECT bool_and(has_sequence_privilege('app_runtime', relation_name, 'SELECT')) FROM application_sequences), true),
+      COALESCE((SELECT bool_and(has_sequence_privilege('app_runtime', relation_name, 'UPDATE')) FROM application_sequences), true),
+      NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'SELECT'),
+      NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'INSERT'),
+      NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'UPDATE'),
+      NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'DELETE'),
+      NOT has_database_privilege('app_runtime', current_database(), 'CREATE'),
+      NOT has_database_privilege('app_runtime', current_database(), 'TEMPORARY'),
+      (
+        SELECT count(*) = 2 AND COALESCE(bool_and(
+          rolcanlogin
+          AND NOT rolinherit
+          AND NOT rolsuper
+          AND NOT rolcreatedb
+          AND NOT rolcreaterole
+          AND NOT rolreplication
+          AND NOT rolbypassrls
+        ), false)
+        FROM pg_roles
+        WHERE rolname IN ('app_migrator', 'app_runtime')
+      )
+    ]) AS checks(check_value)
+  ) AS runtime_privileges_verified
+\gset runtime_
+
+\if :runtime_runtime_privileges_verified
+\else
+  \echo 'runtime privilege verification failed; stop before granting traffic'
+  \quit 1
+\endif
 
 SELECT NOT EXISTS (
   SELECT 1
   FROM pg_class
   WHERE relnamespace = 'public'::regnamespace
     AND relowner = (SELECT oid FROM pg_roles WHERE rolname = 'app_runtime')
-) AS runtime_owns_no_public_relations;
+) AS runtime_owns_no_public_relations
+\gset ownership_
+
+\if :ownership_runtime_owns_no_public_relations
+\else
+  \echo 'runtime ownership verification failed; stop before granting traffic'
+  \quit 1
+\endif
 
 SELECT rolname, rolsuper, rolcreaterole, rolcreatedb, rolreplication, rolbypassrls
 FROM pg_roles
@@ -165,9 +229,11 @@ SQL
 
 Expected values are true, false, then true for each application-table DML
 privilege, each sequence privilege, and each denied `_prisma_migrations`
-privilege, followed by false and false for database CREATE and TEMPORARY. The
-ownership query returns true, and all six role attributes are false for both
-roles. The `app-runtime` service alias in this example is provisioned from
+privilege, followed by false and false for database CREATE and TEMPORARY, and
+true for the application-role attribute guard. The ownership query returns
+true; `rolcanlogin` is true, while `rolinherit` and every forbidden
+administrative attribute are false for both roles. The `app-runtime` service
+alias in this example is provisioned from
 `RUNTIME_DATABASE_URL` through a protected service file, so the URL is not
 passed in argv.
 

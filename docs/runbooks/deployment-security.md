@@ -16,8 +16,10 @@ runtime-конфигурацию приложения.
    `TRUST_PROXY_CIDRS`; прямой доступ к API не должен позволять подменить
    forwarded headers.
 4. В production установите `API_DOCS_MODE=protected` либо `off`. Для
-   `protected` применяйте отдельную authenticated authorization policy и
-   проверяйте, что Swagger недоступен анонимному пользователю. Не оставляйте
+   `protected` приложение само применяет `DocsAccessPolicyAdapter`: проверяйте
+   отказ анонимного запроса и успешный доступ через session пользователя
+   `system.admin` с permission `system.docs.read`. Внешняя proxy-auth policy
+   сама по себе не заменяет application session и authorization. Не оставляйте
    docs public.
 
 ## Учётные данные и роли

@@ -42,16 +42,25 @@ authoritative coordination instance другим Redis без принятого
 
 ## Redis data loss
 
-1. Остановите promotion и определите, какие persistent volume, AOF и backup
+1. Остановите promotion, переведите все API replicas в controlled maintenance и
+   снимите их с traffic до чтения или восстановления dataset. Одной остановки
+   promotion недостаточно: Redis может отвечать на `PING`, пока login/session
+   writes продолжаются. Определите, какие persistent volume, AOF и backup
    относятся к authoritative instance; не выводите location или credentials в
    incident evidence.
 2. Восстановите согласованный persistent dataset на том же authoritative
    instance по процедуре владельца Redis. Проверяйте AOF/volume перед тем, как
    возвращать API traffic.
-3. После reconnect дождитесь `/health/ready` = `200`. Sessions, которых нет в
-   восстановленном dataset, должны потребовать новый login; не обходите это
-   проверкой и не восстанавливайте их ручным изменением keys.
-4. Если восстановление невозможно, явно примите global logout как incident
+3. Перед возвратом traffic либо докажите, что recovery point не предшествует
+   ни одному session logout/revocation, либо выполните глобальную инвалидацию.
+   Без такого доказательства восстановленный backup/AOF может воскресить
+   удалённые session keys. Безопасный fallback — coordinated rotation всего
+   auth bundle по `session-secret-compromise.md`; частичная ротация запрещена.
+4. После этого запустите согласованный configuration revision, дождитесь
+   `/health/ready` = `200` и только затем верните API traffic. Sessions,
+   которых нет в восстановленном dataset, должны потребовать новый login; не
+   обходите это проверкой и не восстанавливайте их ручным изменением keys.
+5. Если восстановление невозможно, явно примите global logout как incident
    decision, сообщите пользователям по утверждённому каналу и документируйте
    потерю без user data. PostgreSQL users/passwords остаются authoritative.
 
@@ -67,5 +76,8 @@ authoritative coordination instance другим Redis без принятого
    возвращается к `200`.
 
 Для автоматической проверки в этом repository используйте
-`test/e2e/health/redis-outage.e2e.spec.ts`; он моделирует эту последовательность
-без записи connection URL или cookie в test evidence.
+`test/e2e/health/redis-outage.e2e.spec.ts`; он проверяет readiness, login и
+cookie-auth с точным `DEPENDENCY_UNAVAILABLE`, затем восстановление readiness,
+без записи connection URL или cookie в test evidence. Этот e2e-тест не заменяет
+controlled-maintenance, восстановление persistent dataset или post-restore
+инвалидацию из production-процедуры выше.
