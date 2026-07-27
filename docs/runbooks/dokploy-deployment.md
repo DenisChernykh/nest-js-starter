@@ -21,7 +21,13 @@ environment. Do not use shell tracing (<code>set -x</code>), literal tokens in
 commands, or saved request payloads containing registry credentials. The API
 runtime must be configured with <code>DATABASE_URL</code> resolved from
 <code>RUNTIME_DATABASE_URL</code>; the migrator command below is the only
-consumer of <code>MIGRATION_DATABASE_URL</code>.
+consumer of <code>MIGRATION_DATABASE_URL</code>. Before the first mutation,
+capture the complete current application environment byte-for-byte in the
+secret-injected <code>DOKPLOY_PREVIOUS_APPLICATION_ENV</code>. Do not obtain it
+by printing the environment or put it in a command argument. The adapter
+restores that exact value automatically if an environment/provider/deploy/poll
+request fails; the rollback runbook restores it explicitly if external smoke
+fails after this adapter has finished.
 
 ```sh
 # Disable tracing before expanding any secret variable.
@@ -54,6 +60,10 @@ test -n "$RUNTIME_DATABASE_URL" || {
 }
 test -n "$DOKPLOY_APPLICATION_ENV" || {
   echo 'DOKPLOY_APPLICATION_ENV is required' >&2
+  exit 1
+}
+test -n "$DOKPLOY_PREVIOUS_APPLICATION_ENV" || {
+  echo 'DOKPLOY_PREVIOUS_APPLICATION_ENV is required' >&2
   exit 1
 }
 test -n "$GHCR_REGISTRY_URL" || {
@@ -107,6 +117,7 @@ printf 'header = "x-api-key: %s"\n' "$DOKPLOY_API_KEY" \
   >"$dokploy_curl_config"
 before_deployments=''
 after_deployments=''
+environment_mutation_started=0
 dokploy_request_timeout_seconds=30
 dokploy_connect_timeout_seconds=10
 dokploy_cleanup() {
@@ -120,7 +131,6 @@ dokploy_cleanup() {
     rm -f -- "$after_deployments"
   fi
 }
-trap dokploy_cleanup EXIT HUP INT TERM
 dokploy_curl() {
   curl -q \
     --connect-timeout "$dokploy_connect_timeout_seconds" \
@@ -128,6 +138,32 @@ dokploy_curl() {
     --config "$dokploy_curl_config" \
     --fail-with-body --silent --show-error "$@"
 }
+restore_previous_environment() {
+  previous_environment_payload="$(
+    printf '%s' "$DOKPLOY_PREVIOUS_APPLICATION_ENV" |
+      jq -Rs --arg applicationId "$DOKPLOY_APPLICATION_ID" \
+        '{applicationId: $applicationId, env: ., buildArgs: null, buildSecrets: null, createEnvFile: false}'
+  )"
+  previous_environment_response="$(printf '%s' "$previous_environment_payload" | dokploy_curl \
+    --request POST "$dokploy_base_url/api/application.saveEnvironment" \
+    --header 'accept: application/json' \
+    --header 'content-type: application/json' \
+    --data-binary @-)"
+  printf '%s' "$previous_environment_response" | jq -e 'type == "object" and length == 0' >/dev/null
+  unset previous_environment_payload previous_environment_response
+}
+dokploy_failure_cleanup() {
+  status=$?
+  if [ "$status" -ne 0 ] && [ "$environment_mutation_started" -eq 1 ]; then
+    if ! restore_previous_environment; then
+      printf '%s\n' 'CRITICAL: failed to restore the previous Dokploy environment' >&2
+    fi
+  fi
+  dokploy_cleanup
+  trap - EXIT HUP INT TERM
+  exit "$status"
+}
+trap dokploy_failure_cleanup EXIT HUP INT TERM
 ```
 
 The temporary config contains the API key and has mode <code>0600</code>. Every
@@ -143,8 +179,14 @@ exit status. The repository's Prisma config maps <code>DATABASE_URL</code> to
 the canonical <code>MIGRATION_DATABASE_URL</code> input:
 
 ```sh
-DATABASE_URL="$MIGRATION_DATABASE_URL" \
-  corepack pnpm@11.15.1 start:migrate
+(
+  export DATABASE_URL="$MIGRATION_DATABASE_URL"
+  docker run --rm \
+    --env DATABASE_URL \
+    --entrypoint corepack \
+    "$CANDIDATE_IMAGE_REF" \
+    pnpm@11.15.1 start:migrate
+)
 ```
 
 Only after this command succeeds may the operator save the candidate provider
@@ -165,8 +207,8 @@ connection URLs never appear as command arguments or output.
 ```sh
 environment_payload="$(jq -n \
   --arg applicationId "$DOKPLOY_APPLICATION_ID" \
-  --arg env "$DOKPLOY_APPLICATION_ENV" \
-  '{applicationId: $applicationId, env: $env, buildArgs: null, buildSecrets: null, createEnvFile: false}')"
+  '{applicationId: $applicationId, env: env.DOKPLOY_APPLICATION_ENV, buildArgs: null, buildSecrets: null, createEnvFile: false}')"
+environment_mutation_started=1
 environment_response="$(printf '%s' "$environment_payload" | dokploy_curl \
   --request POST "$dokploy_base_url/api/application.saveEnvironment" \
   --header 'accept: application/json' \

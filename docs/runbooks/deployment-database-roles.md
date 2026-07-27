@@ -182,7 +182,20 @@ SELECT
       NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'UPDATE'),
       NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'DELETE'),
       NOT has_database_privilege('app_runtime', current_database(), 'CREATE'),
-      NOT has_database_privilege('app_runtime', current_database(), 'TEMPORARY')
+      NOT has_database_privilege('app_runtime', current_database(), 'TEMPORARY'),
+      (
+        SELECT count(*) = 2 AND COALESCE(bool_and(
+          rolcanlogin
+          AND NOT rolinherit
+          AND NOT rolsuper
+          AND NOT rolcreatedb
+          AND NOT rolcreaterole
+          AND NOT rolreplication
+          AND NOT rolbypassrls
+        ), false)
+        FROM pg_roles
+        WHERE rolname IN ('app_migrator', 'app_runtime')
+      )
     ]) AS checks(check_value)
   ) AS runtime_privileges_verified
 \gset runtime_
@@ -216,9 +229,11 @@ SQL
 
 Expected values are true, false, then true for each application-table DML
 privilege, each sequence privilege, and each denied `_prisma_migrations`
-privilege, followed by false and false for database CREATE and TEMPORARY. The
-ownership query returns true, and all six role attributes are false for both
-roles. The `app-runtime` service alias in this example is provisioned from
+privilege, followed by false and false for database CREATE and TEMPORARY, and
+true for the application-role attribute guard. The ownership query returns
+true; `rolcanlogin` is true, while `rolinherit` and every forbidden
+administrative attribute are false for both roles. The `app-runtime` service
+alias in this example is provisioned from
 `RUNTIME_DATABASE_URL` through a protected service file, so the URL is not
 passed in argv.
 

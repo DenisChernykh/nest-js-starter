@@ -89,11 +89,16 @@ checkout. The operator maps the canonical migration input only inside this
 one-shot container:
 
 ```sh
-docker run --rm \
-  --env "DATABASE_URL=$MIGRATION_DATABASE_URL" \
-  --entrypoint corepack \
-  "$CANDIDATE_IMAGE_REF" \
-  pnpm@11.15.1 start:migrate
+(
+  # Pass only the exported variable name to Docker. The value is not placed in
+  # the docker command's argv or in a process-listing argument.
+  export DATABASE_URL="$MIGRATION_DATABASE_URL"
+  docker run --rm \
+    --env DATABASE_URL \
+    --entrypoint corepack \
+    "$CANDIDATE_IMAGE_REF" \
+    pnpm@11.15.1 start:migrate
+)
 ```
 
 Attach the operator's isolated migration network to this command when the

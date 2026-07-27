@@ -18,9 +18,13 @@ archive/sidecar pairs; this is the retention evidence.
 
 S3 credentials, bucket policy, endpoint, and PostgreSQL connection settings
 are environment secrets. They are not committed or printed. The S3 principal
-may write and read only this backup prefix and may delete only explicitly
-identified expired pairs. It must not receive application or database
-administration privileges.
+may write and read only this backup prefix. Its delete permission must be
+limited to the exact archive and sidecar keys for the current in-flight
+`backup_id` when publication aborts, plus explicitly identified expired final
+pairs; it must not receive a recursive delete permission. The scheduler must
+alert if either exact-key cleanup operation is denied, because a partial object
+would otherwise remain for operator cleanup. The principal must not receive
+application or database administration privileges.
 
 ## Scheduled backup operation
 
@@ -43,11 +47,21 @@ archive_name="nest-js-starter-$backup_id.dump"
 backup_published=0
 cleanup_backup() {
   status=$?
+  cleanup_failed=0
   if [ "$status" -ne 0 ] && [ "$backup_published" -eq 0 ]; then
-    aws s3 rm --only-show-errors \
-      "s3://$S3_BACKUP_BUCKET/$S3_BACKUP_PREFIX/$archive_name" || true
-    aws s3 rm --only-show-errors \
-      "s3://$S3_BACKUP_BUCKET/$S3_BACKUP_PREFIX/$archive_name.sha256" || true
+    if ! aws s3 rm --only-show-errors \
+      "s3://$S3_BACKUP_BUCKET/$S3_BACKUP_PREFIX/$archive_name"; then
+      printf '%s\n' 'failed to remove incomplete backup archive; investigate immediately' >&2
+      cleanup_failed=1
+    fi
+    if ! aws s3 rm --only-show-errors \
+      "s3://$S3_BACKUP_BUCKET/$S3_BACKUP_PREFIX/$archive_name.sha256"; then
+      printf '%s\n' 'failed to remove incomplete backup sidecar; investigate immediately' >&2
+      cleanup_failed=1
+    fi
+    if [ "$cleanup_failed" -ne 0 ]; then
+      printf '%s\n' 'backup cleanup was not fully verified; do not count this backup as published' >&2
+    fi
   fi
   rm -rf "$workdir"
   trap - EXIT HUP INT TERM
@@ -131,11 +145,14 @@ source_db="$(PGSERVICE=backup-source psql --no-psqlrc --tuples-only --no-align \
 }
 
 source_metadata="$(PGSERVICE=backup-source psql --no-psqlrc --tuples-only --no-align \
-  --field-separator='|' \
-  --command "SELECT format('%s|%s|%s|%s|%s', pg_encoding_to_char(datencoding), CASE datlocprovider WHEN 'c' THEN 'libc' WHEN 'i' THEN 'icu' WHEN 'b' THEN 'builtin' ELSE 'unknown' END, datcollate, datctype, coalesce(datlocale, '')) FROM pg_database WHERE datname = current_database()")"
-IFS='|' read -r source_encoding source_locale_provider source_lc_collate \
-  source_lc_ctype source_locale <<<"$source_metadata"
-test -n "$source_encoding" || {
+  --command "SELECT json_build_object('encoding', pg_encoding_to_char(datencoding), 'locale_provider', CASE datlocprovider WHEN 'c' THEN 'libc' WHEN 'i' THEN 'icu' WHEN 'b' THEN 'builtin' ELSE 'unknown' END, 'lc_collate', datcollate, 'lc_ctype', datctype, 'locale', coalesce(datlocale, ''), 'icu_rules', coalesce(daticurules, '')) FROM pg_database WHERE datname = current_database()")"
+source_encoding="$(printf '%s' "$source_metadata" | jq -er '.encoding | select(type == "string" and length > 0)')"
+source_locale_provider="$(printf '%s' "$source_metadata" | jq -er '.locale_provider | select(type == "string" and length > 0)')"
+source_lc_collate="$(printf '%s' "$source_metadata" | jq -er '.lc_collate | select(type == "string" and length > 0)')"
+source_lc_ctype="$(printf '%s' "$source_metadata" | jq -er '.lc_ctype | select(type == "string" and length > 0)')"
+source_locale="$(printf '%s' "$source_metadata" | jq -er '.locale')"
+source_icu_rules="$(printf '%s' "$source_metadata" | jq -er '.icu_rules')"
+test -n "$source_encoding" && test -n "$source_locale_provider" || {
   printf '%s\n' 'refusing restore: source database locale metadata is unavailable' >&2
   exit 64
 }
@@ -183,15 +200,28 @@ SQL
       printf '%s\n' 'refusing restore: ICU locale is unavailable' >&2
       exit 64
     }
-    PGSERVICE=restore-admin psql --no-psqlrc --set=ON_ERROR_STOP=1 \
-      --set=restore_db="$restore_db" \
-      --set=source_encoding="$source_encoding" \
-      --set=source_locale="$source_locale" <<'SQL'
+    if [ -n "$source_icu_rules" ]; then
+      PGSERVICE=restore-admin psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+        --set=restore_db="$restore_db" \
+        --set=source_encoding="$source_encoding" \
+        --set=source_locale="$source_locale" \
+        --set=source_icu_rules="$source_icu_rules" <<'SQL'
+SELECT format(
+  'CREATE DATABASE %I TEMPLATE template0 ENCODING %L LOCALE_PROVIDER icu ICU_LOCALE %L ICU_RULES %L',
+  :'restore_db', :'source_encoding', :'source_locale', :'source_icu_rules'
+) \gexec
+SQL
+    else
+      PGSERVICE=restore-admin psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+        --set=restore_db="$restore_db" \
+        --set=source_encoding="$source_encoding" \
+        --set=source_locale="$source_locale" <<'SQL'
 SELECT format(
   'CREATE DATABASE %I TEMPLATE template0 ENCODING %L LOCALE_PROVIDER icu ICU_LOCALE %L',
   :'restore_db', :'source_encoding', :'source_locale'
 ) \gexec
 SQL
+    fi
     ;;
   builtin)
     test -n "$source_locale" || {
