@@ -11,6 +11,7 @@ import { LoggingModule } from '@/platform/logging/logging.module'
 import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
 
 import { API_HTTP_PROBLEM_CONTRIBUTIONS } from './api-http-problems'
+import { API_ROLE_DEFINITIONS } from './api-auth.roles'
 
 /**
  * Определяет composition root API process без прямых driver imports.
@@ -34,7 +35,7 @@ export class ApiModule {
         LifecycleModule,
         HealthModule,
         HttpErrorsModule.forRoot(API_HTTP_PROBLEM_CONTRIBUTIONS),
-        AuthModule,
+        AuthModule.forRoot({ roleDefinitions: API_ROLE_DEFINITIONS }),
       ],
       providers: [],
     }

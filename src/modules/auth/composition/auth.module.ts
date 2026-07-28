@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common'
+import { Module, type DynamicModule } from '@nestjs/common'
 import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core'
 
 import { AuthenticateSessionUseCase } from '../application/authenticate-session.use-case'
@@ -12,6 +12,7 @@ import { LogoutUseCase } from '../application/logout.use-case'
 import {
   createAuthRoleRegistry,
   RoleRegistry,
+  type RoleDefinition,
 } from '../application/role-registry'
 import { RevokeSessionUseCase } from '../application/revoke-session.use-case'
 import { Argon2PasswordHasher } from '../infrastructure/argon2-password.hasher'
@@ -52,6 +53,13 @@ import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
 const dummyPasswordHash =
   '$argon2id$v=19$m=19456,p=1,t=2$AQEBAQEBAQEBAQEBAQEBAQ$89iZHLNRbRP/PDabySsV1BxlW1VfqedCPSqmvYANw2U'
 
+const AUTH_ROLE_DEFINITIONS = Symbol('auth:role-definitions')
+
+/** Product-owned role catalog required to compose the auth capability. */
+export interface AuthModuleOptions {
+  readonly roleDefinitions: readonly RoleDefinition[]
+}
+
 /** Composes durable identity, Redis sessions and ordered browser policy. */
 @Module({
   imports: [RuntimeConfigModule, DatabaseModule, RedisModule],
@@ -61,7 +69,11 @@ const dummyPasswordHash =
     GetMeQuery,
     Argon2PasswordHasher,
     NodeAuthCryptoAdapter,
-    { provide: RoleRegistry, useFactory: createAuthRoleRegistry },
+    {
+      provide: RoleRegistry,
+      inject: [AUTH_ROLE_DEFINITIONS],
+      useFactory: createAuthRoleRegistry,
+    },
     {
       provide: PrismaAuthRepository,
       inject: [PrismaClientProvider, TRANSACTION_PORT],
@@ -318,4 +330,30 @@ const dummyPasswordHash =
   ],
   exports: [PrismaAuthRepository, Argon2PasswordHasher, DOCS_ACCESS_POLICY],
 })
-export class AuthModule {}
+export class AuthModule {
+  /**
+   * Composes auth with one immutable snapshot of product-owned roles.
+   *
+   * @param options - Complete role catalog owned by the API composition root.
+   * @returns Dynamic auth module whose registry cannot observe later input mutations.
+   */
+  public static forRoot(options: AuthModuleOptions): DynamicModule {
+    const roleDefinitions = Object.freeze(
+      options.roleDefinitions.map((definition) =>
+        Object.freeze({
+          key: definition.key,
+          permissions: Object.freeze([...definition.permissions]),
+        }),
+      ),
+    )
+    return {
+      module: AuthModule,
+      providers: [
+        {
+          provide: AUTH_ROLE_DEFINITIONS,
+          useValue: roleDefinitions,
+        },
+      ],
+    }
+  }
+}
