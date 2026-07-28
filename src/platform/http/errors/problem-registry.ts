@@ -3,7 +3,7 @@ import type {
   RegisteredProblemDefinition,
 } from './problem.contracts'
 
-const problemBaseUri = 'https://nest-js-starter.invalid/problems'
+const PROBLEM_BASE_URI = 'https://nest-js-starter.invalid/problems'
 
 const problemDefinitions = [
   {
@@ -85,34 +85,48 @@ const problemDefinitions = [
   },
 ] as const satisfies readonly ProblemDefinition[]
 
-/** Stable machine codes owned by the starter problem catalogue. */
-export type ProblemCode = (typeof problemDefinitions)[number]['code']
+/** Stable machine codes owned by the starter core problem catalogue. */
+export type CoreProblemCode = (typeof problemDefinitions)[number]['code']
 
-/** Immutable RFC 9457 definitions used by every HTTP error mapper. */
-export const PROBLEM_CATALOG: readonly RegisteredProblemDefinition[] =
-  Object.freeze(
-    problemDefinitions.map((definition) =>
-      Object.freeze({
-        ...definition,
-        type: `${problemBaseUri}/${definition.slug}`,
-      }),
-    ),
-  )
+/** Compatibility alias for transport decorators restricted to core codes. */
+export type ProblemCode = CoreProblemCode
 
-const definitionsByCode: ReadonlyMap<ProblemCode, RegisteredProblemDefinition> =
-  new Map<ProblemCode, RegisteredProblemDefinition>(
-    PROBLEM_CATALOG.map(
-      (definition) =>
-        [definition.code as ProblemCode, definition] as readonly [
-          ProblemCode,
-          RegisteredProblemDefinition,
-        ],
-    ),
-  )
+/**
+ * Commits a starter-owned problem slug to the shared absolute type namespace.
+ *
+ * @param definition - Stable public problem metadata without a derived type.
+ * @returns One frozen registered definition with its absolute type URI.
+ */
+export function defineProblemDefinition<const TCode extends string>(
+  definition: ProblemDefinition & { readonly code: TCode },
+): RegisteredProblemDefinition & { readonly code: TCode } {
+  return Object.freeze({
+    ...definition,
+    type: `${PROBLEM_BASE_URI}/${definition.slug}`,
+  })
+}
+
+/** Immutable RFC 9457 definitions owned by the HTTP platform contribution. */
+export const PROBLEM_CATALOG = Object.freeze(
+  problemDefinitions.map((definition) => defineProblemDefinition(definition)),
+)
+
+const definitionsByCode: ReadonlyMap<
+  CoreProblemCode,
+  RegisteredProblemDefinition
+> = new Map<CoreProblemCode, RegisteredProblemDefinition>(
+  PROBLEM_CATALOG.map(
+    (definition) =>
+      [definition.code, definition] as readonly [
+        CoreProblemCode,
+        RegisteredProblemDefinition,
+      ],
+  ),
+)
 
 /** Returns one known immutable problem definition without a wire fallback. */
 export function getProblemDefinition(
-  code: ProblemCode,
+  code: CoreProblemCode,
 ): RegisteredProblemDefinition {
   const definition = definitionsByCode.get(code)
   if (definition === undefined) throw new Error(`Unknown problem code: ${code}`)

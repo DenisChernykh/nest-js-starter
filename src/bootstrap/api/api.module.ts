@@ -8,6 +8,9 @@ import { LifecycleModule } from '@/platform/lifecycle/lifecycle.module'
 import { AuthModule } from '@/modules/auth/composition/auth.module'
 import { RedisModule } from '@/platform/redis/redis.module'
 import { LoggingModule } from '@/platform/logging/logging.module'
+import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
+
+import { API_HTTP_PROBLEM_CONTRIBUTIONS } from './api-http-problems'
 
 /**
  * Определяет composition root API process без прямых driver imports.
@@ -30,6 +33,7 @@ export class ApiModule {
         RedisModule,
         LifecycleModule,
         HealthModule,
+        HttpErrorsModule.forRoot(API_HTTP_PROBLEM_CONTRIBUTIONS),
         AuthModule,
       ],
       providers: [],

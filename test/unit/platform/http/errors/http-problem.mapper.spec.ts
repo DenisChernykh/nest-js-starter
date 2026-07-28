@@ -10,19 +10,14 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common'
 
-import type { AuthFailureCode } from '@/modules/auth/application/auth-errors'
-import {
-  AUTH_FAILURE_PROBLEM_CODES,
-  mapHttpProblem,
-} from '@/platform/http/errors/http-problem.mapper'
-import type { ProblemCode } from '@/platform/http/errors/problem-registry'
+import { DatabaseUnavailableError } from '@/platform/database/database.contracts'
+import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
+import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registry'
 import { RequestValidationError } from '@/platform/http/errors/request-validation.error'
 
-const completeAuthMapping: Readonly<Record<AuthFailureCode, ProblemCode>> =
-  AUTH_FAILURE_PROBLEM_CODES
-void completeAuthMapping
+const registry = new HttpProblemRegistry([CORE_HTTP_PROBLEM_CONTRIBUTION])
 
-describe('mapHttpProblem', () => {
+describe('CORE_HTTP_PROBLEM_CONTRIBUTION', () => {
   it.each([
     [new BadRequestException('raw secret'), 'MALFORMED_REQUEST', 400],
     [new UnauthorizedException('raw secret'), 'AUTHENTICATION_REQUIRED', 401],
@@ -42,7 +37,7 @@ describe('mapHttpProblem', () => {
       503,
     ],
   ])('maps expected HTTP failure to %s', (error, code, status) => {
-    const mapped = mapHttpProblem(error)
+    const mapped = registry.map(error)
 
     expect(mapped.definition.code).toBe(code)
     expect(mapped.definition.status).toBe(status)
@@ -58,7 +53,7 @@ describe('mapHttpProblem', () => {
         detail: 'Field has an invalid format.',
       }),
     ])
-    const mapped = mapHttpProblem(new RequestValidationError(errors))
+    const mapped = registry.map(new RequestValidationError(errors))
 
     expect(mapped.definition.code).toBe('VALIDATION_FAILED')
     expect(mapped.errors).toEqual(errors)
@@ -71,46 +66,31 @@ describe('mapHttpProblem', () => {
       status: 413,
     })
 
-    const mapped = mapHttpProblem(error)
+    const mapped = registry.map(error)
 
     expect(mapped.definition.code).toBe('PAYLOAD_TOO_LARGE')
     expect(mapped.unexpected).toBe(false)
     expect(JSON.stringify(mapped)).not.toContain('raw body-parser secret')
   })
 
-  it.each([
-    ['AUTHENTICATION_REQUIRED', 'AUTHENTICATION_REQUIRED', 401],
-    ['AUTHENTICATION_FAILED', 'AUTHENTICATION_REQUIRED', 401],
-    ['AUTHORIZATION_DENIED', 'AUTHORIZATION_DENIED', 403],
-    ['AUTH_CSRF_REJECTED', 'AUTHORIZATION_DENIED', 403],
-    ['AUTH_SESSION_NOT_FOUND', 'NOT_FOUND', 404],
-    ['AUTH_STATE_CONFLICT', 'CONFLICT', 409],
-    ['AUTH_RATE_LIMITED', 'RATE_LIMIT_EXCEEDED', 429],
-    ['AUTH_DEPENDENCY_UNAVAILABLE', 'DEPENDENCY_UNAVAILABLE', 503],
-  ] as const)(
-    'exhaustively maps auth code %s',
-    (authCode, problemCode, status) => {
-      const error = Object.assign(new Error('raw auth detail'), {
-        code: authCode,
-        ...(authCode === 'AUTH_RATE_LIMITED' ? { retryAfterMs: 1_001 } : {}),
-      })
-      const mapped = mapHttpProblem(error)
+  it('maps an explicit database outage without its internal message', () => {
+    const mapped = registry.map(new DatabaseUnavailableError())
 
-      expect(mapped.definition.code).toBe(problemCode)
-      expect(mapped.definition.status).toBe(status)
-      expect(mapped.retryAfterSeconds).toBe(
-        authCode === 'AUTH_RATE_LIMITED' ? 2 : undefined,
-      )
-      expect(mapped.unexpected).toBe(false)
-    },
-  )
+    expect(mapped.definition.code).toBe('DEPENDENCY_UNAVAILABLE')
+    expect(mapped.definition.status).toBe(503)
+    expect(mapped.unexpected).toBe(false)
+    expect(JSON.stringify(mapped)).not.toContain('Database is unavailable')
+  })
 
   it.each([
     new Error('password=top-secret postgresql://user:secret@db/internal'),
+    Object.assign(new Error('raw auth detail'), {
+      code: 'AUTHENTICATION_REQUIRED',
+    }),
     new HttpException('token=top-secret', 418),
     new HttpException('secret', 500),
   ])('maps unknown failures to one constant internal problem', (error) => {
-    const mapped = mapHttpProblem(error)
+    const mapped = registry.map(error)
 
     expect(mapped.definition.code).toBe('INTERNAL_ERROR')
     expect(mapped.definition.status).toBe(500)

@@ -1,3 +1,5 @@
+import { ApplicationError } from '@/shared/application/application.error'
+
 /** Stable framework-free auth failure codes exposed at transport boundaries. */
 export type AuthFailureCode =
   | 'AUTHENTICATION_REQUIRED'
@@ -9,13 +11,10 @@ export type AuthFailureCode =
   | 'AUTH_STATE_CONFLICT'
   | 'AUTH_CSRF_REJECTED'
 
-/** Base error that carries only a stable auth code and safe detail. */
-export class AuthError extends Error {
-  public constructor(
-    public readonly code: AuthFailureCode,
-    detail: string,
-  ) {
-    super(detail)
+/** Base error that carries only a stable auth code and internal detail. */
+export class AuthError extends ApplicationError<AuthFailureCode> {
+  public constructor(code: AuthFailureCode, detail: string) {
+    super(code, detail)
     this.name = 'AuthError'
   }
 }

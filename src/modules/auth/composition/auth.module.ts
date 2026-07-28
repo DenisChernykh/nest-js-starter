@@ -43,7 +43,6 @@ import {
   TRANSACTION_PORT,
   type TransactionPort,
 } from '@/shared/application/transaction.port'
-import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
 import {
   DOCS_ACCESS_POLICY,
   type DocsAccessPolicy,
@@ -55,7 +54,7 @@ const dummyPasswordHash =
 
 /** Composes durable identity, Redis sessions and ordered browser policy. */
 @Module({
-  imports: [RuntimeConfigModule, DatabaseModule, RedisModule, HttpErrorsModule],
+  imports: [RuntimeConfigModule, DatabaseModule, RedisModule],
   controllers: [AuthController],
   providers: [
     AuthRequestContext,

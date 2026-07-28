@@ -12,6 +12,8 @@ import { runtimeDefaults } from '@/platform/config/runtime-defaults'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import { RequestContext } from '@/platform/http/context/request-context'
+import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
+import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registry'
 import { ProblemExceptionFilter } from '@/platform/http/errors/problem-exception.filter'
 import { TestHttpModule } from '@test/e2e/fixtures/http/test-http.module'
 import { requiredRuntimeEnvironment } from '@test/support/required-runtime-environment'
@@ -44,6 +46,7 @@ describe('hardened HTTP bootstrap', () => {
         expressApp.get(HttpAdapterHost),
         requestContext,
         { write: jest.fn() },
+        new HttpProblemRegistry([CORE_HTTP_PROBLEM_CONTRIBUTION]),
       ),
     )
     lifecycle = expressApp.get(ApplicationLifecycleState)

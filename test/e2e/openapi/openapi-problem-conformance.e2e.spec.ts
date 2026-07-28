@@ -21,6 +21,8 @@ import {
   AuthorizationDeniedError,
   AuthRateLimitedError,
 } from '@/modules/auth/application/auth-errors'
+import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
+import { API_PROBLEM_CATALOG } from '@/bootstrap/api/api-http-problems'
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
@@ -28,7 +30,7 @@ import { runtimeDefaults } from '@/platform/config/runtime-defaults'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
-import { PROBLEM_CATALOG } from '@/platform/http/errors/problem-registry'
+import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import { STRUCTURED_LOGGER } from '@/platform/logging/logging.contracts'
 import { LoggingModule } from '@/platform/logging/logging.module'
@@ -82,7 +84,10 @@ describe('OpenAPI RFC 9457 conformance', () => {
       imports: [
         RuntimeConfigModule.forRoot(runtimeConfig),
         LoggingModule.forRoot(),
-        HttpErrorsModule,
+        HttpErrorsModule.forRoot([
+          CORE_HTTP_PROBLEM_CONTRIBUTION,
+          AUTH_HTTP_PROBLEM_CONTRIBUTION,
+        ]),
         TestHttpModule,
       ],
       controllers: [OpenApiProblemFixtureController],
@@ -161,10 +166,10 @@ describe('OpenAPI RFC 9457 conformance', () => {
     const documentedCodes = (codeSchema.enum ?? [])
       .filter((value): value is string => typeof value === 'string')
       .sort()
-    const registryCodes = PROBLEM_CATALOG.map(({ code }) => code).sort()
+    const registryCodes = API_PROBLEM_CATALOG.map(({ code }) => code).sort()
 
     expect(documentedCodes).toEqual(registryCodes)
-    for (const definition of PROBLEM_CATALOG) {
+    for (const definition of API_PROBLEM_CATALOG) {
       expect(markdown).toContain(definition.type)
       expect(markdown).toContain(definition.code)
     }

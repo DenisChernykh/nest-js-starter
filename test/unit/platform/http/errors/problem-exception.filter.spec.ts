@@ -2,15 +2,17 @@ import type { ArgumentsHost } from '@nestjs/common'
 import { HttpAdapterHost } from '@nestjs/core'
 import type { AbstractHttpAdapter } from '@nestjs/core'
 
+import { AuthCsrfRejectedError } from '@/modules/auth/application/auth-errors'
+import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
 import { RequestContext } from '@/platform/http/context/request-context'
+import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
+import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registry'
 import { ProblemExceptionFilter } from '@/platform/http/errors/problem-exception.filter'
 
 describe('ProblemExceptionFilter', () => {
   it('writes one exact problem response and no error log for expected failures', () => {
     const fixture = createFixture()
-    const error = Object.assign(new Error('private detail'), {
-      code: 'AUTH_CSRF_REJECTED',
-    })
+    const error = new AuthCsrfRejectedError()
 
     fixture.requestContext.run(fixture.requestId, () =>
       fixture.filter.catch(error, fixture.host),
@@ -103,7 +105,15 @@ function createFixture(headersSent = false): {
     switchToHttp: () => ({ getResponse: () => response }),
   } as ArgumentsHost
   return {
-    filter: new ProblemExceptionFilter(adapterHost, requestContext, logger),
+    filter: new ProblemExceptionFilter(
+      adapterHost,
+      requestContext,
+      logger,
+      new HttpProblemRegistry([
+        CORE_HTTP_PROBLEM_CONTRIBUTION,
+        AUTH_HTTP_PROBLEM_CONTRIBUTION,
+      ]),
+    ),
     requestContext,
     adapter,
     logger,
