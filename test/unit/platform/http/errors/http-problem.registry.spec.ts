@@ -1,10 +1,7 @@
 import { ApplicationError } from '@/shared/application/application.error'
 import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
 import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registry'
-import {
-  PROBLEM_CATALOG,
-  defineProblemDefinition,
-} from '@/platform/http/errors/problem-registry'
+import { defineProblemDefinition } from '@/platform/http/errors/problem-registry'
 
 class ExampleError extends ApplicationError<'EXAMPLE_CONFLICT'> {
   public constructor() {
@@ -45,16 +42,53 @@ describe('HttpProblemRegistry', () => {
     ).toBe('INTERNAL_ERROR')
   })
 
-  it('rejects duplicate codes, slugs and types at construction', () => {
-    expect(
-      () =>
-        new HttpProblemRegistry([
-          CORE_HTTP_PROBLEM_CONTRIBUTION,
-          {
-            definitions: [PROBLEM_CATALOG[0]!],
-            map: () => undefined,
-          },
-        ]),
-    ).toThrow('Duplicate HTTP problem definition')
-  })
+  it.each([
+    [
+      'code',
+      {
+        slug: 'duplicate-code-only',
+        code: 'MALFORMED_REQUEST',
+        status: 409,
+        title: 'Duplicate code only',
+        detail: 'The code duplicates a core definition.',
+        type: 'https://nest-js-starter.invalid/problems/duplicate-code-only',
+      },
+    ],
+    [
+      'slug',
+      {
+        slug: 'malformed-request',
+        code: 'DUPLICATE_SLUG_ONLY',
+        status: 409,
+        title: 'Duplicate slug only',
+        detail: 'The slug duplicates a core definition.',
+        type: 'https://example.invalid/problems/duplicate-slug-only',
+      },
+    ],
+    [
+      'absolute type',
+      {
+        slug: 'duplicate-type-only',
+        code: 'DUPLICATE_TYPE_ONLY',
+        status: 409,
+        title: 'Duplicate type only',
+        detail: 'The type duplicates a core definition.',
+        type: 'https://nest-js-starter.invalid/problems/malformed-request',
+      },
+    ],
+  ] as const)(
+    'rejects a duplicate %s at construction',
+    (_field, definition) => {
+      expect(
+        () =>
+          new HttpProblemRegistry([
+            CORE_HTTP_PROBLEM_CONTRIBUTION,
+            {
+              definitions: [definition],
+              map: () => undefined,
+            },
+          ]),
+      ).toThrow('Duplicate HTTP problem definition')
+    },
+  )
 })
