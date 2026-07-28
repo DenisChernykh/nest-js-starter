@@ -6,11 +6,13 @@ trace-only OpenTelemetry.
 
 ## Local workflow
 
-Use Node `24.18.0` and Corepack pnpm `11.15.1`. Enable Corepack once, then
-use the short `pnpm` commands below.
+Use Node `24.18.0` and pnpm `11.15.1`. Install those exact versions with a
+user-level Node or package manager, then use the short `pnpm` commands below.
+The repository pins both versions through `engines` and `packageManager`.
 
 ```sh
-corepack enable
+node --version
+pnpm --version
 pnpm install --frozen-lockfile
 cp .env.example .env
 docker compose up -d --wait postgres redis-coordination
