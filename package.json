@@ -18,7 +18,8 @@
     "check": "corepack pnpm@11.15.1 run check:quick && corepack pnpm@11.15.1 run test:integration:run && corepack pnpm@11.15.1 run test:e2e:run",
     "check:quick": "corepack pnpm@11.15.1 run format:check && corepack pnpm@11.15.1 run prisma:validate && corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run openapi:drift && corepack pnpm@11.15.1 run openapi:lint && corepack pnpm@11.15.1 run lint && corepack pnpm@11.15.1 run typecheck && corepack pnpm@11.15.1 run test:unit:run && corepack pnpm@11.15.1 run architecture:check && corepack pnpm@11.15.1 run build:compiled",
     "db:migrate:dev": "prisma migrate dev --config prisma.config.ts",
-    "dev:api": "corepack pnpm@11.15.1 run prisma:generate && tsx watch src/bootstrap/api/main.ts",
+    "dev": "corepack pnpm@11.15.1 run prisma:generate && nest start --watch",
+    "dev:api": "corepack pnpm@11.15.1 run dev",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "lint": "eslint . --max-warnings=0",
@@ -81,6 +82,7 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@microsoft/tsdoc": "0.16.0",
+    "@nestjs/cli": "11.0.24",
     "@nestjs/testing": "11.1.28",
     "@redocly/cli": "2.40.0",
     "@testcontainers/postgresql": "12.0.4",

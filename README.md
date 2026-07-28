@@ -6,14 +6,32 @@ trace-only OpenTelemetry.
 
 ## Local workflow
 
-Use Node `24.18.0` and Corepack pnpm `11.15.1`.
+Use Node `24.18.0` and pnpm `11.15.1`. Install those exact versions with a
+user-level Node or package manager, then use the short `pnpm` commands below.
+The repository pins both versions through `engines` and `packageManager`.
 
 ```sh
-corepack pnpm@11.15.1 install --frozen-lockfile
-corepack pnpm@11.15.1 run dev:api
-corepack pnpm@11.15.1 run check:quick
-corepack pnpm@11.15.1 run check
-corepack pnpm@11.15.1 run oci:check
+node --version
+pnpm --version
+pnpm install --frozen-lockfile
+cp .env.example .env
+docker compose up -d --wait postgres redis-coordination
+pnpm start:migrate
+pnpm dev
+```
+
+`pnpm dev` generates Prisma Client, then starts the API with the standard
+Nest CLI watch flow. It does not start or stop Docker services and does not
+apply migrations. Bring the infrastructure up and run `pnpm start:migrate`
+explicitly when preparing a local environment. PostgreSQL and
+`redis-coordination` must both be available before the API becomes ready.
+
+Run the remaining local checks separately:
+
+```sh
+pnpm check:quick
+pnpm check
+pnpm oci:check
 ```
 
 `check:quick` runs formatting, Prisma validation/generation, non-mutating
