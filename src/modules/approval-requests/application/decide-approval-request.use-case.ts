@@ -37,6 +37,23 @@ export class DecideApprovalRequestUseCase {
     private readonly clock: ApprovalRequestClock = () => new Date(),
   ) {}
 
+  /**
+   * Decides a visible pending snapshot through the repository CAS boundary.
+   *
+   * @remarks
+   * The operation attempts one pending-only compare-and-set. A lost CAS causes
+   * one reload for outcome classification, not a retry. A terminal reload is
+   * reported as already decided; a still-pending reload is an internal
+   * invariant failure. No stronger atomicity or durability is implied beyond
+   * the repository port.
+   *
+   * @param input - Reviewer identity, target identity and terminal decision.
+   * @returns The terminal snapshot returned by a successful pending-only CAS.
+   * @throws ApprovalRequestNotFoundError when the target is absent initially or after reload.
+   * @throws ApprovalRequestAlreadyDecidedError when initial or reloaded state is terminal.
+   * @throws ApprovalSelfDecisionForbiddenError when the actor authored the request.
+   * @throws Error when a dependency fails or a lost-CAS reload remains pending.
+   */
   public async execute(
     input: DecideApprovalRequestUseCaseInput,
   ): Promise<ApprovalRequest> {
@@ -62,7 +79,7 @@ export class DecideApprovalRequestUseCase {
     const reloaded = await this.repository.findById(input.requestId)
     if (reloaded === undefined) throw new ApprovalRequestNotFoundError()
     assertApprovalDecisionAllowed(reloaded, input.actorUserId)
-    throw new ApprovalRequestAlreadyDecidedError()
+    throw new Error('Approval request pending CAS invariant violated')
   }
 }
 

@@ -19,6 +19,18 @@ export class GetApprovalRequestQuery {
     private readonly repository: ApprovalRequestRepositoryPort,
   ) {}
 
+  /**
+   * Reads one request and applies author-or-broad-read visibility.
+   *
+   * @remarks
+   * The query performs one repository read and propagates dependency failures
+   * unchanged.
+   *
+   * @param input - Actor identity, target identity and broad-read decision.
+   * @returns The repository snapshot when it is visible to the actor.
+   * @throws ApprovalRequestNotFoundError when the request is absent or hidden.
+   * @throws Error when the repository read fails.
+   */
   public async execute(
     input: GetApprovalRequestQueryInput,
   ): Promise<ApprovalRequest> {

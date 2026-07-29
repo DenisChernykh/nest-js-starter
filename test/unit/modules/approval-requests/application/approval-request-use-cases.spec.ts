@@ -1,5 +1,6 @@
 import {
   ApprovalRequestAlreadyDecidedError,
+  ApprovalRequestError,
   ApprovalRequestNotFoundError,
   ApprovalSelfDecisionForbiddenError,
 } from '@/modules/approval-requests/application/approval-request-errors'
@@ -203,19 +204,41 @@ describe('DecideApprovalRequestUseCase', () => {
     ])
   })
 
-  it('reloads a lost compare-and-set and reports the terminal winner', async () => {
+  it.each(['approved', 'rejected'] as const)(
+    'reloads a lost compare-and-set and reports a durable %s winner',
+    async (winningDecision) => {
+      const repository = repositoryDouble()
+      const pending = pendingRequest()
+      const terminal = decideApprovalRequest(
+        pending,
+        strangerId,
+        winningDecision,
+        later,
+      )
+      repository.decidePending.mockResolvedValueOnce(undefined)
+      repository.findById
+        .mockResolvedValueOnce(pending)
+        .mockResolvedValueOnce(terminal)
+      const useCase = new DecideApprovalRequestUseCase(repository, () => later)
+
+      await expect(
+        useCase.execute({
+          actorUserId: reviewerId,
+          requestId,
+          decision: 'rejected',
+        }),
+      ).rejects.toThrow(ApprovalRequestAlreadyDecidedError)
+      expect(repository.findById.mock.calls).toHaveLength(2)
+    },
+  )
+
+  it('reports not found when the request disappears after a lost compare-and-set', async () => {
     const repository = repositoryDouble()
     const pending = pendingRequest()
-    const approved = decideApprovalRequest(
-      pending,
-      reviewerId,
-      'approved',
-      later,
-    )
     repository.decidePending.mockResolvedValueOnce(undefined)
     repository.findById
       .mockResolvedValueOnce(pending)
-      .mockResolvedValueOnce(approved)
+      .mockResolvedValueOnce(undefined)
     const useCase = new DecideApprovalRequestUseCase(repository, () => later)
 
     await expect(
@@ -224,7 +247,28 @@ describe('DecideApprovalRequestUseCase', () => {
         requestId,
         decision: 'rejected',
       }),
-    ).rejects.toThrow(ApprovalRequestAlreadyDecidedError)
+    ).rejects.toThrow(ApprovalRequestNotFoundError)
+    expect(repository.findById.mock.calls).toHaveLength(2)
+  })
+
+  it('reports an internal invariant failure when reload remains pending after a lost compare-and-set', async () => {
+    const repository = repositoryDouble()
+    const pending = pendingRequest()
+    repository.decidePending.mockResolvedValueOnce(undefined)
+    repository.findById
+      .mockResolvedValueOnce(pending)
+      .mockResolvedValueOnce(pending)
+    const useCase = new DecideApprovalRequestUseCase(repository, () => later)
+
+    const outcome = useCase.execute({
+      actorUserId: reviewerId,
+      requestId,
+      decision: 'rejected',
+    })
+
+    await expect(outcome).rejects.toBeInstanceOf(Error)
+    await expect(outcome).rejects.not.toBeInstanceOf(ApprovalRequestError)
+    await expect(outcome).rejects.not.toHaveProperty('code')
     expect(repository.findById.mock.calls).toHaveLength(2)
   })
 })

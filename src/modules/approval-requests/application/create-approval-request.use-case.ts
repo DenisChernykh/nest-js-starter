@@ -28,6 +28,18 @@ export class CreateApprovalRequestUseCase {
     private readonly clock: ApprovalRequestClock = () => new Date(),
   ) {}
 
+  /**
+   * Creates the aggregate and delegates its persistence once.
+   *
+   * @remarks
+   * Repository failures propagate unchanged. Completion guarantees only the
+   * snapshot returned by the configured repository port.
+   *
+   * @param input - Authenticated actor and unnormalized request content.
+   * @returns The normalized pending snapshot returned by persistence.
+   * @throws RangeError when normalized content violates aggregate limits.
+   * @throws Error when identifier, clock or repository dependencies fail.
+   */
   public execute(
     input: CreateApprovalRequestUseCaseInput,
   ): Promise<ApprovalRequest> {
