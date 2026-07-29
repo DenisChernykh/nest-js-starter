@@ -23,7 +23,19 @@ export class CreateUserUseCase {
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}
 
-  /** Creates a user or reports a case-insensitive email conflict. */
+  /**
+   * Validates code-owned roles and provisions one login-capable user.
+   *
+   * @remarks
+   * Role resolution intentionally completes before password hashing, so an
+   * unknown role cannot consume hashing or persistence resources.
+   *
+   * @param input - Operator-owned email, plaintext password and requested role keys.
+   * @returns The persistence result unchanged, including its created user id or
+   * finite normalized-email conflict.
+   * @throws UnknownRoleAssignmentError when any requested role is absent.
+   * @throws Non-role failures from hashing or persistence are rethrown unchanged.
+   */
   public async execute(input: CreateUserInput): Promise<CreateUserResult> {
     const roleKeys = [...new Set(input.roleKeys)].sort()
     try {

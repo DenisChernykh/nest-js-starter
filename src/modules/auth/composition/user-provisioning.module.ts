@@ -9,6 +9,12 @@ import type { AuthAuditPort } from '../application/auth-audit.port'
 import type { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import type { TransactionPort } from '@/shared/application/transaction.port'
 
+export { UnknownRoleAssignmentError } from '../application/auth-errors'
+export type {
+  CreateUserInput,
+  CreateUserResult,
+} from '../application/create-user.use-case'
+
 /** Composes PostgreSQL-only user provisioning from auth-owned adapters. */
 export function createUserCommand(
   provider: PrismaClientProvider,

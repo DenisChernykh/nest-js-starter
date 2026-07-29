@@ -162,6 +162,18 @@ describe('approval request real HTTP workflow', () => {
     await assertProblemResponseConforms(repeatedDecision)
   })
 
+  it('creates a request at the Unicode code-point limits', async () => {
+    const title = '😀'.repeat(120)
+    const description = '🚀'.repeat(2_000)
+
+    const created = await unsafe(author, 'post', '/v1/approval-requests')
+      .send({ title, description })
+      .expect(201)
+
+    await assertOpenApiResponseConforms('approvalRequestsCreate', created)
+    expect(created.body).toMatchObject({ title, description })
+  })
+
   it('publishes and returns a value-free validation problem for an invalid request id', async () => {
     const invalid = await request(baseUrl)
       .get('/v1/approval-requests/not-a-uuid')

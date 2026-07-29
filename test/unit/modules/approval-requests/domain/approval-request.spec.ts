@@ -31,6 +31,18 @@ describe('approval request domain', () => {
     })
   })
 
+  it('accepts title and description at Unicode code-point limits', () => {
+    const title = '😀'.repeat(120)
+    const description = '🚀'.repeat(2_000)
+
+    const request = createApprovalRequest(
+      { id, title, description, createdByUserId: authorId },
+      now,
+    )
+
+    expect(request).toMatchObject({ title, description })
+  })
+
   it.each([
     ['an empty title', '', 'description'],
     ['an empty description', 'title', '   '],

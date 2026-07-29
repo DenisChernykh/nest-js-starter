@@ -38,9 +38,11 @@ export function createApprovalRequest(
 ): ApprovalRequest {
   const title = input.title.trim()
   const description = input.description.trim()
-  if (title.length === 0 || title.length > 120)
+  const titleLength = codePointLength(title)
+  const descriptionLength = codePointLength(description)
+  if (titleLength === 0 || titleLength > 120)
     throw new RangeError('Approval request title is outside allowed limits')
-  if (description.length === 0 || description.length > 2_000)
+  if (descriptionLength === 0 || descriptionLength > 2_000)
     throw new RangeError(
       'Approval request description is outside allowed limits',
     )
@@ -113,4 +115,8 @@ function immutableApprovalRequest(
       get: () => new Date(decidedAtMs),
     })
   return Object.freeze(snapshot)
+}
+
+function codePointLength(value: string): number {
+  return Array.from(value).length
 }

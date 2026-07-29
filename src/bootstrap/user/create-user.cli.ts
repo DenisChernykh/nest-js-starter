@@ -1,10 +1,10 @@
 import { TextDecoder } from 'node:util'
 
-import { UnknownRoleAssignmentError } from '@/modules/auth/application/auth-errors'
-import type {
-  CreateUserInput,
-  CreateUserResult,
-} from '@/modules/auth/application/create-user.use-case'
+import {
+  UnknownRoleAssignmentError,
+  type CreateUserInput,
+  type CreateUserResult,
+} from '@/modules/auth/composition/user-provisioning.module'
 
 /** Narrow user-provisioning use-case surface consumed by the CLI parser. */
 export interface UserCreator {
@@ -60,7 +60,20 @@ function parseArguments(argv: readonly string[]): ParsedArguments | undefined {
   return { email, roleKeys }
 }
 
-/** Parses operator arguments, reads one password and emits only safe outcomes. */
+/**
+ * Parses operator arguments and provisions one user through bounded CLI effects.
+ *
+ * @remarks
+ * Invalid arguments are rejected before password input. Once acquired, the
+ * caller-supplied password buffer is zero-filled on every completion path.
+ * Only finite public messages are sent to the supplied output callbacks.
+ *
+ * @param argv - Operator arguments excluding the executable and script paths.
+ * @param dependencies - Use case, password reader and public output callbacks.
+ * @returns `0` after confirmed creation; `1` for handled validation, conflict,
+ * unknown-role and dependency failures.
+ * @throws When a supplied output callback throws.
+ */
 export async function runCreateUserCli(
   argv: readonly string[],
   dependencies: CreateUserCliDependencies,

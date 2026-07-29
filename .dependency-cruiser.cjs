@@ -10,6 +10,14 @@ module.exports = {
       },
     },
     {
+      name: 'bootstrap-must-import-modules-through-composition',
+      severity: 'error',
+      from: { path: '(^|/)bootstrap(/|$)' },
+      to: {
+        path: '(^|/)modules/[^/]+/(domain|application|infrastructure|presentation)(/|$)',
+      },
+    },
+    {
       name: 'application-must-not-import-generated-prisma',
       severity: 'error',
       from: { path: '(^|/)application(/|$)' },
