@@ -24,4 +24,27 @@ describe('dependency-cruiser policy', () => {
     )
     expect(result.status).toBeGreaterThan(0)
   })
+
+  it('rejects module public entrypoints that export domain internals', () => {
+    const fixture = resolve(
+      'test/fixtures/dependency-cruiser/module-index-exports-domain',
+    )
+    const result = spawnSync(
+      process.execPath,
+      [
+        'node_modules/dependency-cruiser/bin/dependency-cruise.mjs',
+        '--config',
+        '.dependency-cruiser.cjs',
+        '--output-type',
+        'err',
+        fixture,
+      ],
+      { cwd: process.cwd(), encoding: 'utf8' },
+    )
+
+    expect(`${result.stdout}${result.stderr}`).toContain(
+      'module-public-api-must-not-export-domain',
+    )
+    expect(result.status).toBeGreaterThan(0)
+  })
 })

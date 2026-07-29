@@ -76,9 +76,9 @@ export class PrismaApprovalRequestRepository implements ApprovalRequestRepositor
   ): Promise<ApprovalRequest | undefined> {
     const status = input.decision === 'approved' ? 'APPROVED' : 'REJECTED'
     const decidedAt = new Date(input.decidedAt)
-    const result = await this.runDatabaseOperation(() =>
+    const rows = await this.runDatabaseOperation(() =>
       this.provider.withClient((client) =>
-        client.approvalRequest.updateMany({
+        client.approvalRequest.updateManyAndReturn({
           where: { id: input.id, status: 'PENDING' },
           data: {
             status,
@@ -88,16 +88,9 @@ export class PrismaApprovalRequestRepository implements ApprovalRequestRepositor
         }),
       ),
     )
-    if (result.count === 0) return undefined
-    if (result.count !== 1) throw new DatabaseUnavailableError()
-
-    const row = await this.runDatabaseOperation(() =>
-      this.provider.withClient((client) =>
-        client.approvalRequest.findUnique({ where: { id: input.id } }),
-      ),
-    )
-    if (row === null) throw new DatabaseUnavailableError()
-    return mapPrismaApprovalRequest(row)
+    if (rows.length === 0) return undefined
+    if (rows.length !== 1) throw new DatabaseUnavailableError()
+    return mapPrismaApprovalRequest(rows[0]!)
   }
 
   private mapStatus(

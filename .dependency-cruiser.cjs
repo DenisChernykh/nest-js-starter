@@ -18,6 +18,12 @@ module.exports = {
       },
     },
     {
+      name: 'module-public-api-must-not-export-domain',
+      severity: 'error',
+      from: { path: '(^|/)modules/[^/]+/index\\.ts$' },
+      to: { path: '(^|/)modules/[^/]+/domain(/|$)' },
+    },
+    {
       name: 'application-must-not-import-generated-prisma',
       severity: 'error',
       from: { path: '(^|/)application(/|$)' },

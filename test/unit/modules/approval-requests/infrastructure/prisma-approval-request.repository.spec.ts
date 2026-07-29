@@ -81,6 +81,62 @@ describe('PrismaApprovalRequestRepository error boundary', () => {
     expect(error).not.toBeInstanceOf(DatabaseUnavailableError)
     expect(error).toMatchObject({ message: 'Mapper status failure' })
   })
+
+  it('returns the committed decision without a second database admission', async () => {
+    const requestId = '19c2dc04-4fd7-42f0-a27a-7365c61650a8'
+    const reviewerId = 'c725ac30-fd9a-44b9-b07b-b73a11f4d795'
+    const decidedAt = new Date('2026-07-29T10:30:00.000Z')
+    const updatedRow = {
+      id: requestId,
+      title: 'Atomic decision',
+      description: 'The committed row is returned by the conditional update.',
+      status: 'APPROVED' as const,
+      createdByUserId: '38af083a-5aa7-4a69-935b-1f164733a53d',
+      decidedByUserId: reviewerId,
+      createdAt: new Date('2026-07-29T10:00:00.000Z'),
+      decidedAt,
+    }
+    const client = {
+      approvalRequest: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        updateManyAndReturn: jest.fn().mockResolvedValue([updatedRow]),
+      },
+    }
+    let admissions = 0
+    const provider = {
+      withClient: jest.fn(
+        async (
+          operation: (databaseClient: typeof client) => Promise<unknown>,
+        ): Promise<unknown> => {
+          admissions += 1
+          if (admissions > 1) throw new DatabaseUnavailableError()
+          return operation(client)
+        },
+      ),
+    }
+    const repository = new PrismaApprovalRequestRepository(
+      provider as unknown as PrismaClientProvider,
+    )
+
+    await expect(
+      repository.decidePending({
+        id: requestId,
+        decision: 'approved',
+        decidedByUserId: reviewerId,
+        decidedAt,
+      }),
+    ).resolves.toEqual({
+      id: requestId,
+      title: 'Atomic decision',
+      description: 'The committed row is returned by the conditional update.',
+      status: 'approved',
+      createdByUserId: '38af083a-5aa7-4a69-935b-1f164733a53d',
+      decidedByUserId: reviewerId,
+      createdAt: new Date('2026-07-29T10:00:00.000Z'),
+      decidedAt,
+    })
+    expect(admissions).toBe(1)
+  })
 })
 
 function createRejectingRepository(
