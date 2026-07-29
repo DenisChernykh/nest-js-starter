@@ -23,53 +23,76 @@ const problemContentType = 'application/problem+json'
 export function ApiProblemResponses(
   ...problems: readonly (CoreProblemCode | RegisteredProblemDefinition)[]
 ): ClassDecorator & MethodDecorator {
-  const responseDecorators = problems.map((problem) => {
+  const definitionsByStatus = new Map<number, RegisteredProblemDefinition[]>()
+  for (const problem of problems) {
     const definition =
       typeof problem === 'string' ? getProblemDefinition(problem) : problem
-    const responseType =
-      definition.code === 'VALIDATION_FAILED'
-        ? ValidationProblemResponseDto
-        : ProblemResponseDto
-    const example = {
-      type: definition.type,
-      title: definition.title,
-      status: definition.status,
-      detail: definition.detail,
-      instance: 'urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4',
-      code: definition.code,
-      requestId: '01J3G1TQ9YQ7R7FQZ5P6M2K8A4',
-      ...(definition.code === 'VALIDATION_FAILED'
-        ? {
-            errors: [
-              {
-                pointer: '/email',
-                code: 'invalid_email',
-                detail: 'The field must be a valid email address.',
-              },
-            ],
-          }
-        : {}),
-    }
+    const definitions = definitionsByStatus.get(definition.status) ?? []
+    definitions.push(definition)
+    definitionsByStatus.set(definition.status, definitions)
+  }
+  const responseDecorators = [...definitionsByStatus].map(
+    ([status, definitions]) => {
+      const responseTypes = [
+        ...new Set(
+          definitions.map(({ code }) =>
+            code === 'VALIDATION_FAILED'
+              ? ValidationProblemResponseDto
+              : ProblemResponseDto,
+          ),
+        ),
+      ]
+      const schemas = responseTypes.map((responseType) => ({
+        $ref: getSchemaPath(responseType),
+      }))
+      const examples = Object.fromEntries(
+        definitions.map((definition) => [
+          definition.code,
+          {
+            summary: definition.title,
+            value: problemExample(definition),
+          },
+        ]),
+      )
 
-    return ApiResponse({
-      status: definition.status,
-      description: definition.title,
-      content: {
-        [problemContentType]: {
-          schema: { $ref: getSchemaPath(responseType) },
-          examples: {
-            [definition.code]: {
-              summary: definition.title,
-              value: example,
-            },
+      return ApiResponse({
+        status,
+        description: definitions.map(({ title }) => title).join('; '),
+        content: {
+          [problemContentType]: {
+            schema: schemas.length === 1 ? schemas[0]! : { oneOf: schemas },
+            examples,
           },
         },
-      },
-    })
-  })
+      })
+    },
+  )
 
   return applyDecorators(
     ApiExtraModels(ProblemResponseDto, ValidationProblemResponseDto),
     ...responseDecorators,
   )
+}
+
+function problemExample(definition: RegisteredProblemDefinition): object {
+  return {
+    type: definition.type,
+    title: definition.title,
+    status: definition.status,
+    detail: definition.detail,
+    instance: 'urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4',
+    code: definition.code,
+    requestId: '01J3G1TQ9YQ7R7FQZ5P6M2K8A4',
+    ...(definition.code === 'VALIDATION_FAILED'
+      ? {
+          errors: [
+            {
+              pointer: '/email',
+              code: 'invalid_email',
+              detail: 'The field must be a valid email address.',
+            },
+          ],
+        }
+      : {}),
+  }
 }

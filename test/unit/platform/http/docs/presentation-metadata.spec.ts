@@ -4,6 +4,8 @@ import {
   LoginRequestDto,
   SessionPathDto,
 } from '@/modules/auth/presentation/auth.dto'
+import { APPROVAL_SELF_DECISION_FORBIDDEN_PROBLEM } from '@/modules/approval-requests/presentation/approval-request-problem.definitions'
+import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.decorator'
 import { HealthController } from '@/platform/http/health/health.controller'
 
 const metadataKeys = {
@@ -33,6 +35,14 @@ const sessionSecurity = Object.freeze([{ sessionCookie: [] }])
 const sessionAndCsrfSecurity = Object.freeze([
   { sessionCookie: [], csrfToken: [] },
 ])
+
+class SameStatusProblemFixture {
+  @ApiProblemResponses(
+    'AUTHORIZATION_DENIED',
+    APPROVAL_SELF_DECISION_FORBIDDEN_PROBLEM,
+  )
+  public decide(): void {}
+}
 
 const operations: readonly OperationExpectation[] = [
   {
@@ -238,12 +248,35 @@ describe('HTTP presentation Swagger metadata', () => {
       expect(typeof property?.example).toBe('string')
     }
   })
+
+  it('retains every stable problem code declared for the same HTTP status', () => {
+    const method = Reflect.get(
+      SameStatusProblemFixture.prototype,
+      'decide',
+    ) as object
+    const responses = Reflect.getMetadata(metadataKeys.responses, method) as
+      Readonly<Record<string, ResponseMetadata>> | undefined
+    const examples =
+      responses?.['403']?.content?.['application/problem+json']?.examples
+
+    expect(Object.keys(examples ?? {}).sort()).toEqual([
+      'APPROVAL_SELF_DECISION_FORBIDDEN',
+      'AUTHORIZATION_DENIED',
+    ])
+  })
 })
 
 interface ResponseMetadata {
   readonly type?: { readonly name?: string }
   readonly schema?: unknown
-  readonly content?: Readonly<Record<string, unknown>>
+  readonly content?: Readonly<
+    Record<
+      string,
+      {
+        readonly examples?: Readonly<Record<string, unknown>>
+      }
+    >
+  >
 }
 
 interface ParameterMetadata {
