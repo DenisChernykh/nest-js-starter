@@ -21,60 +21,65 @@ export class PrismaApprovalRequestRepository implements ApprovalRequestRepositor
   public constructor(private readonly provider: PrismaClientProvider) {}
 
   public async create(request: ApprovalRequest): Promise<ApprovalRequest> {
-    return this.runDatabaseOperation(async () => {
-      const row = await this.provider.withClient((client) =>
+    const status = this.mapStatus(request.status)
+    const createdAt = new Date(request.createdAt)
+    const decidedAt =
+      request.decidedAt === undefined ? null : new Date(request.decidedAt)
+    const row = await this.runDatabaseOperation(() =>
+      this.provider.withClient((client) =>
         client.approvalRequest.create({
           data: {
             id: request.id,
             title: request.title,
             description: request.description,
-            status: this.mapStatus(request.status),
+            status,
             createdByUserId: request.createdByUserId,
             decidedByUserId: request.decidedByUserId ?? null,
-            createdAt: new Date(request.createdAt),
-            decidedAt:
-              request.decidedAt === undefined
-                ? null
-                : new Date(request.decidedAt),
+            createdAt,
+            decidedAt,
           },
         }),
-      )
-      return mapPrismaApprovalRequest(row)
-    })
+      ),
+    )
+    return mapPrismaApprovalRequest(row)
   }
 
   public async findById(id: string): Promise<ApprovalRequest | undefined> {
-    return this.runDatabaseOperation(async () => {
-      const row = await this.provider.withClient((client) =>
+    const row = await this.runDatabaseOperation(() =>
+      this.provider.withClient((client) =>
         client.approvalRequest.findUnique({ where: { id } }),
-      )
-      return row === null ? undefined : mapPrismaApprovalRequest(row)
-    })
+      ),
+    )
+    return row === null ? undefined : mapPrismaApprovalRequest(row)
   }
 
   public async decidePending(
     input: DecidePendingApprovalRequestInput,
   ): Promise<ApprovalRequest | undefined> {
-    return this.runDatabaseOperation(async () => {
-      const result = await this.provider.withClient((client) =>
+    const status = input.decision === 'approved' ? 'APPROVED' : 'REJECTED'
+    const decidedAt = new Date(input.decidedAt)
+    const result = await this.runDatabaseOperation(() =>
+      this.provider.withClient((client) =>
         client.approvalRequest.updateMany({
           where: { id: input.id, status: 'PENDING' },
           data: {
-            status: input.decision === 'approved' ? 'APPROVED' : 'REJECTED',
+            status,
             decidedByUserId: input.decidedByUserId,
-            decidedAt: new Date(input.decidedAt),
+            decidedAt,
           },
         }),
-      )
-      if (result.count === 0) return undefined
-      if (result.count !== 1) throw new DatabaseUnavailableError()
+      ),
+    )
+    if (result.count === 0) return undefined
+    if (result.count !== 1) throw new DatabaseUnavailableError()
 
-      const row = await this.provider.withClient((client) =>
+    const row = await this.runDatabaseOperation(() =>
+      this.provider.withClient((client) =>
         client.approvalRequest.findUnique({ where: { id: input.id } }),
-      )
-      if (row === null) throw new DatabaseUnavailableError()
-      return mapPrismaApprovalRequest(row)
-    })
+      ),
+    )
+    if (row === null) throw new DatabaseUnavailableError()
+    return mapPrismaApprovalRequest(row)
   }
 
   private mapStatus(
