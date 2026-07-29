@@ -19,6 +19,7 @@ import {
   type DocsAccessPolicy,
 } from '@/platform/http/docs/docs-access.contracts'
 import { configureApiDocs } from '@/platform/http/docs/configure-api-docs'
+import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registry'
 import { CorrelationFieldsProvider } from '@/platform/http/context/correlation-fields.provider'
 import { createHttpAccessLogMiddleware } from '@/platform/logging/http-access-log.middleware'
 import { NestLoggerAdapter } from '@/platform/logging/nest-logger.adapter'
@@ -103,7 +104,13 @@ export async function configureApi(
     config.docs.mode === 'protected'
       ? app.get<DocsAccessPolicy | null>(DOCS_ACCESS_POLICY)
       : null
-  configureApiDocs(app, runtimeConfig, requestContext, docsPolicy)
+  configureApiDocs(
+    app,
+    runtimeConfig,
+    requestContext,
+    docsPolicy,
+    app.get(HttpProblemRegistry).definitions,
+  )
   await app.init()
 
   return {

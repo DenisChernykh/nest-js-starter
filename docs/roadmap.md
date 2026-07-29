@@ -12,7 +12,8 @@ evidence machinery.
 
 ## Status snapshot
 
-As of 2026-07-26, the production foundation is implemented on `stage`.
+As of 2026-07-26, the universal production foundation is implemented on
+`stage`.
 
 - PR [#13](https://github.com/DenisChernykh/nest-js-starter/pull/13)
   simplified the runtime, tooling, test and OCI boundaries while preserving the
@@ -22,12 +23,36 @@ As of 2026-07-26, the production foundation is implemented on `stage`.
 - The
   [Stage image run for `913fef3`](https://github.com/DenisChernykh/nest-js-starter/actions/runs/30192505866)
   completed successfully.
-- The current quick gate has 60 unit suites and 302 tests. Integration and e2e
-  suites remain in `pnpm check`; Docker verification remains in
+- The recorded `stage` quick gate had 60 unit suites and 302 tests. Integration
+  and e2e suites remain in `pnpm check`; Docker verification remains in
   `pnpm oci:check` and stage publication.
 
 This snapshot is evidence for the stated revision, not a permanent substitute
 for checking the current branch and workflow runs.
+
+## Maintained vertical reference
+
+As of 2026-07-29, the `approval-requests` slice is implemented and
+production-wired on its feature branch as the first maintained vertical
+reference. It covers authenticated creation, author-or-reviewer visibility and
+an authorized non-author approve/reject decision. Prisma persists the aggregate
+and enforces the terminal transition with a pending-only compare-and-set.
+
+The module contributes its permissions to product-owned root role definitions
+and its explicit error-class mappings to the root-composed HTTP problem
+registry. The committed OpenAPI contract includes the three operations and the
+complete composed problem-code enum. Real HTTP tests cover its authentication,
+authorization, validation, visibility and business-error responses.
+
+Fresh local Node 24.18.0 and pnpm 11.15.1 evidence for that feature-branch
+revision is `pnpm check:quick` with 68 unit suites and 346 tests, followed by
+`pnpm check` with 12 integration suites/58 tests and 28 e2e suites/85 tests.
+This is local implementation evidence only: no remote CI, merge, image
+publication, deployment or hosted verification is recorded for the slice.
+
+The reference is optional product code rather than universal foundation. It
+does not implement listing, user provisioning, self-service auth, email,
+queues or object storage.
 
 ## Accepted foundation
 
@@ -48,9 +73,9 @@ The following contracts are complete and remain in the core:
 8. A non-root SHA-published GHCR image, one digest smoke and a Trivy
    High/Critical scan.
 
-The foundation does not include registration, password recovery, queues, object
-storage, application caching, durable events or project-specific business
-modules.
+The universal foundation does not include registration, password recovery,
+queues, object storage, application caching, durable events or mandatory
+project-specific business modules.
 
 ## Roadmap rules
 

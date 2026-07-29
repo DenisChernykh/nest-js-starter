@@ -30,3 +30,29 @@ export interface ProblemDefinition {
 export interface RegisteredProblemDefinition extends ProblemDefinition {
   readonly type: string
 }
+
+/** Safe public metadata returned by one contributed application mapper. */
+export interface HttpProblemMapping {
+  readonly code: string
+  readonly errors?: readonly ProblemFieldError[]
+  readonly retryAfterSeconds?: number
+}
+
+/** Framework-bound projection from an explicit error class to public metadata. */
+export type HttpProblemMapper = (
+  error: unknown,
+) => HttpProblemMapping | undefined
+
+/** Module-owned definitions and mapper installed by a composition root. */
+export interface HttpProblemContribution {
+  readonly definitions: readonly RegisteredProblemDefinition[]
+  readonly map: HttpProblemMapper
+}
+
+/** Fully resolved safe problem consumed by the global exception filter. */
+export interface MappedHttpProblem {
+  readonly definition: RegisteredProblemDefinition
+  readonly errors?: readonly ProblemFieldError[]
+  readonly retryAfterSeconds?: number
+  readonly unexpected: boolean
+}

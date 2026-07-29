@@ -4,9 +4,9 @@ import {
 } from '@/modules/auth/application/auth-errors'
 import { definePermissions } from '@/modules/auth/application/permission'
 import {
+  createAuthRoleRegistry,
   RoleRegistry,
   SYSTEM_ADMIN_PERMISSIONS,
-  SYSTEM_ADMIN_ROLE,
 } from '@/modules/auth/application/role-registry'
 
 describe('RoleRegistry', () => {
@@ -21,15 +21,22 @@ describe('RoleRegistry', () => {
     ).toThrow()
   })
 
-  it('rejects duplicate role definitions at startup', () => {
+  it('has no implicit product role definitions', () => {
+    const registry = createAuthRoleRegistry([])
+
+    expect(() => registry.resolve('active', ['system.admin'])).toThrow(
+      UnknownRoleAssignmentError,
+    )
+  })
+
+  it('rejects duplicate product role definitions at startup', () => {
     const permissions = definePermissions(['system.docs.read'])
 
-    expect(
-      () =>
-        new RoleRegistry([
-          { key: 'system.admin', permissions },
-          { key: 'system.admin', permissions },
-        ]),
+    expect(() =>
+      createAuthRoleRegistry([
+        { key: 'system.admin', permissions },
+        { key: 'system.admin', permissions },
+      ]),
     ).toThrow()
   })
 
@@ -68,7 +75,6 @@ describe('RoleRegistry', () => {
       'system.docs.read',
     ])
     expect(SYSTEM_ADMIN_PERMISSIONS).toContain('system.docs.read')
-    expect(SYSTEM_ADMIN_ROLE.key).toBe('system.admin')
     expect(Object.isFrozen(result)).toBe(true)
     expect('add' in result).toBe(false)
   })

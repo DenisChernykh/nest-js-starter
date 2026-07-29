@@ -30,7 +30,19 @@ export interface AuthE2eRuntime {
   readonly redis: StartedRedisContainer
   readonly pool: Pool
   readonly instances: readonly AuthApiInstance[]
-  createUser(email: string, passwordHash?: string): Promise<string>
+  /**
+   * Persists one login-ready user and exactly the requested role rows.
+   *
+   * @param email - Unique user email normalized by the fixture.
+   * @param passwordHash - Optional precomputed hash; defaults to `valid password`.
+   * @param roleKeys - Exact role rows to insert; defaults to `system.admin`.
+   * @returns The generated durable user identifier.
+   */
+  createUser(
+    email: string,
+    passwordHash?: string,
+    roleKeys?: readonly string[],
+  ): Promise<string>
   flushRedis(): Promise<void>
   stop(): Promise<void>
 }
@@ -133,7 +145,7 @@ export async function createAuthTestRuntime(
     redis,
     pool,
     instances,
-    createUser: async (email, passwordHash) => {
+    createUser: async (email, passwordHash, roleKeys = ['system.admin']) => {
       const hash =
         passwordHash ??
         (await new Argon2PasswordHasher().hash('valid password'))
@@ -149,10 +161,12 @@ export async function createAuthTestRuntime(
          VALUES ($1, $2, CURRENT_TIMESTAMP)`,
         [userId, hash],
       )
-      await pool.query(
-        'INSERT INTO user_roles (user_id, role_key) VALUES ($1, $2)',
-        [userId, 'system.admin'],
-      )
+      for (const roleKey of roleKeys) {
+        await pool.query(
+          'INSERT INTO user_roles (user_id, role_key) VALUES ($1, $2)',
+          [userId, roleKey],
+        )
+      }
       return userId
     },
     flushRedis: async () => {

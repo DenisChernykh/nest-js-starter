@@ -10,6 +10,20 @@ module.exports = {
       },
     },
     {
+      name: 'bootstrap-must-import-modules-through-composition',
+      severity: 'error',
+      from: { path: '(^|/)bootstrap(/|$)' },
+      to: {
+        path: '(^|/)modules/[^/]+/(domain|application|infrastructure|presentation)(/|$)',
+      },
+    },
+    {
+      name: 'module-public-api-must-not-export-domain',
+      severity: 'error',
+      from: { path: '(^|/)modules/[^/]+/index\\.ts$' },
+      to: { path: '(^|/)modules/[^/]+/domain(/|$)' },
+    },
+    {
       name: 'application-must-not-import-generated-prisma',
       severity: 'error',
       from: { path: '(^|/)application(/|$)' },

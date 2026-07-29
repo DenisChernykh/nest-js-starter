@@ -5,6 +5,7 @@ import { Reflector } from '@nestjs/core'
 import type { AuthenticateSessionUseCase } from '../application/authenticate-session.use-case'
 import { AuthenticationRequiredError } from '../application/auth-errors'
 import type { AuthRequestContext } from './auth-request.context'
+import { attachAuthenticatedPrincipal } from './current-principal.decorator'
 import { readCanonicalSessionToken } from './session-cookie'
 import { PUBLIC_ENDPOINT_METADATA } from '@/platform/http/policy/public-endpoint.decorator'
 
@@ -36,6 +37,7 @@ export class AuthenticationGuard implements CanActivate {
     )
     if (token === undefined) throw new AuthenticationRequiredError()
     const principal = await this.authenticate.execute(token, this.now())
+    attachAuthenticatedPrincipal(request, principal)
     this.requestContext.prepare(request, principal, token)
     return true
   }
