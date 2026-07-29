@@ -21,6 +21,19 @@ metrics and custom OCI evidence machinery. Product modules own their ports and
 adapters; shared infrastructure is introduced only after a real consumer and
 failure model are known.
 
+`approval-requests` is the production-wired maintained vertical reference, not
+universal foundation and not a generic CRUD abstraction. It demonstrates an
+authenticated create/get/decision workflow across all five module-local
+layers: product-owned permissions and roles, module-owned HTTP problems, a
+Prisma repository with a pending-only compare-and-set, explicit OpenAPI
+operations and real HTTP business-error coverage. Products may replace or
+remove this reference while retaining the universal runtime, auth and HTTP
+contracts.
+
+The reference does not add a list endpoint, user provisioning, self-service
+auth, email, queues or object storage. Those remain absent until an independent
+product requirement supplies a concrete consumer and failure model.
+
 `docs/roadmap.md` is the canonical source for remaining deployment/recovery
 work and optional capability adoption. Product repositories may provide proven
 patterns, but they do not define starter scope.

@@ -24,6 +24,20 @@ to `src/modules/<name>/index.ts`. Internal entities, ports, adapters, DTOs and
 composition files are private. Bootstrap is the only layer allowed to import a
 module's composition class directly.
 
+Auth is the public presentation integration for authenticated business
+controllers. They consume `CurrentPrincipal`, `RequirePermission` and
+`AuthenticatedPrincipal` through `@/modules/auth`; they do not import auth
+application or presentation internals. Product modules own their permission
+keys and expose frozen role contributions from `composition`. The API root
+combines those contributions into product-owned role definitions passed to
+auth, so auth resolves roles without importing the contributing module.
+
+Each module also owns its public HTTP problem definitions and the mapper from
+explicit module error classes. Its composition layer exports that contribution;
+the API root installs the selected module contributions in one process catalog.
+Neither the global HTTP platform nor another business module recognizes
+module-specific errors or codes.
+
 ## Platform and shared
 
 `platform` implements technical capabilities and never imports business
