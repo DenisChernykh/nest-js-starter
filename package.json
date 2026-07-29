@@ -12,6 +12,7 @@
   "scripts": {
     "architecture:check": "corepack pnpm@11.15.1 run prisma:generate && depcruise --config .dependency-cruiser.cjs --output-type err src",
     "auth:create-admin": "corepack pnpm@11.15.1 run prisma:generate && tsx src/bootstrap/admin/main.ts",
+    "auth:create-user": "corepack pnpm@11.15.1 run prisma:generate && tsx src/bootstrap/user/main.ts",
     "build": "corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run build:compiled",
     "build:clean": "tsx scripts/build/clean-dist.ts",
     "build:compiled": "corepack pnpm@11.15.1 run build:clean && tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",

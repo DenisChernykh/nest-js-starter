@@ -3,6 +3,8 @@ import type {
   CredentialSnapshot,
   InitialAdminInput,
   InitialAdminResult,
+  UserProvisioningInput,
+  CreateUserResult,
 } from './auth.types'
 
 /** Durable identity and security-state operations required by auth use cases. */
@@ -27,6 +29,8 @@ export interface AuthPersistencePort {
   incrementSessionGeneration(userId: string): Promise<bigint>
   /** Creates at most one initial administrator across concurrent processes. */
   bootstrapInitialAdmin(input: InitialAdminInput): Promise<InitialAdminResult>
+  /** Atomically creates one user, credential and deduplicated role set. */
+  createUser(input: UserProvisioningInput): Promise<CreateUserResult>
 }
 
 /** Integrity failure for the required singleton auth security state. */
