@@ -30,7 +30,10 @@ import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { runtimeDefaults } from '@/platform/config/runtime-defaults'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
 import { RequestContext } from '@/platform/http/context/request-context'
-import { ProblemResponseDto } from '@/platform/http/docs/problem-response.dto'
+import {
+  ProblemResponseDto,
+  ValidationProblemResponseDto,
+} from '@/platform/http/docs/problem-response.dto'
 import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
 import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
@@ -157,20 +160,28 @@ describe('OpenAPI RFC 9457 conformance', () => {
       readCommittedOpenApiDocument(),
       readFile('docs/api/problem-types.md', 'utf8'),
     ])
-    const schema = document.components?.schemas?.['ProblemResponseDto']
-    if (schema === undefined || '$ref' in schema) {
-      throw new Error('ProblemResponseDto component is unavailable')
-    }
-    const codeSchema = schema.properties?.['code']
-    if (codeSchema === undefined || '$ref' in codeSchema) {
-      throw new Error('ProblemResponseDto code schema is unavailable')
-    }
-    const documentedCodes = (codeSchema.enum ?? [])
-      .filter((value): value is string => typeof value === 'string')
-      .sort()
     const registryCodes = API_PROBLEM_CATALOG.map(({ code }) => code).sort()
+    const problemComponentNames = findProblemComponentNames(document)
 
-    expect(documentedCodes).toEqual(registryCodes)
+    expect(problemComponentNames).toEqual([
+      'ProblemResponseDto',
+      'ValidationProblemResponseDto',
+    ])
+    for (const componentName of problemComponentNames) {
+      const schema = document.components?.schemas?.[componentName]
+      if (schema === undefined || '$ref' in schema) {
+        throw new Error(`${componentName} component is unavailable`)
+      }
+      const codeSchema = schema.properties?.['code']
+      if (codeSchema === undefined || '$ref' in codeSchema) {
+        throw new Error(`${componentName} code schema is unavailable`)
+      }
+      const documentedCodes = (codeSchema.enum ?? [])
+        .filter((value): value is string => typeof value === 'string')
+        .sort()
+      expect(codeSchema['pattern']).toBe('^[A-Z][A-Z0-9_]*$')
+      expect(documentedCodes).toEqual(registryCodes)
+    }
     for (const definition of API_PROBLEM_CATALOG) {
       expect(markdown).toContain(definition.type)
       expect(markdown).toContain(definition.code)
@@ -184,22 +195,76 @@ describe('OpenAPI RFC 9457 conformance', () => {
     }
   })
 
-  it('rejects generation when the problem code schema is unavailable', async () => {
-    const metadataKey = 'swagger/apiModelPropertiesArray'
-    const target = ProblemResponseDto.prototype
-    const properties = Reflect.getOwnMetadata(metadataKey, target) as string[]
-    Reflect.defineMetadata(
-      metadataKey,
-      properties.filter((property) => property !== ':code'),
-      target,
-    )
-
-    try {
-      await expect(generateOpenApiArtifact()).rejects.toThrow(
-        'OpenAPI ProblemResponseDto.code schema is unavailable',
+  it.each([
+    ['ProblemResponseDto', ProblemResponseDto],
+    ['ValidationProblemResponseDto', ValidationProblemResponseDto],
+  ] as const)(
+    'rejects generation when the %s code schema is unavailable',
+    async (componentName, responseType) => {
+      const metadataKey = 'swagger/apiModelPropertiesArray'
+      const target = responseType.prototype
+      const properties = Reflect.getOwnMetadata(metadataKey, target) as string[]
+      Reflect.defineMetadata(
+        metadataKey,
+        properties.filter((property) => property !== ':code'),
+        target,
       )
-    } finally {
-      Reflect.defineMetadata(metadataKey, properties, target)
-    }
-  })
+
+      try {
+        await expect(generateOpenApiArtifact()).rejects.toThrow(
+          `OpenAPI ${componentName}.code schema is unavailable`,
+        )
+      } finally {
+        Reflect.defineMetadata(metadataKey, properties, target)
+      }
+    },
+  )
 })
+
+function findProblemComponentNames(
+  document: Awaited<ReturnType<typeof readCommittedOpenApiDocument>>,
+): readonly string[] {
+  const names = new Set<string>()
+  for (const pathItem of Object.values(document.paths)) {
+    for (const operation of Object.values(pathItem)) {
+      if (operation === undefined) continue
+      for (const response of Object.values(operation.responses)) {
+        if ('$ref' in response) continue
+        const schema =
+          response.content?.['application/problem+json']?.schema ?? undefined
+        if (schema !== undefined) collectProblemComponentNames(schema, names)
+      }
+    }
+  }
+  return [...names].sort()
+}
+
+function collectProblemComponentNames(
+  schema: Readonly<Record<string, unknown>>,
+  names: Set<string>,
+): void {
+  const reference = schema['$ref']
+  if (
+    typeof reference === 'string' &&
+    reference.startsWith('#/components/schemas/')
+  ) {
+    names.add(reference.slice('#/components/schemas/'.length))
+  }
+  const alternatives = schema['oneOf']
+  if (!isUnknownArray(alternatives)) return
+  for (const alternative of alternatives) {
+    if (isReadonlyRecord(alternative)) {
+      collectProblemComponentNames(alternative, names)
+    }
+  }
+}
+
+function isUnknownArray(value: unknown): value is readonly unknown[] {
+  return Array.isArray(value)
+}
+
+function isReadonlyRecord(
+  value: unknown,
+): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}

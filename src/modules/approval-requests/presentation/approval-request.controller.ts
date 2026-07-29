@@ -128,6 +128,7 @@ export class ApprovalRequestController {
     description: 'Approval request visible to the current actor.',
   })
   @ApiProblemResponses(
+    'VALIDATION_FAILED',
     'AUTHENTICATION_REQUIRED',
     APPROVAL_REQUEST_NOT_FOUND_PROBLEM,
     'INTERNAL_ERROR',

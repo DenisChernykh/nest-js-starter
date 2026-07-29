@@ -27,9 +27,18 @@ export class HttpProblemRegistry {
    * required `INTERNAL_ERROR` fallback is absent.
    */
   public constructor(contributions: readonly HttpProblemContribution[]) {
-    this.#contributions = Object.freeze([...contributions])
-    const definitions = contributions.flatMap(({ definitions: owned }) =>
-      owned.map((definition) => Object.freeze({ ...definition })),
+    this.#contributions = Object.freeze(
+      contributions.map(({ definitions, map }) =>
+        Object.freeze({
+          definitions: Object.freeze(
+            definitions.map((definition) => Object.freeze({ ...definition })),
+          ),
+          map,
+        }),
+      ),
+    )
+    const definitions = this.#contributions.flatMap(
+      ({ definitions: owned }) => owned,
     )
     validateUniqueDefinitions(definitions)
     this.definitions = Object.freeze(definitions)

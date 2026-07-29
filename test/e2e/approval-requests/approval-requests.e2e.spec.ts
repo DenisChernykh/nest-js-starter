@@ -161,6 +161,18 @@ describe('approval request real HTTP workflow', () => {
     expectProblem(repeatedDecision, 409, 'APPROVAL_REQUEST_ALREADY_DECIDED')
     await assertProblemResponseConforms(repeatedDecision)
   })
+
+  it('publishes and returns a value-free validation problem for an invalid request id', async () => {
+    const invalid = await request(baseUrl)
+      .get('/v1/approval-requests/not-a-uuid')
+      .set('Cookie', author.cookie)
+      .expect(422)
+
+    expectProblem(invalid, 422, 'VALIDATION_FAILED')
+    expect(JSON.stringify(invalid.body)).not.toContain('not-a-uuid')
+    await assertProblemResponseConforms(invalid)
+    await assertOpenApiResponseConforms('approvalRequestsGet', invalid)
+  })
 })
 
 async function login(baseUrl: string, email: string): Promise<AuthSession> {

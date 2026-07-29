@@ -8,6 +8,22 @@ import {
 import type { ApplicationRuntimeConfig } from '@/platform/config/runtime-config.types'
 import type { RegisteredProblemDefinition } from '@/platform/http/errors/problem.contracts'
 
+const openApiMethods = [
+  'get',
+  'put',
+  'post',
+  'delete',
+  'options',
+  'head',
+  'patch',
+  'trace',
+] as const
+
+interface ReferencedProblemSchema {
+  readonly $ref?: string
+  readonly oneOf?: readonly ReferencedProblemSchema[]
+}
+
 /**
  * Builds the single code-first OpenAPI document for offline and runtime use.
  *
@@ -17,7 +33,7 @@ import type { RegisteredProblemDefinition } from '@/platform/http/errors/problem
  * finite response-code enum.
  * @returns OpenAPI 3 document generated from explicit presentation data and
  * the supplied process composition.
- * @throws Error when a generated problem component omits its `code` property.
+ * @throws Error when a used problem component omits a usable `code` property.
  */
 export function createOpenApiDocument(
   app: INestApplication,
@@ -63,13 +79,50 @@ export function createOpenApiDocument(
     operationIdFactory: (controllerKey, methodKey) =>
       `${controllerKey}.${methodKey}`,
   })
-  const problemSchema = document.components?.schemas?.['ProblemResponseDto']
-  if (problemSchema === undefined) return document
-  const codeSchema =
-    '$ref' in problemSchema ? undefined : problemSchema.properties?.['code']
-  if (codeSchema === undefined || '$ref' in codeSchema) {
-    throw new Error('OpenAPI ProblemResponseDto.code schema is unavailable')
+  const problemCodes = problems.map(({ code }) => code).sort()
+  for (const componentName of findProblemComponentNames(document)) {
+    const problemSchema = document.components?.schemas?.[componentName]
+    const codeSchema =
+      problemSchema === undefined || '$ref' in problemSchema
+        ? undefined
+        : problemSchema.properties?.['code']
+    if (codeSchema === undefined || '$ref' in codeSchema) {
+      throw new Error(`OpenAPI ${componentName}.code schema is unavailable`)
+    }
+    codeSchema.enum = [...problemCodes]
   }
-  codeSchema.enum = problems.map(({ code }) => code).sort()
   return document
+}
+
+function findProblemComponentNames(document: OpenAPIObject): readonly string[] {
+  const componentNames = new Set<string>()
+  for (const pathItem of Object.values(document.paths)) {
+    for (const method of openApiMethods) {
+      const operation = pathItem[method]
+      if (operation === undefined) continue
+      for (const response of Object.values(operation.responses)) {
+        if (response === undefined) continue
+        if ('$ref' in response) continue
+        const schema = response.content?.['application/problem+json']?.schema
+        if (schema !== undefined) {
+          collectProblemComponentNames(schema, componentNames)
+        }
+      }
+    }
+  }
+  return [...componentNames].sort()
+}
+
+function collectProblemComponentNames(
+  schema: ReferencedProblemSchema,
+  componentNames: Set<string>,
+): void {
+  const reference = schema.$ref
+  const prefix = '#/components/schemas/'
+  if (reference?.startsWith(prefix) === true) {
+    componentNames.add(reference.slice(prefix.length))
+  }
+  for (const alternative of schema.oneOf ?? []) {
+    collectProblemComponentNames(alternative, componentNames)
+  }
 }

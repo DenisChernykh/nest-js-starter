@@ -42,6 +42,62 @@ describe('HttpProblemRegistry', () => {
     ).toBe('INTERNAL_ERROR')
   })
 
+  it('snapshots mutable contribution objects, mappers and owned definitions', () => {
+    const originalDefinition = {
+      slug: 'mutable-contribution',
+      code: 'MUTABLE_CONTRIBUTION',
+      status: 409,
+      title: 'Original title',
+      detail: 'Original detail.',
+      type: 'https://example.invalid/problems/mutable-contribution',
+    }
+    const replacementDefinition = {
+      slug: 'replacement-contribution',
+      code: 'REPLACEMENT_CONTRIBUTION',
+      status: 503,
+      title: 'Replacement title',
+      detail: 'Replacement detail.',
+      type: 'https://example.invalid/problems/replacement-contribution',
+    }
+    const ownedDefinitions = [originalDefinition]
+    const contribution = {
+      definitions: ownedDefinitions,
+      map: (error: unknown) =>
+        error instanceof ExampleError
+          ? { code: 'MUTABLE_CONTRIBUTION' }
+          : undefined,
+    }
+    const registry = new HttpProblemRegistry([
+      CORE_HTTP_PROBLEM_CONTRIBUTION,
+      contribution,
+    ])
+
+    contribution.map = () => ({ code: 'INTERNAL_ERROR' })
+    contribution.definitions = [replacementDefinition]
+    ownedDefinitions[0] = replacementDefinition
+    originalDefinition.code = 'CALLER_MUTATED'
+    originalDefinition.title = 'Caller-mutated title'
+
+    expect(registry.map(new ExampleError()).definition.code).toBe(
+      'MUTABLE_CONTRIBUTION',
+    )
+    expect(
+      registry.definitions.find(({ code }) => code === 'MUTABLE_CONTRIBUTION'),
+    ).toEqual({
+      slug: 'mutable-contribution',
+      code: 'MUTABLE_CONTRIBUTION',
+      status: 409,
+      title: 'Original title',
+      detail: 'Original detail.',
+      type: 'https://example.invalid/problems/mutable-contribution',
+    })
+    expect(
+      registry.definitions.some(
+        ({ code }) => code === 'REPLACEMENT_CONTRIBUTION',
+      ),
+    ).toBe(false)
+  })
+
   it.each([
     [
       'code',

@@ -38,7 +38,13 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
        WHERE table_schema = 'public' AND table_name <> '_prisma_migrations'
        ORDER BY table_name`,
     )
-    expect(tables.rows).toContainEqual({ table_name: 'approval_requests' })
+    expect(tables.rows).toEqual([
+      { table_name: 'approval_requests' },
+      { table_name: 'auth_security_state' },
+      { table_name: 'password_credentials' },
+      { table_name: 'user_roles' },
+      { table_name: 'users' },
+    ])
     const securityState = await pool.query<{
       id: number
       global_session_epoch: string
