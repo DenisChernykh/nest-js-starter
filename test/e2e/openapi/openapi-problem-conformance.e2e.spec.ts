@@ -23,12 +23,14 @@ import {
 } from '@/modules/auth/application/auth-errors'
 import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
 import { API_PROBLEM_CATALOG } from '@/bootstrap/api/api-http-problems'
+import { generateOpenApiArtifact } from '@/bootstrap/contracts/generate-openapi'
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { runtimeDefaults } from '@/platform/config/runtime-defaults'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
 import { RequestContext } from '@/platform/http/context/request-context'
+import { ProblemResponseDto } from '@/platform/http/docs/problem-response.dto'
 import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
 import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
@@ -172,6 +174,32 @@ describe('OpenAPI RFC 9457 conformance', () => {
     for (const definition of API_PROBLEM_CATALOG) {
       expect(markdown).toContain(definition.type)
       expect(markdown).toContain(definition.code)
+    }
+    for (const approvalCode of [
+      'APPROVAL_REQUEST_NOT_FOUND',
+      'APPROVAL_REQUEST_ALREADY_DECIDED',
+      'APPROVAL_SELF_DECISION_FORBIDDEN',
+    ]) {
+      expect(markdown).toContain(approvalCode)
+    }
+  })
+
+  it('rejects generation when the problem code schema is unavailable', async () => {
+    const metadataKey = 'swagger/apiModelPropertiesArray'
+    const target = ProblemResponseDto.prototype
+    const properties = Reflect.getOwnMetadata(metadataKey, target) as string[]
+    Reflect.defineMetadata(
+      metadataKey,
+      properties.filter((property) => property !== ':code'),
+      target,
+    )
+
+    try {
+      await expect(generateOpenApiArtifact()).rejects.toThrow(
+        'OpenAPI ProblemResponseDto.code schema is unavailable',
+      )
+    } finally {
+      Reflect.defineMetadata(metadataKey, properties, target)
     }
   })
 })

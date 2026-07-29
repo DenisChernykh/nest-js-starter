@@ -4,6 +4,10 @@ import {
   createAuthTestRuntime,
   type AuthE2eRuntime,
 } from '@test/e2e/support/create-auth-test-runtime'
+import {
+  assertOpenApiResponseConforms,
+  assertProblemResponseConforms,
+} from '@test/e2e/openapi/openapi-test-harness'
 
 interface AuthSession {
   readonly baseUrl: string
@@ -73,6 +77,7 @@ describe('approval request real HTTP workflow', () => {
       description: '  Please approve the deployment.  ',
     })
     expect(created.status).toBe(201)
+    await assertOpenApiResponseConforms('approvalRequestsCreate', created)
     const createdBody = created.body as ApprovalResponseBody
     expect(createdBody).toMatchObject({
       title: 'Production access',
@@ -90,6 +95,7 @@ describe('approval request real HTTP workflow', () => {
       .get(`/v1/approval-requests/${requestId}`)
       .set('Cookie', author.cookie)
       .expect(200)
+    await assertOpenApiResponseConforms('approvalRequestsGet', visible)
     expect(visible.body).toEqual(createdBody)
 
     const hidden = await request(baseUrl)
@@ -132,6 +138,7 @@ describe('approval request real HTTP workflow', () => {
       `/v1/approval-requests/${requestId}/decision`,
     ).send({ decision: 'approved' })
     expect(decided.status).toBe(200)
+    await assertOpenApiResponseConforms('approvalRequestsDecide', decided)
     const decidedBody = decided.body as ApprovalResponseBody
     expect(decidedBody).toMatchObject({
       id: createdBody.id,
@@ -144,14 +151,15 @@ describe('approval request real HTTP workflow', () => {
     })
     expect(typeof decidedBody.decidedAt).toBe('string')
 
-    const repeated = await unsafe(
+    const repeatedDecision = await unsafe(
       reviewer,
       'put',
       `/v1/approval-requests/${requestId}/decision`,
     )
       .send({ decision: 'rejected' })
       .expect(409)
-    expectProblem(repeated, 409, 'APPROVAL_REQUEST_ALREADY_DECIDED')
+    expectProblem(repeatedDecision, 409, 'APPROVAL_REQUEST_ALREADY_DECIDED')
+    await assertProblemResponseConforms(repeatedDecision)
   })
 })
 

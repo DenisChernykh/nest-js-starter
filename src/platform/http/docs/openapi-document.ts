@@ -6,17 +6,23 @@ import {
 } from '@nestjs/swagger'
 
 import type { ApplicationRuntimeConfig } from '@/platform/config/runtime-config.types'
+import type { RegisteredProblemDefinition } from '@/platform/http/errors/problem.contracts'
 
 /**
  * Builds the single code-first OpenAPI document for offline and runtime use.
  *
  * @param app - Nest application carrying the complete controller/DTO graph.
  * @param config - Validated config supplying the runtime cookie name.
- * @returns OpenAPI 3 document generated only from explicit presentation data.
+ * @param problems - Complete process-owned problem catalog published as the
+ * finite response-code enum.
+ * @returns OpenAPI 3 document generated from explicit presentation data and
+ * the supplied process composition.
+ * @throws Error when a generated problem component omits its `code` property.
  */
 export function createOpenApiDocument(
   app: INestApplication,
   config: ApplicationRuntimeConfig,
+  problems: readonly RegisteredProblemDefinition[],
 ): OpenAPIObject {
   const documentConfig = new DocumentBuilder()
     .setTitle('NestJS Starter API')
@@ -26,6 +32,10 @@ export function createOpenApiDocument(
     .addServer('/', 'Current API origin.')
     .addTag('health', 'Process lifecycle and dependency health probes.')
     .addTag('auth', 'Hardened browser-session authentication endpoints.')
+    .addTag(
+      'approval-requests',
+      'Reference approval-request creation, visibility and decision workflow.',
+    )
     .addCookieAuth(
       config.auth.sessionCookieName,
       {
@@ -47,10 +57,19 @@ export function createOpenApiDocument(
     )
     .build()
 
-  return SwaggerModule.createDocument(app, documentConfig, {
+  const document = SwaggerModule.createDocument(app, documentConfig, {
     autoTagControllers: false,
     deepScanRoutes: true,
     operationIdFactory: (controllerKey, methodKey) =>
       `${controllerKey}.${methodKey}`,
   })
+  const problemSchema = document.components?.schemas?.['ProblemResponseDto']
+  if (problemSchema === undefined) return document
+  const codeSchema =
+    '$ref' in problemSchema ? undefined : problemSchema.properties?.['code']
+  if (codeSchema === undefined || '$ref' in codeSchema) {
+    throw new Error('OpenAPI ProblemResponseDto.code schema is unavailable')
+  }
+  codeSchema.enum = problems.map(({ code }) => code).sort()
+  return document
 }
