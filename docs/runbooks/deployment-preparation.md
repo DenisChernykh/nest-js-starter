@@ -396,17 +396,17 @@ reference. Dedicated future GHCR pull identity и окно создания PAT 
 Focused runbooks и repository files остаются authoritative; этот документ
 только задаёт orchestration и stop gates.
 
-| Contract | Authoritative source |
-| --- | --- |
-| Stage order, permissions and target GHCR identity | [`.github/workflows/stage-image.yml`](../../.github/workflows/stage-image.yml) |
-| Platform, non-root runtime, entrypoint and OCI labels | [`Dockerfile`](../../Dockerfile) |
-| Local OCI checks and smoke behavior | [`package.json`](../../package.json), [`scripts/oci/run-image-smoke.ts`](../../scripts/oci/run-image-smoke.ts) |
-| Runtime input examples and validation | [`.env.example`](../../.env.example), [`src/platform/config/runtime-environment.schema.ts`](../../src/platform/config/runtime-environment.schema.ts) |
-| PostgreSQL migrator/runtime role separation | [`deployment-database-roles.md`](deployment-database-roles.md) |
-| Public perimeter, credentials and Redis durability | [`deployment-security.md`](deployment-security.md) |
-| PostgreSQL backup ownership and isolated restore | [`postgres-backup-restore.md`](postgres-backup-restore.md) |
-| Stage publication semantics | [`stage-image-publication.md`](stage-image-publication.md) |
-| Redis-loss procedure | [`coordination-redis-loss.md`](coordination-redis-loss.md) |
-| Secret-compromise procedure | [`session-secret-compromise.md`](session-secret-compromise.md) |
-| Telemetry-loss procedure | [`telemetry-collector-loss.md`](telemetry-collector-loss.md) |
-| Later hosted deployment adapter | [`dokploy-deployment.md`](dokploy-deployment.md) |
+| Contract                                              | Authoritative source                                                                                                                                 |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stage order, permissions and target GHCR identity     | [`.github/workflows/stage-image.yml`](../../.github/workflows/stage-image.yml)                                                                       |
+| Platform, non-root runtime, entrypoint and OCI labels | [`Dockerfile`](../../Dockerfile)                                                                                                                     |
+| Local OCI checks and smoke behavior                   | [`package.json`](../../package.json), [`scripts/oci/run-image-smoke.ts`](../../scripts/oci/run-image-smoke.ts)                                       |
+| Runtime input examples and validation                 | [`.env.example`](../../.env.example), [`src/platform/config/runtime-environment.schema.ts`](../../src/platform/config/runtime-environment.schema.ts) |
+| PostgreSQL migrator/runtime role separation           | [`deployment-database-roles.md`](deployment-database-roles.md)                                                                                       |
+| Public perimeter, credentials and Redis durability    | [`deployment-security.md`](deployment-security.md)                                                                                                   |
+| PostgreSQL backup ownership and isolated restore      | [`postgres-backup-restore.md`](postgres-backup-restore.md)                                                                                           |
+| Stage publication semantics                           | [`stage-image-publication.md`](stage-image-publication.md)                                                                                           |
+| Redis-loss procedure                                  | [`coordination-redis-loss.md`](coordination-redis-loss.md)                                                                                           |
+| Secret-compromise procedure                           | [`session-secret-compromise.md`](session-secret-compromise.md)                                                                                       |
+| Telemetry-loss procedure                              | [`telemetry-collector-loss.md`](telemetry-collector-loss.md)                                                                                         |
+| Later hosted deployment adapter                       | [`dokploy-deployment.md`](dokploy-deployment.md)                                                                                                     |
