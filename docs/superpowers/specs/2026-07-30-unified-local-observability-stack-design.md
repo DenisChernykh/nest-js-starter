@@ -5,7 +5,7 @@
 Approved in discussion on 2026-07-30 for
 [`nest-js-starter` issue #26](https://github.com/DenisChernykh/nest-js-starter/issues/26).
 The design ports the reusable local runtime topology validated in Amazing EKB
-without copying product workers, uploads, schemas or deployment policy.
+without copying product workers, uploads or schemas.
 
 ## Context
 
@@ -44,14 +44,14 @@ that migrations run as a separate one-shot role before the API starts.
    stop/start operations.
 6. Keep every published port loopback-only and every vendor image pinned by
    immutable version and digest.
-7. Preserve the production process boundary: migration is an explicit one-shot
+7. Preserve the local process invariant: migration is an explicit one-shot
    role; the long-running API never applies migrations.
 
 ## Non-goals
 
-- No Amazing EKB product workers, imports, uploads, Prisma schema or deployment
-  policy.
-- No production Compose topology, hosted Grafana stack or Dokploy mutation.
+- No Amazing EKB product workers, imports, uploads or Prisma schema.
+- Production and deployment are deferred to a separate task after the local
+  logs/traces workflow is complete.
 - No metrics exporter, Prometheus, Mimir, dashboards, alerts or profiles.
 - No OpenTelemetry log pipeline and no direct Pino network transport.
 - No application dependency on observability availability.
@@ -121,7 +121,7 @@ Add a `development` Dockerfile stage that:
 - copies repository files with ownership for the existing non-root `node` user;
 - creates writable `/app/dist` before changing to the non-root user;
 - runs `corepack pnpm@11.15.1 run dev:api`;
-- leaves the production `runtime` stage and compiled entrypoint unchanged.
+- leaves the existing `runtime` stage and compiled entrypoint unchanged.
 
 ### One-shot migrator
 
@@ -140,11 +140,6 @@ visible in Compose output.
 
 The API owns the separate healthy Redis dependency. Redis is therefore included
 in the one-command environment without being coupled to schema migration.
-
-Production keeps its existing stronger separation: the operator runs the
-one-shot migrator from the immutable candidate image with the migration
-credential before changing the API image. The API runtime credential is not
-expanded.
 
 ### Compose Watch
 
@@ -176,8 +171,8 @@ Alloy is the single local ingestion boundary:
 - an OTLP/HTTP receiver listens on container port `4318`;
 - a bounded batch processor forwards traces to Tempo.
 
-Alloy mounts the Docker socket read-only for local discovery. Docker API access
-is still a privileged local boundary and is explicitly not production policy.
+Alloy mounts the Docker socket read-only for discovery inside this local
+Compose project. The mount is not generalized beyond that boundary.
 
 ### Loki
 
@@ -208,8 +203,8 @@ Provisioning expressions such as `${__value.raw}`,
 `${__resource.service.name}` and `${__span.traceId}` are escaped as
 `$${...}` so Compose preserves the literal Grafana expressions.
 
-Anonymous Editor access is acceptable only for this loopback-only local
-environment. It is not a production default.
+Anonymous Editor access is acceptable only behind this loopback-only local
+binding.
 
 ## Command contract
 
@@ -326,5 +321,5 @@ additional evidence because `check:quick` does not prove a running local stack.
 - Ports are loopback-only and vendor images use immutable pins.
 - Vendor configuration and resolved Compose contracts have automated tests.
 - Documentation explains commands, restart rules, retention and failures.
-- No Amazing EKB product worker, upload boundary, product schema or deployment
-  policy enters the starter.
+- No Amazing EKB product worker, upload boundary or product schema enters the
+  starter.

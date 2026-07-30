@@ -26,8 +26,10 @@ Grafana 13.1.0, OpenTelemetry OTLP/HTTP protobuf, Pino JSON, Jest 30.
   `docs/superpowers/specs/2026-07-30-unified-local-observability-stack-design.md`.
 - Работать только в `nest-js-starter`; `backend-codex` является read-only
   reference и не изменяется.
-- Не добавлять product workers, uploads, product schema, queue Redis или
-  Amazing EKB deployment policy.
+- Не добавлять product workers, uploads, product schema или queue Redis.
+- Production и deployment полностью находятся за рамками этого плана и будут
+  отдельной задачей после локального logs/traces workflow. Существующие
+  связанные файлы разрешено только проверить на отсутствие случайных изменений.
 - Не добавлять Alloy, Loki, Tempo или Grafana clients в application TypeScript.
 - Pino остаётся stdout-only; OpenTelemetry остаётся trace-only.
 - API никогда не применяет migrations самостоятельно.
@@ -37,8 +39,8 @@ Grafana 13.1.0, OpenTelemetry OTLP/HTTP protobuf, Pino JSON, Jest 30.
   `/health/live` или `/health/ready`.
 - Все host ports публикуются только на `127.0.0.1`.
 - Loki, Tempo и Grafana используют отдельные named volumes с retention `168h`.
-- Docker socket монтируется read-only только в local Alloy и не является
-  production policy.
+- Docker socket монтируется read-only только в local Alloy текущего Compose
+  project.
 - `requestId`, `traceId`, `spanId`, event, module, reason code и user identity
   не становятся Loki labels.
 - Использовать exact image version + digest из Fixed Image Contract; не
@@ -53,7 +55,7 @@ Grafana 13.1.0, OpenTelemetry OTLP/HTTP protobuf, Pino JSON, Jest 30.
 - Runtime smoke использует только project
   `nest-js-starter-observability-smoke`, выделенные host ports и собственные
   volumes; другие Docker projects и volumes не изменяются.
-- Не выполнять push, PR, merge или deployment в рамках плана.
+- Не выполнять push, PR или merge в рамках плана.
 
 ## Fixed Image Contract
 
@@ -87,8 +89,8 @@ digest не заменяются догадкой.
 
 ### Modify
 
-- `Dockerfile` — non-root `development` target; production `runtime` semantics
-  remain unchanged.
+- `Dockerfile` — non-root `development` target; существующий `runtime` stage
+  остаётся без изменений.
 - `docker-compose.yml` — local API, migrator, observability services, Watch и
   volumes.
 - `package.json` — `dev`, `dev:api`, `dev:host`, `dev:down`.
@@ -1310,7 +1312,7 @@ git status --short --branch
 ```
 
 Expected: the branch contains the approved design, this plan and files in the
-File Map; no `backend-codex`, production workflow or lockfile change exists.
+File Map; no `backend-codex`, workflow or lockfile change exists.
 
 - [ ] **Step 2: Run the two focused unit contracts together**
 
@@ -1798,7 +1800,7 @@ Report exact:
 - Grafana URL and datasource UIDs;
 - what restarts for source, dependency, Prisma, env and vendor config changes;
 - any limitation discovered;
-- explicit statement that push, PR, merge and deployment were not performed.
+- explicit statement that push, PR and merge were not performed.
 
 ## Plan Review and Execution Strategy
 
@@ -1833,29 +1835,32 @@ implementation across parallel agents:
 - Agent handoff/review overhead is larger than the expected mechanical-edit
   savings for this seven-task slice.
 
-### Time reductions that preserve quality
+### How Codex will reduce implementation time without quality loss
 
-1. Reuse the already validated Amazing EKB vendor configs and immutable image
-   pins, changing only project identity and the `api` service allowlist.
-2. Reuse one resolved Compose test helper for migrator, Watch, images, ports,
+1. Keep the implementation in this task and model context. Do not hand the work
+   to another agent or switch models between mechanical edits, Docker
+   configuration and runtime evidence.
+2. Reuse the already inspected Amazing EKB vendor configs and immutable image
+   pins, changing only project identity and the `api` service allowlist; do not
+   repeat repository research already captured by the approved design.
+3. Batch independent read-only inspections and exact vendor pulls where the
+   tools allow it, but keep file writes and Docker lifecycle operations
+   sequential because they share state.
+4. Reuse one resolved Compose test helper for migrator, Watch, images, ports,
    mounts and volumes instead of adding YAML parsers or multiple suites.
-3. Share one development image between local API and migrator, avoiding a
-   second local build target while keeping production migration policy
-   unchanged.
-4. Add no dependencies and no runtime-smoke helper; use Node 24 `fetch`, Docker
+5. Apply focused patches task-by-task and run one narrow RED/GREEN test for
+   each contract. Avoid repeated whole-repository checks during mechanical
+   edits.
+6. Add no dependencies and no runtime-smoke helper; use Node 24 `fetch`, Docker
    Compose and Grafana's datasource proxy.
-5. Run focused RED/GREEN tests per task, but pull vendor images once and run the
-   expensive `check:quick` only after the static implementation batch and once
-   again only when runtime fixes changed files.
-6. Build the development image once before the isolated runtime smoke; reuse
-   BuildKit cache for the smoke startup.
-7. Use one isolated runtime session to prove migration ordering, signal
-   correlation, collector outage, recovery, persistence and Watch instead of
-   starting a new project for every criterion.
-8. Keep full integration/e2e suites out of the critical path because no
-   application TypeScript behavior changes; existing unit/privacy/correlation
-   coverage plus `check:quick` and the real inter-container smoke provide the
-   relevant evidence.
+7. Pull vendor images once, build the development image once and use one
+   isolated Docker project to prove migration ordering, correlation, collector
+   outage, recovery, persistence and Watch.
+8. Run `pnpm check:quick` once after the static implementation batch. Repeat it
+   only if runtime diagnosis causes a source/config change.
+9. Keep full integration/e2e suites out of the critical path because no
+   application TypeScript behavior changes; focused contracts,
+   `pnpm check:quick` and the real inter-container smoke cover this slice.
 
 ### Self-review result
 
@@ -1865,5 +1870,6 @@ implementation across parallel agents:
   `docs` → `static gate` → `runtime smoke` → `final gate`.
 - Type/name consistency: service names, datasource UIDs, ports, paths and
   package scripts are identical across tests, Compose, docs and smoke commands.
-- Scope: no production Compose, workflow, dependency, lockfile, generated
-  contract or Amazing EKB product change is planned.
+- Scope: production/deployment design and verification are deliberately
+  excluded; no workflow, dependency, lockfile, generated contract or Amazing
+  EKB product change is planned.
