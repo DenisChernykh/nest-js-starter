@@ -27,6 +27,7 @@ services:
 
   migrator:
     image: ${IMAGE}
+    build: !reset null
     command:
       - corepack
       - pnpm@11.15.1
@@ -34,6 +35,7 @@ services:
       - start:migrate
     env_file:
       - ${SMOKE_ENV_FILE}
+    environment: !reset {}
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,9 +43,13 @@ services:
 
   api:
     image: ${IMAGE}
+    build: !reset null
+    develop: !reset null
     env_file:
       - ${SMOKE_ENV_FILE}
-    ports:
+    environment: !reset {}
+    profiles: !reset []
+    ports: !override
       - '127.0.0.1::3000'
     depends_on:
       migrator:

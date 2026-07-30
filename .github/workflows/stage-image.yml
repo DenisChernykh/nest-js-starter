@@ -3,6 +3,8 @@ name: Stage image
 on:
   push:
     branches: [stage]
+  pull_request:
+    branches: [stage]
 
 permissions:
   contents: read
@@ -23,6 +25,10 @@ jobs:
         with:
           node-version-file: .node-version
           check-latest: false
+      - name: Setup Docker Compose
+        uses: docker/setup-compose-action@4eb059ff7f16592f9c84d5ca339c53cb7c5064e2 # v2.3.0
+        with:
+          version: v2.39.4
       - run: corepack pnpm@11.15.1 install --frozen-lockfile
       - name: Run full gate
         run: corepack pnpm@11.15.1 run check
@@ -31,6 +37,7 @@ jobs:
 
   publish:
     needs: gate
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     permissions:
       contents: read
       packages: write
@@ -45,6 +52,10 @@ jobs:
         with:
           node-version-file: .node-version
           check-latest: false
+      - name: Setup Docker Compose
+        uses: docker/setup-compose-action@4eb059ff7f16592f9c84d5ca339c53cb7c5064e2 # v2.3.0
+        with:
+          version: v2.39.4
       - run: corepack pnpm@11.15.1 install --frozen-lockfile
       - id: image
         name: Derive public image metadata
