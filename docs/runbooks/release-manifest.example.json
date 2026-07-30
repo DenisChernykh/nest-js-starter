@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "environment": "stage",
+  "repository": "DenisChernykh/nest-js-starter",
+  "candidate": {
+    "imageRef": "ghcr.io/denischernykh/nest-js-starter@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "revision": "1111111111111111111111111111111111111111",
+    "workflowRunUrl": "https://github.com/DenisChernykh/nest-js-starter/actions/runs/123456789"
+  },
+  "rollback": {
+    "imageRef": "ghcr.io/denischernykh/nest-js-starter@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "revision": "2222222222222222222222222222222222222222",
+    "schemaCompatibilityEvidence": "review/rollback-compatible"
+  },
+  "publicApiUrl": "https://stage-api.example.com"
+}
