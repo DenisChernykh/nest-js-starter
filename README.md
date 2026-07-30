@@ -6,25 +6,26 @@ trace-only OpenTelemetry.
 
 ## Local workflow
 
-Use Node `24.18.0` and pnpm `11.15.1`. Install those exact versions with a
-user-level Node or package manager, then use the short `pnpm` commands below.
-The repository pins both versions through `engines` and `packageManager`.
+Use Node `24.18.0`, pnpm `11.15.1` and Docker Compose `2.39.4` or newer.
+Install those versions with a user-level Node or package manager and Docker
+Desktop, then use the short `pnpm` commands below. The repository pins Node and
+pnpm through `engines` and `packageManager`; CI pins the minimum compatible
+Compose release.
 
 ```sh
 node --version
 pnpm --version
+docker compose version
 pnpm install --frozen-lockfile
 cp .env.example .env
-docker compose up -d --wait postgres redis-coordination
-pnpm start:migrate
 pnpm dev
 ```
 
-`pnpm dev` generates Prisma Client, then starts the API with the standard
-Nest CLI watch flow. It does not start or stop Docker services and does not
-apply migrations. Bring the infrastructure up and run `pnpm start:migrate`
-explicitly when preparing a local environment. PostgreSQL and
-`redis-coordination` must both be available before the API becomes ready.
+`pnpm dev` starts PostgreSQL, coordination Redis, the one-shot migrator, the
+watched Nest API, Alloy, Loki, Tempo and Grafana. The API waits for successful
+committed migrations and healthy Redis; observability remains fail-open.
+See the [local development runbook](docs/runbooks/local-development.md) for
+Grafana Explore, Watch behavior, host debugging and shutdown.
 
 ## Initial administrator bootstrap
 
@@ -81,7 +82,8 @@ authenticated requests.
 Internal timeouts and tuning are typed code defaults in
 `src/platform/config/runtime-defaults.ts`. Deployment inputs are documented in
 `.env.example`; local Compose-only `POSTGRES_*` and `REDIS_PORT` inputs remain
-there. The API does not run migrations; run the migrator role first.
+there. The API process does not run migrations; local Compose starts a separate
+one-shot migrator and gates API startup on its successful exit.
 
 ## Repository guide
 

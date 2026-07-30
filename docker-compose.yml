@@ -1,3 +1,32 @@
+x-development-image: &development-image
+  image: nest-js-starter:development
+  build:
+    context: .
+    target: development
+
+x-api-environment: &api-environment
+  NODE_ENV: ${NODE_ENV:-development}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-nest-js-starter}
+  SERVICE_VERSION: ${SERVICE_VERSION:-0.1.0-alpha.0}
+  SERVICE_REVISION: ${SERVICE_REVISION:-local}
+  OTEL_SDK_DISABLED: 'false'
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+  API_HOST: 0.0.0.0
+  API_PORT: 3000
+  API_DOCS_MODE: ${API_DOCS_MODE:-public}
+  PUBLIC_API_URL: ${PUBLIC_API_URL}
+  CORS_ORIGINS: ${CORS_ORIGINS}
+  TRUST_PROXY_CIDRS: ${TRUST_PROXY_CIDRS}
+  DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+  DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
+  REDIS_COORDINATION_URL: redis://default:local-development-only@redis-coordination:6379
+  REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-nest-js-starter}
+  AUTH_SESSION_KEY_SECRET: ${AUTH_SESSION_KEY_SECRET}
+  AUTH_CSRF_SECRET: ${AUTH_CSRF_SECRET}
+  AUTH_RATE_LIMIT_KEY_SECRET: ${AUTH_RATE_LIMIT_KEY_SECRET}
+  AUTH_NETWORK_METADATA_SECRET: ${AUTH_NETWORK_METADATA_SECRET}
+
 services:
   postgres:
     image: postgres:18.4-trixie@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a
@@ -43,6 +72,128 @@ services:
       retries: 30
       start_period: 5s
 
+  migrator:
+    <<: *development-image
+    command: ['corepack', 'pnpm@11.15.1', 'run', 'start:migrate']
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    <<: *development-image
+    profiles:
+      - development
+    environment: *api-environment
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      redis-coordination:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:${API_PORT:-3000}:3000'
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+          initial_sync: true
+        - action: rebuild
+          path: ./package.json
+        - action: rebuild
+          path: ./pnpm-lock.yaml
+        - action: rebuild
+          path: ./pnpm-workspace.yaml
+        - action: rebuild
+          path: ./prisma
+        - action: rebuild
+          path: ./prisma.config.ts
+        - action: sync+restart
+          path: ./nest-cli.json
+          target: /app/nest-cli.json
+        - action: sync+restart
+          path: ./tsconfig.json
+          target: /app/tsconfig.json
+        - action: sync+restart
+          path: ./tsconfig.build.json
+          target: /app/tsconfig.build.json
+        - action: sync+restart
+          path: ./tsconfig.base.json
+          target: /app/tsconfig.base.json
+
+  loki:
+    image: grafana/loki:3.7.2@sha256:191d4fdfb7264f16989f0a57f320872620a5a7c2ceeec6229212c4190ec49b86
+    profiles:
+      - observability
+    command:
+      - -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./config/observability/loki/loki.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+
+  tempo:
+    image: grafana/tempo:2.10.7@sha256:032b3acb51ed02c4b801473d54bb63e9e9f13738d215126d9843c30283794f4b
+    profiles:
+      - observability
+    command:
+      - -config.file=/etc/tempo/tempo.yaml
+    volumes:
+      - ./config/observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+
+  alloy:
+    image: grafana/alloy:v1.18.0@sha256:491b0578c04983fd54fe99b587b6fab4404dc46d0dc16677bd6b00cc1140b308
+    profiles:
+      - observability
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    environment:
+      ALLOY_DOCKER_COMPOSE_PROJECT: ${COMPOSE_PROJECT_NAME:-nest-js-starter}
+    depends_on:
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_started
+    ports:
+      - '127.0.0.1:${OTLP_HTTP_PORT:-4318}:4318'
+    volumes:
+      - ./config/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  grafana:
+    image: grafana/grafana:13.1.0@sha256:121a7a9ece6dc10b969f1f96eed64b4f07dfac0d0b8abc070f7cb83bbde86f63
+    profiles:
+      - observability
+    environment:
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Editor
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+      GF_PLUGINS_PLUGIN_ADMIN_ENABLED: 'false'
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: 'false'
+      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    depends_on:
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_started
+    ports:
+      - '127.0.0.1:${GRAFANA_PORT:-3004}:3000'
+    volumes:
+      - ./config/observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - grafana-data:/var/lib/grafana
+
 volumes:
+  grafana-data:
+  loki-data:
   postgres-data:
   redis-coordination-data:
+  tempo-data:

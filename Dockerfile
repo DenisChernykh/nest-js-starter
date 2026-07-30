@@ -9,6 +9,16 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     corepack pnpm@11.15.1 install --frozen-lockfile --store-dir=/pnpm/store
 
+FROM dependencies AS development
+ENV NODE_ENV=development \
+    API_HOST=0.0.0.0 \
+    pnpm_config_verify_deps_before_run=false
+COPY --chown=node:node . .
+RUN mkdir -p /app/dist && chown -R node:node /app/dist
+USER node
+EXPOSE 3000
+CMD ["corepack", "pnpm@11.15.1", "run", "dev:api"]
+
 FROM dependencies AS build
 COPY . .
 RUN corepack pnpm@11.15.1 run build && \

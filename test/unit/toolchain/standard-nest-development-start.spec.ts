@@ -22,21 +22,42 @@ function readPackageManifest(): PackageManifest {
 }
 
 describe('standard Nest development start contract', () => {
-  it('starts the API through Nest CLI watch after generating Prisma Client only', () => {
-    const devScript = readPackageManifest().scripts?.dev
+  it('keeps dev:api as the internal Nest CLI watcher', () => {
+    const scripts = readPackageManifest().scripts ?? {}
 
-    expect(devScript).toContain('prisma:generate')
-    expect(devScript).toContain('nest start --watch')
-    expect(devScript).not.toContain('tsx watch')
-    expect(devScript).not.toMatch(/docker|migrate/)
+    expect(scripts['dev:api']).toBe(
+      'corepack pnpm@11.15.1 run prisma:generate && nest start --watch --no-shell',
+    )
+    expect(scripts['dev:api']).not.toContain('tsx watch')
+    expect(scripts['dev:api']).not.toContain('docker')
   })
 
-  it('keeps dev:api as a Nest CLI-compatible development command', () => {
-    const devApiScript = readPackageManifest().scripts?.['dev:api']
+  it('makes dev the canonical observable Compose Watch command', () => {
+    const scripts = readPackageManifest().scripts ?? {}
 
-    expect(devApiScript).toBeDefined()
-    expect(devApiScript).not.toContain('tsx watch')
-    expect(devApiScript).toMatch(/(?:run dev|nest start --watch)/)
+    expect(scripts.dev).toBe(
+      'docker compose --profile development --profile observability up --watch api alloy loki tempo grafana',
+    )
+    expect(scripts['dev:host']).toBe(
+      'OTEL_SDK_DISABLED=true corepack pnpm@11.15.1 run dev:api',
+    )
+    expect(scripts['dev:down']).toBe(
+      'docker compose --profile development --profile observability stop api migrator alloy loki tempo grafana postgres redis-coordination',
+    )
+    expect(scripts['dev:down']).not.toMatch(/\bdown\b|--volumes|docker volume/u)
+  })
+
+  it('defines a writable non-root development image target', () => {
+    const dockerfileSource = readFileSync(
+      join(process.cwd(), 'Dockerfile'),
+      'utf8',
+    )
+
+    expect(dockerfileSource).toContain('FROM dependencies AS development')
+    expect(dockerfileSource).toContain('mkdir -p /app/dist')
+    expect(dockerfileSource).toMatch(
+      /FROM dependencies AS development[\s\S]*USER node[\s\S]*CMD \["corepack", "pnpm@11\.15\.1", "run", "dev:api"\]/u,
+    )
   })
 
   it('selects the API entry point through the standard TypeScript Nest CLI builder', () => {

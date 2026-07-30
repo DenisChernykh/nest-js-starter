@@ -1,0 +1,109 @@
+discovery.docker "local" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "api_logs" {
+  targets = discovery.docker.local.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    regex         = sys.env("ALLOY_DOCKER_COMPOSE_PROJECT")
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "api"
+    action        = "keep"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "compose_service"
+  }
+}
+
+loki.source.docker "api_logs" {
+  host             = "unix:///var/run/docker.sock"
+  targets          = discovery.relabel.api_logs.output
+  refresh_interval = "5s"
+  labels = {
+    source = "docker",
+  }
+  forward_to = [loki.process.api_logs.receiver]
+}
+
+loki.process "api_logs" {
+  stage.json {
+    expressions = {
+      environment = "",
+      event       = "",
+      level       = "",
+      module      = "",
+      reasonCode  = "",
+      requestId   = "",
+      service     = "",
+      spanId      = "",
+      timestamp   = "",
+      traceId     = "",
+    }
+  }
+
+  stage.timestamp {
+    source            = "timestamp"
+    format            = "RFC3339Nano"
+    action_on_failure = "skip"
+  }
+
+  stage.labels {
+    values = {
+      environment = "",
+      level       = "",
+      service     = "",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      event      = "",
+      module     = "",
+      reasonCode = "",
+      requestId  = "",
+      spanId     = "",
+      traceId    = "",
+    }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+otelcol.receiver.otlp "api" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces = [otelcol.processor.batch.traces.input]
+  }
+}
+
+otelcol.processor.batch "traces" {
+  timeout         = "1s"
+  send_batch_size = 512
+
+  output {
+    traces = [otelcol.exporter.otlphttp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlphttp "tempo" {
+  client {
+    endpoint = "http://tempo:4318"
+  }
+}
