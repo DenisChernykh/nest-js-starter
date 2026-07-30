@@ -99,6 +99,9 @@ rolled back and recovered without changing the application core.
 
 **Deliverables:**
 
+- repository-owned `deployment:preflight`, offline `deployment:promote`
+  dry-run, explicit apply and `deployment:rollback` mechanics with strict
+  non-secret manifests, bounded adapters and atomic redacted evidence;
 - `docs/runbooks/deployment.md` for exact-digest promotion and bounded terminal
   polling;
 - `docs/runbooks/rollback.md` for returning to the previous digest without
@@ -136,6 +139,12 @@ rolled back and recovered without changing the application core.
 Dokploy may be the first deployment adapter, but the contract above is the
 stable boundary. Dokploy identifiers, credentials and polling details belong
 to its runbook or deployment automation, not to application code.
+
+As of 2026-07-30, the repository-owned operator mechanics and local contract
+tests are implemented on the deployment feature branch. This is local
+repository evidence only. A hosted Stage promotion/rollback drill, Dokploy
+runtime observation, production PostgreSQL/Redis verification and recovery
+record remain unperformed Milestone 7 exit evidence.
 
 ## Milestone 8: clean-copy certification
 

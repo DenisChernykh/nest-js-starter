@@ -13,6 +13,22 @@ credentials и объявлять окружение уже provisioned.
 readiness record. Подробные команды, проверки и failure handling остаются в
 focused runbooks из [Source-of-truth map](#source-of-truth-map).
 
+Repository readiness does not prove environment readiness. The repository may
+have a verified GHCR artifact while Dokploy, network routes, PostgreSQL, Redis,
+DNS/TLS and secret injection remain unavailable. CLI does not provision
+infrastructure: it validates approved inputs and, only under an explicit
+`--apply`, operates an already prepared application.
+
+Use [`release-manifest.example.json`](release-manifest.example.json) as the
+non-secret structure for a later release decision. The handoff must name the
+protected real manifest path and the intended `promotion-evidence.json` and
+`rollback-evidence.json` paths; it must not pre-create or claim those evidence
+files.
+
+Local Alloy, Loki, Tempo and Grafana are development-only services and are
+**excluded from production deployment readiness**. Production telemetry needs
+its own environment owner, endpoint decision and hosted evidence.
+
 ## Два режима применения
 
 - **Fresh descendant:** до первой публикации Stage замените каждую
@@ -245,10 +261,10 @@ Fail-closed правила:
 Если любая часть цепочки отсутствует либо относится к другому source revision,
 repository readiness остаётся неподтверждённой.
 
-Dokploy adapter сохраняет operation-specific byte-for-byte pin guard. Поэтому
-fresh descendant и `backend-codex` после получения собственного Stage evidence,
-но до любой будущей Dokploy mutation обязаны атомарно заменить во всех своих
-target runbooks две независимые пары:
+Строгий release manifest и CLI сохраняют operation-specific byte-for-byte pin
+guard. Поэтому fresh descendant и `backend-codex` после получения собственного
+Stage evidence, но до любой будущей Dokploy mutation обязаны записать в
+target-owned protected manifest две независимые пары:
 
 - candidate image digest и его exact Stage/OCI revision из нового успешного
   target workflow;
@@ -260,7 +276,7 @@ Candidate и rollback не могут ссылаться на один обра�
 promotion запрещён. Historical pins starter нельзя использовать как target
 defaults, переносить в readiness record или принимать как повторно используемое
 evidence. Ревью обеих пар и schema-compatibility evidence входят в readiness
-record; сами equality guards удалять или ослаблять нельзя.
+record; строгую manifest validation удалять или ослаблять нельзя.
 
 ## Шаг 6. Подготовить production configuration contract
 
@@ -377,6 +393,9 @@ inputs:
 ## Readiness record
 
 - Target repository:
+- Protected release manifest path and approval reference:
+- Intended promotion evidence path:
+- Intended rollback evidence path:
 - Target identity manifest reference:
 - Repo-wide starter identity inventory and retained-literal allowlist reference:
 - GHCR package state before Stage: absent/existing; pre-publication access evidence if existing:

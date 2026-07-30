@@ -1,160 +1,119 @@
 # Stage promotion by immutable digest
 
-This runbook promotes one already-published Stage image. It is an operational
-procedure, not evidence that Dokploy or any production environment has been
-called. Keep the change window exclusive: a second deploy makes it unsafe to
-identify the newly created deployment record.
+This runbook promotes one already-published Stage image through the
+repository-owned deployment operator. It is policy and procedure, not evidence
+that Dokploy or any hosted environment has been called.
 
-## Fixed candidate and preflight
+Keep an exclusive change window. A concurrent deployment makes the before/after
+record comparison ambiguous, so the operator fails closed.
 
-The approved candidate is supplied through <code>CANDIDATE_IMAGE_REF</code> and
-must match the approved immutable GHCR reference byte-for-byte:
-<code>ghcr.io/denischernykh/nest-js-starter@sha256:84d0fdb162020eea35113c9b05071f61179e01a6f47a7ea088b69cead393d112</code>.
-This reference carries revision
-<code>ddfacb316ecb721e4e0a7d2967816b8bbfd875f0</code>. Never substitute a tag,
-including a commit-SHA tag, for this digest. The API runtime must receive
-<code>RUNTIME_DATABASE_URL</code> as its <code>DATABASE_URL</code>; keep it
-separate from the migration-only <code>MIGRATION_DATABASE_URL</code> and do not
-print either connection URL.
+## Human approval gate
 
-Before a change window:
+Before creating a release manifest, confirm all of the following:
 
-1. Confirm that the Stage workflow for revision
-   <code>ddfacb316ecb721e4e0a7d2967816b8bbfd875f0</code> succeeded, published the
-   exact <code>CANDIDATE_IMAGE_REF</code>, and recorded a passing OCI smoke and
-   vulnerability gate.
-2. Pull and inspect that immutable reference from a controlled operator host.
-   Require <code>org.opencontainers.image.revision</code> to equal the exact
-   revision. Also record the image digest and the OCI source label as incident
-   evidence.
-3. Confirm that the API runtime identity is least-privilege and cannot run
-   Prisma migrations. Keep migration credentials separate from API runtime
-   credentials.
-4. Check that the candidate is compatible with the currently applied schema.
-   If a rollback may be needed, also establish that the previous API image is
-   compatible with the schema after this promotion.
+1. The target repository's successful Stage workflow URL identifies the exact
+   approved source revision.
+2. The workflow published the candidate `image@sha256` and passed its full
+   repository gate, Trivy gate and pull-the-same-digest OCI smoke.
+3. The OCI `org.opencontainers.image.revision` is expected to equal the
+   candidate revision byte-for-byte.
+4. The one-shot migrator owns `MIGRATION_DATABASE_URL`; the long-running API
+   owns the separate `RUNTIME_DATABASE_URL` and cannot apply schema migrations.
+5. The candidate is compatible with the current database schema.
+6. The distinct rollback image remains compatible with the schema after the
+   candidate migration. Record the human review reference; never plan a
+   database down-migration.
+7. The complete previous Dokploy environment has been captured in the protected
+   operator input described by
+   [dokploy-deployment.md](dokploy-deployment.md).
 
-```sh
-set -eu
+If any item is missing, stop before an apply command. A manifest records an
+approval decision; it does not create that approval.
 
-test -n "$CANDIDATE_IMAGE_REF" || {
-  echo 'CANDIDATE_IMAGE_REF is required' >&2
-  exit 1
-}
-test -n "$MIGRATION_DATABASE_URL" || {
-  echo 'MIGRATION_DATABASE_URL is required' >&2
-  exit 1
-}
-test -n "$RUNTIME_DATABASE_URL" || {
-  echo 'RUNTIME_DATABASE_URL is required' >&2
-  exit 1
-}
-test -n "$PUBLIC_API_URL" || {
-  echo 'PUBLIC_API_URL is required' >&2
-  exit 1
-}
-approved_candidate_image_ref='ghcr.io/denischernykh/nest-js-starter@sha256:84d0fdb162020eea35113c9b05071f61179e01a6f47a7ea088b69cead393d112'
-candidate_revision='ddfacb316ecb721e4e0a7d2967816b8bbfd875f0'
-test "$CANDIDATE_IMAGE_REF" = "$approved_candidate_image_ref" || {
-  echo 'CANDIDATE_IMAGE_REF is not the approved immutable candidate' >&2
-  exit 1
-}
+## Release manifest
 
-docker pull "$CANDIDATE_IMAGE_REF"
-docker image inspect "$CANDIDATE_IMAGE_REF" \
-  --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' \
-  | grep -Fx "$candidate_revision"
-```
+Start from
+[`release-manifest.example.json`](release-manifest.example.json), replace every
+symbolic value with evidence from the target repository, and keep the resulting
+JSON outside the repository when it represents a real release.
 
-If the Stage run, digest, revision label, OCI checks, runtime-role separation,
-or compatibility review cannot be proven, stop. Do not configure a provider or
-start an API deployment.
+The manifest is deliberately non-secret. It contains:
 
-## Order of change
+- environment and repository identity;
+- distinct candidate and rollback immutable GHCR references and revisions;
+- the successful candidate workflow URL;
+- a schema-compatibility review reference for rollback;
+- the credential-free public HTTPS API origin.
 
-1. Freeze concurrent deployments and capture the previous API digest as the
-   rollback candidate.
-2. Verify <code>CANDIDATE_IMAGE_REF</code> and its revision label as shown above.
-3. Run the one-shot migrator with <code>MIGRATION_DATABASE_URL</code>.
-4. Only after the migrator exits successfully, configure the candidate digest
-   in the deployment adapter.
-5. Mutate the API deployment and wait for one identified deployment to reach
-   its terminal state.
-6. Run the external smoke checks below.
+It must not contain API keys, registry credentials, database or Redis URLs,
+cookies, complete runtime environment text or secret values.
 
-The repository's Prisma config reads <code>DATABASE_URL</code>. Run the
-migrator from the exact image that was pulled and label-verified above, so the
-migration files and application revision cannot come from an unrelated
-checkout. The operator maps the canonical migration input only inside this
-one-shot container:
+## Commands
+
+Run the local validation first:
 
 ```sh
-(
-  # Pass only the exported variable name to Docker. The value is not placed in
-  # the docker command's argv or in a process-listing argument.
-  export DATABASE_URL="$MIGRATION_DATABASE_URL"
-  docker run --rm \
-    --env DATABASE_URL \
-    --entrypoint corepack \
-    "$CANDIDATE_IMAGE_REF" \
-    pnpm@11.15.1 start:migrate
-)
+pnpm deployment:preflight -- --manifest /protected/path/release.json
 ```
 
-Attach the operator's isolated migration network to this command when the
-database is not reachable from the Docker default network. The image itself is
-the only source of <code>prisma.config.ts</code>, migration files and the
-<code>start:migrate</code> script; never substitute a host checkout or a
-mutable image tag.
-
-The API image must not be changed after any migrator failure. Preserve the
-failed migrator logs and diagnose the database or migration; do not retry by
-starting the API or by attempting an automatic down-migration. Configure the
-long-running API with <code>DATABASE_URL</code> resolved from
-<code>RUNTIME_DATABASE_URL</code> only after this command succeeds.
-
-<code>docs/runbooks/dokploy-deployment.md</code> supplies the Dokploy adapter
-calls and bounded polling. <code>docs/runbooks/rollback.md</code> supplies the
-response to a failed deployment or smoke check.
-
-## External smoke after a successful deployment
-
-Use <code>PUBLIC_API_URL</code> as the public Stage base URL. It is intentionally
-read from the environment so that no environment URL is committed or printed.
-All three health endpoints must return <code>200</code>;
-<code>/v1/auth/me</code> without a cookie must return the RFC 9457
-authentication problem, not a redirect or HTML page.
+Review the ordered promotion plan:
 
 ```sh
-set -eu
-
-public_api_url="$(printf '%s' "$PUBLIC_API_URL" | sed 's:/$::')"
-
-check_health() {
-  local status
-  status="$(curl --silent --show-error --output /dev/null \
-    --write-out '%{http_code}' "$public_api_url$1")"
-  test "$status" = '200'
-}
-
-check_health /health/live
-check_health /health/startup
-check_health /health/ready
-
-auth_body="$(mktemp)"
-auth_headers="$(mktemp)"
-trap 'rm -f -- "$auth_body" "$auth_headers"' EXIT
-auth_status="$(curl --silent --show-error --output "$auth_body" \
-  --dump-header "$auth_headers" --write-out '%{http_code}' \
-  "$public_api_url/v1/auth/me")"
-test "$auth_status" = '401'
-grep -qi '^content-type: application/problem+json' "$auth_headers"
-jq -e '.code == "AUTHENTICATION_REQUIRED" and .status == 401' "$auth_body" >/dev/null
+pnpm deployment:promote -- --manifest /protected/path/release.json
 ```
 
-Any HTTP transport/API error, a non-<code>done</code> deployment status, polling
-timeout, or failed smoke is a failed promotion. Do not treat
-<code>running</code>, a missing status, or an unknown status as success. Keep
-the response/log evidence free of cookies, credentials, connection URLs and
-user data, then enter the rollback or roll-forward decision in
-<code>docs/runbooks/rollback.md</code>.
+This second command is an **offline dry-run**. It reads the non-secret manifest
+and does not construct Docker, Dokploy, smoke or evidence adapters.
+
+After the human gate and all protected live inputs are ready, the following is
+the **only live promotion** command:
+
+```sh
+pnpm deployment:promote -- --manifest /protected/path/release.json \
+  --apply \
+  --evidence /protected/path/promotion-evidence.json
+```
+
+The CLI refuses apply without an explicit evidence destination and all live
+environment inputs. It refuses to overwrite an existing evidence file.
+
+## Enforced order
+
+The apply command performs this fixed sequence:
+
+1. validate the manifest and protected live inputs;
+2. authenticate to private GHCR in an isolated temporary Docker config;
+3. pull the exact candidate digest and verify its OCI revision;
+4. run the one-shot Prisma migrator from that same image;
+5. stop before Dokploy mutation if migration exits non-zero;
+6. snapshot existing Dokploy deployments;
+7. save the complete candidate runtime environment;
+8. save the exact candidate digest as the Docker provider;
+9. deploy with a revision-bound title and identify exactly one new record;
+10. poll only that record every five seconds, for at most ten minutes;
+11. accept only `done`;
+12. check `/health/live`, `/health/startup`, `/health/ready` and the
+    unauthenticated `/v1/auth/me` RFC 9457 problem;
+13. atomically publish redacted evidence with mode `0600`.
+
+The operator host needs network access to GHCR, Dokploy HTTPS, the migration
+PostgreSQL endpoint and the public API. Routine deployment does not require SSH
+access to the VPS.
+
+## Failed promotion boundary
+
+Image verification or migration failure causes no Dokploy mutation. Once the
+environment mutation begins, provider, deploy, identification, polling or
+external smoke failure triggers one bounded attempt to restore the protected
+previous complete environment. The CLI records whether that restoration was
+attempted and succeeded.
+
+The promotion command never invokes a rollback image, never runs a second
+migration and never performs an automatic rollback. Preserve the evidence and
+make the human rollback-or-roll-forward decision in
+[rollback.md](rollback.md). A failed evidence publication is not permission to
+repeat a mutation blindly.
+
+Local tests and dry-run output are repository evidence only. A successful
+hosted promotion requires the generated evidence file plus independently
+reviewed Dokploy and public-runtime observations from that exact execution.
