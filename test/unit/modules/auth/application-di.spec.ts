@@ -19,6 +19,7 @@ import {
 import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
 import { ChangePasswordUseCase } from '@/modules/auth/application/change-password.use-case'
 import { CreateInitialAdminUseCase } from '@/modules/auth/application/create-initial-admin.use-case'
+import { CreateUserUseCase } from '@/modules/auth/application/create-user.use-case'
 import { GetCsrfTokenQuery } from '@/modules/auth/application/get-csrf-token.query'
 import { GetMeQuery } from '@/modules/auth/application/get-me.query'
 import {
@@ -58,6 +59,7 @@ const applicationClasses = [
   AuthenticateSessionUseCase,
   ChangePasswordUseCase,
   CreateInitialAdminUseCase,
+  CreateUserUseCase,
   GetCsrfTokenQuery,
   GetMeQuery,
   ListSessionsQuery,
@@ -68,7 +70,9 @@ const applicationClasses = [
 ] as const
 
 const apiApplicationClasses = applicationClasses.filter(
-  (applicationClass) => applicationClass !== CreateInitialAdminUseCase,
+  (applicationClass) =>
+    applicationClass !== CreateInitialAdminUseCase &&
+    applicationClass !== CreateUserUseCase,
 )
 
 interface ProviderDefinition {
