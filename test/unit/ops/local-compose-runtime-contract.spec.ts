@@ -1,4 +1,15 @@
 import { spawnSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+
+const observabilityImages = Object.freeze({
+  alloy:
+    'grafana/alloy:v1.18.0@sha256:491b0578c04983fd54fe99b587b6fab4404dc46d0dc16677bd6b00cc1140b308',
+  grafana:
+    'grafana/grafana:13.1.0@sha256:121a7a9ece6dc10b969f1f96eed64b4f07dfac0d0b8abc070f7cb83bbde86f63',
+  loki: 'grafana/loki:3.7.2@sha256:191d4fdfb7264f16989f0a57f320872620a5a7c2ceeec6229212c4190ec49b86',
+  tempo:
+    'grafana/tempo:2.10.7@sha256:032b3acb51ed02c4b801473d54bb63e9e9f13738d215126d9843c30283794f4b',
+})
 
 interface ResolvedComposeBuild {
   readonly context?: string
@@ -195,5 +206,133 @@ describe('local Compose runtime contract', () => {
         ),
       ).toBe(true)
     }
+  })
+
+  it('pins and isolates the local observability services', () => {
+    const configuration = resolveLocalCompose()
+
+    for (const [serviceName, image] of Object.entries(observabilityImages)) {
+      const service = requireService(configuration, serviceName)
+
+      expect(service.profiles).toContain('observability')
+      expect(service.image).toBe(image)
+    }
+
+    const alloy = requireService(configuration, 'alloy')
+    const grafana = requireService(configuration, 'grafana')
+    const loki = requireService(configuration, 'loki')
+    const tempo = requireService(configuration, 'tempo')
+
+    expect(alloy.environment?.ALLOY_DOCKER_COMPOSE_PROJECT).toBe(
+      'nest-js-starter-contract',
+    )
+    expect(alloy.ports).toEqual([
+      expect.objectContaining({ host_ip: '127.0.0.1', target: 4318 }),
+    ])
+    expect(grafana.ports).toEqual([
+      expect.objectContaining({ host_ip: '127.0.0.1', target: 3000 }),
+    ])
+    expect(loki.ports).toBeUndefined()
+    expect(tempo.ports).toBeUndefined()
+
+    for (const serviceName of [
+      'postgres',
+      'redis-coordination',
+      'api',
+      'alloy',
+      'grafana',
+    ]) {
+      for (const port of requireService(configuration, serviceName).ports ??
+        []) {
+        expect(port.host_ip).toBe('127.0.0.1')
+      }
+    }
+
+    expect(alloy.volumes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          read_only: true,
+          source: '/var/run/docker.sock',
+          target: '/var/run/docker.sock',
+          type: 'bind',
+        }),
+      ]),
+    )
+    expect(grafana.volumes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          read_only: true,
+          target: '/etc/grafana/provisioning/datasources',
+          type: 'bind',
+        }),
+        expect.objectContaining({
+          source: 'grafana-data',
+          target: '/var/lib/grafana',
+          type: 'volume',
+        }),
+      ]),
+    )
+    expect(loki.volumes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'loki-data',
+          target: '/loki',
+          type: 'volume',
+        }),
+      ]),
+    )
+    expect(tempo.volumes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'tempo-data',
+          target: '/var/tempo',
+          type: 'volume',
+        }),
+      ]),
+    )
+    expect(configuration.volumes).toHaveProperty('grafana-data')
+    expect(configuration.volumes).toHaveProperty('loki-data')
+    expect(configuration.volumes).toHaveProperty('tempo-data')
+  })
+
+  it('preserves correlation literals and bounded low-cardinality storage', () => {
+    const configurationPaths = [
+      'config/observability/alloy/config.alloy',
+      'config/observability/loki/loki.yaml',
+      'config/observability/tempo/tempo.yaml',
+      'config/observability/grafana/provisioning/datasources/observability.yaml',
+    ]
+
+    for (const path of configurationPaths) {
+      expect(existsSync(path)).toBe(true)
+    }
+
+    if (configurationPaths.some((path) => !existsSync(path))) {
+      return
+    }
+
+    const provisioning = readFileSync(
+      'config/observability/grafana/provisioning/datasources/observability.yaml',
+      'utf8',
+    )
+    const alloy = readFileSync(
+      'config/observability/alloy/config.alloy',
+      'utf8',
+    )
+    const loki = readFileSync('config/observability/loki/loki.yaml', 'utf8')
+    const tempo = readFileSync('config/observability/tempo/tempo.yaml', 'utf8')
+    const labelsStage = /stage\.labels \{([\s\S]*?)\n  \}/u.exec(alloy)?.[1]
+
+    expect(provisioning).toContain("'$${__value.raw}'")
+    expect(provisioning).toContain('$${__resource.service.name}')
+    expect(provisioning).toContain('$${__span.traceId}')
+    expect(labelsStage).toContain('environment = ""')
+    expect(labelsStage).toContain('level       = ""')
+    expect(labelsStage).toContain('service     = ""')
+    expect(labelsStage).not.toMatch(
+      /requestId|traceId|spanId|event|module|reasonCode/u,
+    )
+    expect(loki).toMatch(/retention_period:\s+168h/u)
+    expect(tempo).toMatch(/block_retention:\s+168h/u)
   })
 })
