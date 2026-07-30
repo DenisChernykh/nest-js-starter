@@ -93,9 +93,9 @@ hand-written exported TypeScript contract receives TSDoc according to
 `docs/architecture/tsdoc-guidelines.md`.
 
 No new runtime or development dependency is required. The manifest and process
-environment use the repository's existing Zod package, HTTP uses the built-in
-`fetch`, CLI parsing stays deliberately small, and child processes use
-`node:child_process`.
+environment use the repository's exact existing Joi `18.2.3` dependency, HTTP
+uses the built-in `fetch`, CLI parsing stays deliberately small, and child
+processes use `node:child_process`.
 
 ## Commands
 
