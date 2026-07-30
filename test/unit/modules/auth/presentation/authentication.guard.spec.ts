@@ -2,9 +2,13 @@ import type { ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
 import type { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
-import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
+import {
+  AuthDependencyUnavailableError,
+  AuthenticationRequiredError,
+} from '@/modules/auth/application/auth-errors'
 import { AuthRequestContext } from '@/modules/auth/presentation/auth-request.context'
 import { AuthenticationGuard } from '@/modules/auth/presentation/authentication.guard'
+import { readAuthenticatedPrincipal } from '@/modules/auth/presentation/current-principal.decorator'
 import { PUBLIC_ENDPOINT_METADATA } from '@/platform/http/policy/public-endpoint.decorator'
 
 function context(
@@ -88,6 +92,7 @@ describe('AuthenticationGuard', () => {
     )
     await expect(guard.canActivate(executionContext)).resolves.toBe(true)
     const request = executionContext.switchToHttp().getRequest<object>()
+    expect(readAuthenticatedPrincipal(request)).toBe(principal)
     expect(
       requestContext.run(request, () => ({
         principal: requestContext.principal,
@@ -109,8 +114,17 @@ describe('AuthenticationGuard', () => {
       'nest-js-starter-session',
     )
 
-    await expect(
-      guard.canActivate(context(`nest-js-starter-session=${'A'.repeat(43)}`)),
-    ).rejects.toMatchObject({ code: 'AUTH_DEPENDENCY_UNAVAILABLE' })
+    const executionContext = context(
+      `nest-js-starter-session=${'A'.repeat(43)}`,
+    )
+
+    await expect(guard.canActivate(executionContext)).rejects.toMatchObject({
+      code: 'AUTH_DEPENDENCY_UNAVAILABLE',
+    })
+    expect(() =>
+      readAuthenticatedPrincipal(
+        executionContext.switchToHttp().getRequest<object>(),
+      ),
+    ).toThrow(AuthenticationRequiredError)
   })
 })

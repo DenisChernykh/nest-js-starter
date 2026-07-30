@@ -16,7 +16,7 @@ import {
   type StructuredLogger,
 } from '@/platform/logging/logging.contracts'
 
-import { mapHttpProblem } from './http-problem.mapper'
+import { HttpProblemRegistry } from './http-problem.registry'
 import type { ProblemDocument } from './problem.contracts'
 
 /** Sole HTTP failure boundary producing safe RFC 9457 documents. */
@@ -29,6 +29,8 @@ export class ProblemExceptionFilter implements ExceptionFilter<unknown> {
     @Inject(RequestContext)
     private readonly requestContext: RequestContext,
     @Inject(STRUCTURED_LOGGER) private readonly logger: StructuredLogger,
+    @Inject(HttpProblemRegistry)
+    private readonly problemRegistry: HttpProblemRegistry,
   ) {}
 
   /** Writes at most one response and one error record for an unexpected 5xx. */
@@ -37,7 +39,7 @@ export class ProblemExceptionFilter implements ExceptionFilter<unknown> {
     const response = host.switchToHttp().getResponse<unknown>()
     if (httpAdapter.isHeadersSent(response)) return
 
-    const mapped = mapHttpProblem(exception)
+    const mapped = this.problemRegistry.map(exception)
     const requestId = this.requestContext.getRequestId() ?? randomUUID()
     const document: ProblemDocument = {
       type: mapped.definition.type,

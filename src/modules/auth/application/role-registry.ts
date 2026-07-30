@@ -12,15 +12,16 @@ export interface RoleDefinition {
 export const SYSTEM_ADMIN_PERMISSIONS: readonly PermissionKey[] =
   definePermissions(['system.docs.read'])
 
-/** Built-in administrator role with no wildcard or implicit bypass. */
-export const SYSTEM_ADMIN_ROLE: RoleDefinition = Object.freeze({
-  key: 'system.admin',
-  permissions: SYSTEM_ADMIN_PERMISSIONS,
-})
-
-/** Creates the immutable registry used by the auth composition root. */
-export function createAuthRoleRegistry(): RoleRegistry {
-  return new RoleRegistry([SYSTEM_ADMIN_ROLE])
+/**
+ * Creates the immutable registry from the product-owned role catalog.
+ *
+ * @param definitions - Complete role definitions supplied by the composition root.
+ * @returns A registry with no implicit roles or wildcard permissions.
+ */
+export function createAuthRoleRegistry(
+  definitions: readonly RoleDefinition[],
+): RoleRegistry {
+  return new RoleRegistry(definitions)
 }
 
 class ImmutablePermissionSet implements ReadonlySet<PermissionKey> {

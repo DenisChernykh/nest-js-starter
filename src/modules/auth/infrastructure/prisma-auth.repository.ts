@@ -6,11 +6,14 @@ import {
 } from '../application/auth-persistence.port'
 import type {
   AuthProjection,
+  CreateUserResult,
   CredentialSnapshot,
   InitialAdminInput,
   InitialAdminResult,
+  UserProvisioningInput,
 } from '../application/auth.types'
 import { mapAuthProjection, mapCredentialSnapshot } from './prisma-auth.mapper'
+import { Prisma } from '@/generated/prisma/client'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import {
   TRANSACTION_PORT,
@@ -127,5 +130,37 @@ export class PrismaAuthRepository implements AuthPersistencePort {
         return { created: true, userId: user.id }
       }),
     )
+  }
+
+  /** Atomically creates one user with its credential and role assignments. */
+  public async createUser(
+    input: UserProvisioningInput,
+  ): Promise<CreateUserResult> {
+    try {
+      return await this.transaction.run(() =>
+        this.provider.withClient(async (client) => {
+          const user = await client.user.create({
+            data: {
+              email: input.email,
+              normalizedEmail: input.normalizedEmail,
+              credential: { create: { passwordHash: input.passwordHash } },
+              roles: {
+                create: input.roleKeys.map((roleKey) => ({ roleKey })),
+              },
+            },
+            select: { id: true },
+          })
+          return { created: true, userId: user.id }
+        }),
+      )
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return { created: false }
+      }
+      throw error
+    }
   }
 }

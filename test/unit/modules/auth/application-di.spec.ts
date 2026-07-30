@@ -82,6 +82,7 @@ describe('auth application Nest dependency injection', () => {
   it('constructs runtime application classes directly through port tokens', async () => {
     const persistence: AuthPersistencePort = {
       bootstrapInitialAdmin: jest.fn(),
+      createUser: jest.fn(),
       findAuthProjectionByUserId: jest.fn(),
       findCredentialByNormalizedEmail: jest.fn(),
       incrementSessionGeneration: jest.fn(),
@@ -126,7 +127,7 @@ describe('auth application Nest dependency injection', () => {
           useValue: cleanupObserver,
         },
         { provide: AUTH_DUMMY_PASSWORD_HASH, useValue: 'dummy-hash' },
-        { provide: RoleRegistry, useValue: createAuthRoleRegistry() },
+        { provide: RoleRegistry, useValue: createAuthRoleRegistry([]) },
       ],
     }).compile()
 

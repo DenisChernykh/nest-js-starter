@@ -13,6 +13,42 @@ returns deployment records with <code>deploymentId</code> and
 Sources: [Dokploy OpenAPI](https://raw.githubusercontent.com/Dokploy/dokploy/canary/openapi.json)
 and [Dokploy deployment schema](https://raw.githubusercontent.com/Dokploy/dokploy/canary/packages/server/src/db/schema/deployment.ts).
 
+## Preparation prerequisite
+
+Complete [deployment-preparation.md](deployment-preparation.md) and retain its
+redacted readiness record before any mutation in this adapter. Repository
+documentation alone is not hosted evidence: the record must identify the
+successful target Stage workflow run ID/URL, exact Stage revision,
+digest/revision pair, full-gate/Trivy/pull-same-digest smoke evidence, package
+linkage/Actions access/private visibility/organization policy checks, and
+concrete non-secret environment inputs or protected-record references with
+named owners.
+
+This adapter intentionally keeps an operation-specific byte-for-byte pin guard.
+For a fresh descendant or `backend-codex`, after its own successful Stage
+evidence and before any mutation, replace the starter candidate digest/revision
+with the newly approved target pair and replace the rollback digest/revision
+with a separate previously verified, schema-compatible target pair. Candidate
+and rollback must not be the same image. Retain both equality guards. The
+historical starter pins below are not target defaults and are not reusable
+evidence; stop unless the readiness record links both pin reviews and rollback
+schema-compatibility evidence.
+
+The current adapter supports only private authenticated GHCR because
+`application.saveDockerProvider` below always receives `GHCR_USERNAME` and
+`GHCR_PASSWORD`. GitHub supports anonymous pulls from public GHCR packages, but
+that mode is outside this adapter contract until it is intentionally
+implemented. The authorized environment owner must supply a dedicated future
+identity and PAT classic limited to `read:packages`, created only in the
+authorized Dokploy window. The identity must have read access to the private
+package, and its token must be authorized for organization SSO when required.
+Before any API mutation, prove those exact credentials with an authenticated
+pull of `CANDIDATE_IMAGE_REF` and verify the pulled OCI revision.
+
+Stop if Dokploy, VPS, domain/TLS, PostgreSQL, Redis, telemetry, backup storage,
+or credentials are still being inferred rather than supplied by the authorized
+environment owner.
+
 ## Environment and safety boundary
 
 Use a short-lived API key with only the permissions needed for this
@@ -107,6 +143,18 @@ test "$remote_database_url" = "$RUNTIME_DATABASE_URL" || {
   echo 'remote DATABASE_URL must equal RUNTIME_DATABASE_URL' >&2
   exit 1
 }
+service_revision_count="$(printf '%s\n' "$DOKPLOY_APPLICATION_ENV" | \
+  awk 'BEGIN { count = 0 } /^SERVICE_REVISION=/ { count++ } END { print count }')"
+test "$service_revision_count" -eq 1 || {
+  echo 'DOKPLOY_APPLICATION_ENV must contain exactly one SERVICE_REVISION' >&2
+  exit 1
+}
+remote_service_revision="$(printf '%s\n' "$DOKPLOY_APPLICATION_ENV" | \
+  sed -n 's/^SERVICE_REVISION=//p')"
+test "$remote_service_revision" = "$candidate_revision" || {
+  echo 'remote SERVICE_REVISION must equal the approved candidate revision' >&2
+  exit 1
+}
 
 # Keep the API key out of curl's argv and logs. The config file is removed on
 # normal exit and signals.
@@ -117,6 +165,7 @@ printf 'header = "x-api-key: %s"\n' "$DOKPLOY_API_KEY" \
   >"$dokploy_curl_config"
 before_deployments=''
 after_deployments=''
+registry_docker_config=''
 environment_mutation_started=0
 dokploy_request_timeout_seconds=30
 dokploy_connect_timeout_seconds=10
@@ -129,6 +178,9 @@ dokploy_cleanup() {
   fi
   if [ -n "${after_deployments:-}" ]; then
     rm -f -- "$after_deployments"
+  fi
+  if [ -n "${registry_docker_config:-}" ]; then
+    rm -rf -- "$registry_docker_config"
   fi
 }
 dokploy_curl() {
@@ -171,6 +223,40 @@ Dokploy request below passes only its path to curl; the key is never placed in
 a curl argument. Abort on any <code>curl</code> API error
 (<code>4xx</code>/<code>5xx</code>), malformed JSON, or unexpected response
 shape. Such errors are diagnostic events, not a cue to retry indefinitely.
+
+## Verify private GHCR pull access and revision
+
+Use an isolated Docker auth directory so this check neither depends on nor
+changes the operator's existing Docker credentials. A successful login is not
+enough: the dedicated identity must pull the approved private digest, and its
+OCI revision must equal both the approved candidate revision and the
+`SERVICE_REVISION` validated above.
+
+```sh
+ghcr_registry_host="${GHCR_REGISTRY_URL#https://}"
+ghcr_registry_host="${ghcr_registry_host%/}"
+test "$ghcr_registry_host" = 'ghcr.io' || {
+  echo 'GHCR_REGISTRY_URL must identify ghcr.io' >&2
+  exit 1
+}
+registry_docker_config="$(mktemp -d)"
+chmod 700 "$registry_docker_config"
+printf '%s' "$GHCR_PASSWORD" |
+  docker --config "$registry_docker_config" login "$ghcr_registry_host" \
+    --username "$GHCR_USERNAME" --password-stdin >/dev/null
+docker --config "$registry_docker_config" pull "$CANDIDATE_IMAGE_REF"
+docker image inspect "$CANDIDATE_IMAGE_REF" \
+  --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' |
+  grep -Fx "$candidate_revision"
+docker --config "$registry_docker_config" logout "$ghcr_registry_host" >/dev/null
+rm -rf -- "$registry_docker_config"
+registry_docker_config=''
+```
+
+Failure means package read access, token scope/SSO authorization, digest
+availability, or revision binding is not ready. Stop before
+`application.saveEnvironment`, `application.saveDockerProvider`, or any other
+Dokploy mutation.
 
 ## Run the migrator before changing Dokploy
 

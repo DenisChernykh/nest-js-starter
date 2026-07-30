@@ -35,6 +35,19 @@ export type InitialAdminResult =
   | { readonly created: true; readonly userId: string }
   | { readonly created: false }
 
+/** Secret-bearing durable input accepted only by user provisioning. */
+export interface UserProvisioningInput {
+  readonly email: string
+  readonly normalizedEmail: string
+  readonly passwordHash: string
+  readonly roleKeys: readonly string[]
+}
+
+/** Result that reveals no credential material from user provisioning. */
+export type CreateUserResult =
+  | { readonly created: true; readonly userId: string }
+  | { readonly created: false }
+
 /** Fresh authenticated identity attached to one request execution chain. */
 export interface AuthenticatedPrincipal {
   readonly userId: string

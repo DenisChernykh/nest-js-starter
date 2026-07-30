@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common'
+import { Module, type DynamicModule } from '@nestjs/common'
 import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core'
 
 import { AUTH_AUDIT } from '../application/auth-audit.port'
@@ -21,6 +21,7 @@ import { PASSWORD_HASHER } from '../application/password-hasher.port'
 import {
   createAuthRoleRegistry,
   RoleRegistry,
+  type RoleDefinition,
 } from '../application/role-registry'
 import { RevokeSessionUseCase } from '../application/revoke-session.use-case'
 import { SESSION_STORE } from '../application/session-store.port'
@@ -48,7 +49,6 @@ import { DatabaseModule } from '@/platform/database/database.module'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisModule } from '@/platform/redis/redis.module'
 import { REDIS_COORDINATION_COMMAND_EXECUTOR } from '@/platform/redis/redis.tokens'
-import { HttpErrorsModule } from '@/platform/http/errors/http-errors.module'
 import {
   DOCS_ACCESS_POLICY,
   type DocsAccessPolicy,
@@ -58,16 +58,27 @@ import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
 const dummyPasswordHash =
   '$argon2id$v=19$m=19456,p=1,t=2$AQEBAQEBAQEBAQEBAQEBAQ$89iZHLNRbRP/PDabySsV1BxlW1VfqedCPSqmvYANw2U'
 
+const AUTH_ROLE_DEFINITIONS = Symbol('auth:role-definitions')
+
+/** Product-owned role catalog required to compose the auth capability. */
+export interface AuthModuleOptions {
+  readonly roleDefinitions: readonly RoleDefinition[]
+}
+
 /** Composes durable identity, Redis sessions and ordered browser policy. */
 @Module({
-  imports: [RuntimeConfigModule, DatabaseModule, RedisModule, HttpErrorsModule],
+  imports: [RuntimeConfigModule, DatabaseModule, RedisModule],
   controllers: [AuthController],
   providers: [
     AuthRequestContext,
     GetMeQuery,
     Argon2PasswordHasher,
     NodeAuthCryptoAdapter,
-    { provide: RoleRegistry, useFactory: createAuthRoleRegistry },
+    {
+      provide: RoleRegistry,
+      inject: [AUTH_ROLE_DEFINITIONS],
+      useFactory: createAuthRoleRegistry,
+    },
     PrismaAuthRepository,
     {
       provide: RedisSessionStore,
@@ -224,4 +235,30 @@ const dummyPasswordHash =
   ],
   exports: [PrismaAuthRepository, Argon2PasswordHasher, DOCS_ACCESS_POLICY],
 })
-export class AuthModule {}
+export class AuthModule {
+  /**
+   * Composes auth with one immutable snapshot of product-owned roles.
+   *
+   * @param options - Complete role catalog owned by the API composition root.
+   * @returns Dynamic auth module whose registry cannot observe later input mutations.
+   */
+  public static forRoot(options: AuthModuleOptions): DynamicModule {
+    const roleDefinitions = Object.freeze(
+      options.roleDefinitions.map((definition) =>
+        Object.freeze({
+          key: definition.key,
+          permissions: Object.freeze([...definition.permissions]),
+        }),
+      ),
+    )
+    return {
+      module: AuthModule,
+      providers: [
+        {
+          provide: AUTH_ROLE_DEFINITIONS,
+          useValue: roleDefinitions,
+        },
+      ],
+    }
+  }
+}

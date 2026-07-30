@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core'
 import type { NestExpressApplication } from '@nestjs/platform-express'
 
 import { ApiModule } from '@/bootstrap/api/api.module'
+import { API_PROBLEM_CATALOG } from '@/bootstrap/api/api-http-problems'
 import { configureApiRouteMetadata } from '@/platform/http/bootstrap/configure-http-application'
 import { createOpenApiDocument } from '@/platform/http/docs/openapi-document'
 import { canonicalizeJson } from '@/platform/http/docs/openapi-normalizer'
@@ -30,7 +31,9 @@ export async function generateOpenApiArtifact(): Promise<string> {
 
   try {
     configureApiRouteMetadata(app)
-    return canonicalizeJson(createOpenApiDocument(app, config))
+    return canonicalizeJson(
+      createOpenApiDocument(app, config, API_PROBLEM_CATALOG),
+    )
   } finally {
     await app.close()
   }

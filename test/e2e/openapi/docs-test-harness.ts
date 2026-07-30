@@ -14,6 +14,7 @@ import type {
 import { configureApiDocs } from '@/platform/http/docs/configure-api-docs'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { createRequestContextMiddleware } from '@/platform/http/context/request-context.middleware'
+import { PROBLEM_CATALOG } from '@/platform/http/errors/problem-registry'
 
 type HttpServer = Server<typeof IncomingMessage, typeof ServerResponse>
 
@@ -63,7 +64,7 @@ export async function createDocsTestHarness(
     next()
   }
   app.use(accessLogMiddleware)
-  configureApiDocs(app, config, requestContext, policy)
+  configureApiDocs(app, config, requestContext, policy, PROBLEM_CATALOG)
   await app.init()
   await app.listen(0, '127.0.0.1')
 

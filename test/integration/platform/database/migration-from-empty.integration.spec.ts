@@ -18,7 +18,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     await container.stop()
   })
 
-  it('applies baseline plus auth core and creates its singleton', async () => {
+  it('applies all migrations and enforces database invariants', async () => {
     const result = runPrismaCommand(
       ['migrate', 'deploy', '--config', 'prisma.config.ts'],
       container.getConnectionUri(),
@@ -31,6 +31,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     expect(migrations.rows).toEqual([
       { migration_name: '20260720000000_baseline' },
       { migration_name: '20260721090000_auth_core' },
+      { migration_name: '20260728210000_approval_requests' },
     ])
     const tables = await pool.query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables
@@ -38,6 +39,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
        ORDER BY table_name`,
     )
     expect(tables.rows).toEqual([
+      { table_name: 'approval_requests' },
       { table_name: 'auth_security_state' },
       { table_name: 'password_credentials' },
       { table_name: 'user_roles' },
@@ -53,6 +55,26 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
         'INSERT INTO auth_security_state (id, updated_at) VALUES (2, CURRENT_TIMESTAMP)',
       ),
     ).rejects.toThrow()
+    const creator = await pool.query<{ id: string }>(
+      `INSERT INTO users (email, normalized_email, updated_at)
+       VALUES ('creator@example.com', 'creator@example.com', CURRENT_TIMESTAMP)
+       RETURNING id`,
+    )
+    await expect(
+      pool.query(
+        `INSERT INTO approval_requests (
+           title,
+           description,
+           status,
+           created_by_user_id
+         ) VALUES ($1, $2, 'APPROVED', $3)`,
+        [
+          'Needs decision metadata',
+          'Invalid terminal row',
+          creator.rows[0]?.id,
+        ],
+      ),
+    ).rejects.toThrow()
   })
 
   it('is idempotent on a second migrate deploy', async () => {
@@ -65,6 +87,6 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     const migrations = await pool.query<{ count: string }>(
       'SELECT count(*) FROM _prisma_migrations',
     )
-    expect(migrations.rows[0]?.count).toBe('2')
+    expect(migrations.rows[0]?.count).toBe('3')
   })
 })

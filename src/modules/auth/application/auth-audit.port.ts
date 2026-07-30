@@ -6,6 +6,7 @@ export type AuthAuditAction =
   | 'session_revoke'
   | 'password_change'
   | 'initial_admin_create'
+  | 'user_create'
   | 'role_change'
   | 'status_change'
   | 'docs_access'

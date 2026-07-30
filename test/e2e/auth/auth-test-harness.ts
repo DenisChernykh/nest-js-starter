@@ -16,6 +16,7 @@ import { LoginUseCase } from '@/modules/auth/application/login.use-case'
 import { LogoutAllUseCase } from '@/modules/auth/application/logout-all.use-case'
 import { LogoutUseCase } from '@/modules/auth/application/logout.use-case'
 import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
+import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
 import {
   AUTH_LOGIN_METADATA_FACTORY,
   AuthController,
@@ -30,6 +31,8 @@ import { SessionCsrfGuard } from '@/modules/auth/presentation/session-csrf.guard
 import { RequestContext } from '@/platform/http/context/request-context'
 import { createRequestContextMiddleware } from '@/platform/http/context/request-context.middleware'
 import { ProblemExceptionFilter } from '@/platform/http/errors/problem-exception.filter'
+import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
+import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registry'
 import { RequestValidationError } from '@/platform/http/errors/request-validation.error'
 import { mapValidationErrors } from '@/platform/http/errors/validation-error.mapper'
 
@@ -171,9 +174,15 @@ export async function createAuthTestHarness(
     new AuthRequestInterceptor(reflector, requestContext),
   )
   app.useGlobalFilters(
-    new ProblemExceptionFilter(app.get(HttpAdapterHost), httpRequestContext, {
-      write: jest.fn(),
-    }),
+    new ProblemExceptionFilter(
+      app.get(HttpAdapterHost),
+      httpRequestContext,
+      { write: jest.fn() },
+      new HttpProblemRegistry([
+        CORE_HTTP_PROBLEM_CONTRIBUTION,
+        AUTH_HTTP_PROBLEM_CONTRIBUTION,
+      ]),
+    ),
   )
   app.setGlobalPrefix('v1')
   await app.init()

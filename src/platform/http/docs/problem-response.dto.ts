@@ -1,9 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger'
 
-import { PROBLEM_CATALOG } from '../errors/problem-registry'
-
-const problemCodes = PROBLEM_CATALOG.map((definition) => definition.code)
-
 /** Value-free field validation issue addressed by RFC 6901 JSON Pointer. */
 export class ProblemFieldErrorResponseDto {
   @ApiProperty({
@@ -57,7 +53,7 @@ export class ProblemResponseDto {
 
   @ApiProperty({
     type: String,
-    enum: problemCodes,
+    pattern: '^[A-Z][A-Z0-9_]*$',
     example: 'AUTHENTICATION_REQUIRED',
   })
   public readonly code!: string

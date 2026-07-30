@@ -6,14 +6,57 @@ trace-only OpenTelemetry.
 
 ## Local workflow
 
-Use Node `24.18.0` and Corepack pnpm `11.15.1`.
+Use Node `24.18.0` and pnpm `11.15.1`. Install those exact versions with a
+user-level Node or package manager, then use the short `pnpm` commands below.
+The repository pins both versions through `engines` and `packageManager`.
 
 ```sh
-corepack pnpm@11.15.1 install --frozen-lockfile
-corepack pnpm@11.15.1 run dev:api
-corepack pnpm@11.15.1 run check:quick
-corepack pnpm@11.15.1 run check
-corepack pnpm@11.15.1 run oci:check
+node --version
+pnpm --version
+pnpm install --frozen-lockfile
+cp .env.example .env
+docker compose up -d --wait postgres redis-coordination
+pnpm start:migrate
+pnpm dev
+```
+
+`pnpm dev` generates Prisma Client, then starts the API with the standard
+Nest CLI watch flow. It does not start or stop Docker services and does not
+apply migrations. Bring the infrastructure up and run `pnpm start:migrate`
+explicitly when preparing a local environment. PostgreSQL and
+`redis-coordination` must both be available before the API becomes ready.
+
+## Initial administrator bootstrap
+
+After applying migrations, create the first administrator through the
+PostgreSQL-only one-shot command:
+
+```sh
+pnpm auth:create-admin -- --email=admin@example.com
+```
+
+The command reads the password from hidden or piped stdin.
+
+## Operator user provisioning
+
+After the initial administrator bootstrap, operators can provision additional
+users:
+
+```sh
+pnpm auth:create-user -- --email=requester@example.com
+pnpm auth:create-user -- --email=reviewer@example.com --role=approval.reviewer
+```
+
+The command requires migrated PostgreSQL and reads the password from hidden or
+piped stdin. It accepts only roles compiled into the product composition root.
+This is operational provisioning, not HTTP registration or invitation.
+
+Run the remaining local checks separately:
+
+```sh
+pnpm check:quick
+pnpm check
+pnpm oci:check
 ```
 
 `check:quick` runs formatting, Prisma validation/generation, non-mutating
@@ -46,6 +89,7 @@ there. The API does not run migrations; run the migrator role first.
 - `docs/architecture/module-boundaries.md` — five module layers and allowed dependencies;
 - `docs/architecture/runtime-lifecycle.md` — startup, readiness and shutdown;
 - `docs/architecture/openapi-contracts.md` — committed wire contract;
+- `docs/runbooks/deployment-preparation.md` — repository, GHCR and environment-input readiness before any hosted deployment;
 - `docs/runbooks/` — local PostgreSQL, Redis loss, telemetry and image publication.
 
 The core grows only from a concrete consumer and failure model. Queues, object

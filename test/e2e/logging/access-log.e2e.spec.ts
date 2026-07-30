@@ -7,10 +7,13 @@ import type { NestExpressApplication } from '@nestjs/platform-express'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
 
+import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { configureHttpApplication } from '@/platform/http/bootstrap/configure-http-application'
 import { RequestContext } from '@/platform/http/context/request-context'
+import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
+import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registry'
 import { ProblemExceptionFilter } from '@/platform/http/errors/problem-exception.filter'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
 import { createHttpAccessLogMiddleware } from '@/platform/logging/http-access-log.middleware'
@@ -68,6 +71,10 @@ describe('final HTTP access records', () => {
         expressApp.get(HttpAdapterHost),
         context,
         logger,
+        new HttpProblemRegistry([
+          CORE_HTTP_PROBLEM_CONTRIBUTION,
+          AUTH_HTTP_PROBLEM_CONTRIBUTION,
+        ]),
       ),
     )
     configureHttpApplication(

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { API_PROBLEM_CATALOG } from '@/bootstrap/api/api-http-problems'
 import {
   PROBLEM_CATALOG,
   getProblemDefinition,
@@ -118,7 +119,9 @@ describe('problem catalog', () => {
           .map((cell) => cell.trim()),
       )
     expect(documented).toEqual(
-      PROBLEM_CATALOG.map((definition) => [
+      API_PROBLEM_CATALOG.toSorted(
+        (left, right) => left.status - right.status,
+      ).map((definition) => [
         definition.type,
         definition.code,
         String(definition.status),
