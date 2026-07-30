@@ -111,10 +111,28 @@ target identities, не принимается. Starter CI, digest или deploy
 отсутствующие product-local части не изобретайте: замените все starter-owned
 identity до первой Stage publication.
 
+Не ограничивайте identity audit перечисленными ниже файлами. До изменения и
+после него выполните repo-wide inventory конкретных starter literals:
+
+```sh
+git grep -n -I -E \
+  'nest-js-starter|nest_js_starter|nest-js-starter\.invalid|DenisChernykh/nest-js-starter'
+```
+
+Классифицируйте каждое совпадение как target-owned replacement либо намеренно
+сохранённую историческую ссылку с review reference. Проверка должна охватывать
+как минимум repository/package/OCI identity, workflow и OCI smoke helpers,
+runtime defaults и `.env.example`, public Problem Details namespace и OpenAPI
+examples, development cookie name, Redis key/test identities, telemetry service
+и tracer names, database/test fixtures и зависимые тесты. В runtime-bearing
+source, workflows, scripts, active configuration и тестовых ожиданиях
+непреднамеренных starter literals после адаптации оставаться не должно.
+
 ## Шаг 3. Адаптировать repository-owned контракты
 
-Сверьте target с текущими файлами из [Source-of-truth map](#source-of-truth-map)
-и адаптируйте только repository-owned слой:
+Сверьте target с repo-wide identity inventory и текущими файлами из
+[Source-of-truth map](#source-of-truth-map), затем адаптируйте только
+repository-owned слой:
 
 - Stage workflow публикует target GHCR identity и использует repository policy;
 - production image собирается для `linux/amd64`, запускается non-root и содержит
@@ -123,6 +141,8 @@ identity до первой Stage publication.
   non-root user и exact revision;
 - `.env.example` содержит только безопасные development examples, а production
   contract задаётся runtime schema;
+- public Problem Details namespace, development cookie и telemetry tracer names
+  принадлежат target, а их tests/examples изменяются вместе с source;
 - migrations и role contracts сохраняют product schema и разделение migrator /
   runtime;
 - Redis key prefix заменяется один раз на target-owned значение и затем остаётся
@@ -147,10 +167,20 @@ policy. PR gate сам по себе не публикует и не одобр�
   вручную secret;
 - image name выводится из lowercased target `GITHUB_REPOSITORY`.
 
-Первый успешный push workflow автоматически создаёт GHCR container package.
-Оператор не создаёт package заранее вручную. Проверки repository linkage,
-Actions access, visibility и organization policy выполняются после target Stage
-run в шаге 5.
+Сначала определите состояние target package:
+
+- если package ещё не существует, оператор не создаёт его вручную: первый
+  успешный image push внутри workflow автоматически создаёт GHCR container
+  package, даже если более поздний Trivy или OCI smoke затем остановит run;
+- если package уже существует, до Stage run владелец package подтверждает его
+  linkage с target repository, выдаёт этому repository Actions access с правом
+  записи и проверяет visibility/organization policy. Job-scoped
+  `packages: write` не заменяет package-level access.
+
+После target Stage run шаг 5 повторно подтверждает repository linkage, Actions
+access, visibility и organization policy и сохраняет evidence. При
+неподтверждённом доступе существующего package workflow не запускают в расчёте
+на диагностический failure.
 
 Новый package в personal account по умолчанию private. Перевод package в public
 — отдельное необратимое решение оператора: его нельзя выдавать за технический
@@ -161,8 +191,12 @@ password в `application.saveDockerProvider`. Поэтому public anonymous GH
 
 Текущий поддерживаемый handoff использует private authenticated GHCR. Для
 будущего pull потребуется dedicated identity и personal access token (classic),
-ограниченный `read:packages`. Создавайте и передавайте эту identity и token
-только позднее, в явно разрешённом окне настройки Dokploy. Не записывайте
+ограниченный `read:packages`. Сам account должен получить read-доступ к private
+package; для organization package token дополнительно авторизуют для SSO, если
+это требует organization. Создавайте и передавайте эту identity и token только
+позднее, в явно разрешённом окне настройки Dokploy. До первой Dokploy mutation
+этими credentials выполняют authenticated pull одобренного exact digest из
+изолированного Docker auth context и сверяют OCI revision. Не записывайте
 identity credential, token value или registry password ни в этот runbook, ни в
 readiness record.
 
@@ -214,10 +248,18 @@ repository readiness остаётся неподтверждённой.
 Dokploy adapter сохраняет operation-specific byte-for-byte pin guard. Поэтому
 fresh descendant и `backend-codex` после получения собственного Stage evidence,
 но до любой будущей Dokploy mutation обязаны атомарно заменить во всех своих
-target runbooks каждый starter-specific candidate, revision и rollback pin на
-проверенную target-owned пару. Historical pins starter нельзя использовать как
-target defaults, переносить в readiness record или принимать как повторно
-используемое evidence. Ревью замены pins и ссылка на него входят в readiness
+target runbooks две независимые пары:
+
+- candidate image digest и его exact Stage/OCI revision из нового успешного
+  target workflow;
+- отдельный previous image digest и его revision, ранее успешно проверенные и
+  подтверждённые как совместимые с текущей database schema для rollback.
+
+Candidate и rollback не могут ссылаться на один образ. Если отдельного
+совместимого previous image ещё нет, rollback readiness не подтверждена и
+promotion запрещён. Historical pins starter нельзя использовать как target
+defaults, переносить в readiness record или принимать как повторно используемое
+evidence. Ревью обеих пар и schema-compatibility evidence входят в readiness
 record; сами equality guards удалять или ослаблять нельзя.
 
 ## Шаг 6. Подготовить production configuration contract
@@ -257,6 +299,9 @@ secret injection. Production contract требует:
 - `API_DOCS_MODE` равен `protected` или `off`;
 - public API и CORS origins используют HTTPS;
 - `TRUST_PROXY_CIDRS` непуст и принадлежит конкретному environment;
+- `SERVICE_REVISION` ровно один раз присутствует в complete runtime environment
+  и byte-for-byte равен Stage revision и
+  `org.opencontainers.image.revision` одобренного digest;
 - coordination Redis не использует logical database selection;
 - четыре auth secrets независимы друг от друга, каждый является 32-byte
   base64url value и хранится только в будущем secret provider;
@@ -333,6 +378,8 @@ inputs:
 
 - Target repository:
 - Target identity manifest reference:
+- Repo-wide starter identity inventory and retained-literal allowlist reference:
+- GHCR package state before Stage: absent/existing; pre-publication access evidence if existing:
 - Stage workflow run ID/URL:
 - Stage revision:
 - Approved GHCR image@digest:
@@ -344,7 +391,9 @@ inputs:
 - GHCR Actions access check and evidence reference:
 - GHCR visibility: private; owner and evidence reference:
 - GitHub organization policy check and evidence reference:
-- Target-owned Dokploy candidate/revision/rollback pins review reference:
+- Target-owned candidate digest/revision review reference:
+- Target-owned rollback digest/revision and schema-compatibility review reference:
+- SERVICE_REVISION = Stage revision = OCI revision evidence reference:
 - Runtime configuration contract owner:
 - Runtime non-secret expected values/reference:
 - PostgreSQL role contract owner:
@@ -359,6 +408,8 @@ inputs:
 - Backup/restore policy owner:
 - Backup target/prefix/schedule/retention/restore inputs/reference:
 - Future GHCR pull identity owner and authorized creation-window reference:
+- Future pull identity package-read grant/SSO authorization evidence reference:
+- Authenticated pull of approved digest and OCI revision evidence reference:
 - Remaining hosted prerequisites:
 
 Поля содержат только identifiers, результаты, owner names, конкретные
@@ -375,12 +426,17 @@ record, если выбранное место readiness record не предн�
 ID/URL для exact target Stage revision, совпадающую пару image digest/OCI
 revision, ссылки на успешные full gate, Trivy и pull-same-digest OCI smoke,
 результаты repository linkage, Actions access, private visibility и
-organization policy checks, а также review reference для target-owned
-candidate/revision/rollback pins. Для каждого environment input обязательны
-владелец и конкретное non-secret значение либо доступная защищённая record
-reference. Dedicated future GHCR pull identity и окно создания PAT classic с
-`read:packages` должны иметь владельца; сам credential до этого окна не
-создаётся и не записывается.
+organization policy checks, repo-wide identity inventory без непреднамеренных
+starter literals, две независимые review-approved candidate и rollback
+digest/revision пары, rollback schema-compatibility evidence и доказательство
+равенства `SERVICE_REVISION` Stage/OCI revision. Для каждого environment input
+обязательны владелец и конкретное non-secret значение либо доступная защищённая
+record reference. Dedicated future GHCR pull identity и окно создания PAT
+classic с `read:packages` должны иметь владельца; сам credential до этого окна
+не создаётся и не записывается. В разрешённом окне, но до первой Dokploy
+mutation, readiness record дополняется evidence package read grant, SSO
+authorization при необходимости и authenticated pull одобренного digest с
+проверкой OCI revision.
 
 Не делайте вывод, что Dokploy, VPS, DNS, PostgreSQL, Redis, telemetry или S3
 существует. Historical starter pins и evidence не закрывают ни одно из этих
@@ -396,17 +452,19 @@ reference. Dedicated future GHCR pull identity и окно создания PAT 
 Focused runbooks и repository files остаются authoritative; этот документ
 только задаёт orchestration и stop gates.
 
-| Contract                                              | Authoritative source                                                                                                                                 |
-| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stage order, permissions and target GHCR identity     | [`.github/workflows/stage-image.yml`](../../.github/workflows/stage-image.yml)                                                                       |
-| Platform, non-root runtime, entrypoint and OCI labels | [`Dockerfile`](../../Dockerfile)                                                                                                                     |
-| Local OCI checks and smoke behavior                   | [`package.json`](../../package.json), [`scripts/oci/run-image-smoke.ts`](../../scripts/oci/run-image-smoke.ts)                                       |
-| Runtime input examples and validation                 | [`.env.example`](../../.env.example), [`src/platform/config/runtime-environment.schema.ts`](../../src/platform/config/runtime-environment.schema.ts) |
-| PostgreSQL migrator/runtime role separation           | [`deployment-database-roles.md`](deployment-database-roles.md)                                                                                       |
-| Public perimeter, credentials and Redis durability    | [`deployment-security.md`](deployment-security.md)                                                                                                   |
-| PostgreSQL backup ownership and isolated restore      | [`postgres-backup-restore.md`](postgres-backup-restore.md)                                                                                           |
-| Stage publication semantics                           | [`stage-image-publication.md`](stage-image-publication.md)                                                                                           |
-| Redis-loss procedure                                  | [`coordination-redis-loss.md`](coordination-redis-loss.md)                                                                                           |
-| Secret-compromise procedure                           | [`session-secret-compromise.md`](session-secret-compromise.md)                                                                                       |
-| Telemetry-loss procedure                              | [`telemetry-collector-loss.md`](telemetry-collector-loss.md)                                                                                         |
-| Later hosted deployment adapter                       | [`dokploy-deployment.md`](dokploy-deployment.md)                                                                                                     |
+| Contract                                              | Authoritative source                                                                                                                                                                                           |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stage order, permissions and target GHCR identity     | [`.github/workflows/stage-image.yml`](../../.github/workflows/stage-image.yml)                                                                                                                                 |
+| Platform, non-root runtime, entrypoint and OCI labels | [`Dockerfile`](../../Dockerfile)                                                                                                                                                                               |
+| Local OCI checks and smoke behavior                   | [`package.json`](../../package.json), [`scripts/oci/run-image-smoke.ts`](../../scripts/oci/run-image-smoke.ts)                                                                                                 |
+| Runtime input examples and validation                 | [`.env.example`](../../.env.example), [`src/platform/config/runtime-environment.schema.ts`](../../src/platform/config/runtime-environment.schema.ts)                                                           |
+| Public problem identity and examples                  | [`src/platform/http/errors/problem-registry.ts`](../../src/platform/http/errors/problem-registry.ts), [`src/platform/http/docs/problem-response.dto.ts`](../../src/platform/http/docs/problem-response.dto.ts) |
+| Development cookie and Redis telemetry identity       | [`src/platform/config/runtime-environment.ts`](../../src/platform/config/runtime-environment.ts), [`src/platform/redis/redis-command.executor.ts`](../../src/platform/redis/redis-command.executor.ts)         |
+| PostgreSQL migrator/runtime role separation           | [`deployment-database-roles.md`](deployment-database-roles.md)                                                                                                                                                 |
+| Public perimeter, credentials and Redis durability    | [`deployment-security.md`](deployment-security.md)                                                                                                                                                             |
+| PostgreSQL backup ownership and isolated restore      | [`postgres-backup-restore.md`](postgres-backup-restore.md)                                                                                                                                                     |
+| Stage publication semantics                           | [`stage-image-publication.md`](stage-image-publication.md)                                                                                                                                                     |
+| Redis-loss procedure                                  | [`coordination-redis-loss.md`](coordination-redis-loss.md)                                                                                                                                                     |
+| Secret-compromise procedure                           | [`session-secret-compromise.md`](session-secret-compromise.md)                                                                                                                                                 |
+| Telemetry-loss procedure                              | [`telemetry-collector-loss.md`](telemetry-collector-loss.md)                                                                                                                                                   |
+| Later hosted deployment adapter                       | [`dokploy-deployment.md`](dokploy-deployment.md)                                                                                                                                                               |

@@ -42,8 +42,9 @@ adapter; short links make the new entry point discoverable.
   intentionally implemented.
 - Keep the Dokploy adapter's operation-specific byte-for-byte pin guard. After
   fresh target Stage evidence and before any future mutation, descendants and
-  `backend-codex` replace every starter-specific candidate, revision, and
-  rollback pin with one reviewed target-owned pair.
+  `backend-codex` replace the starter candidate digest/revision with a newly
+  approved target pair and the rollback digest/revision with a separate,
+  previously verified schema-compatible target pair.
 - Use only repository-pinned Node `24.18.0` and pnpm `11.15.1` for verification.
 - Finish with `pnpm check:quick`; documentation checks do not prove any hosted
   operation occurred.
@@ -149,7 +150,8 @@ mutation.
 Under `Два режима применения`, define one Russian normative formulation:
 
 - fresh descendants replace every starter-owned identity before the first
-  Stage publication;
+  Stage publication and prove it with a repo-wide literal inventory plus a
+  reviewed retained-literal allowlist;
 - existing backend adoption audits the target, classifies each contract as
   `adopt` / `reconcile` / `reject`, preserves product modules, replaces identity
   atomically, and requires fresh target evidence.
@@ -195,6 +197,13 @@ workflows, Dockerfile, scripts, runtime environment schema, migrations,
 existing registry packages, and product-local infrastructure before editing
 `backend-codex`.
 
+Require a repo-wide inventory of concrete starter literals before and after the
+change. It must cover repository/package/OCI names, workflows and smoke helpers,
+runtime defaults/examples, public Problem Details namespace, development cookie,
+Redis/test identities, telemetry service/tracer names, database fixtures, and
+dependent tests. Every retained historical match needs an explicit reviewed
+allowlist entry.
+
 Define the classification without ambiguity:
 
 ```text
@@ -213,8 +222,11 @@ State all of the following:
   actions and package publication.
 - The Stage job, not a manually created secret, receives `GITHUB_TOKEN` with
   job-scoped `contents: read` and `packages: write`.
-- The first successful push creates the GHCR container package automatically;
-  operators do not pre-create the package.
+- The first successful image push creates the GHCR container package
+  automatically, even if a later Trivy/smoke gate fails; operators do not
+  pre-create the package.
+- If the package already exists, verify repository linkage and Actions write
+  access before Stage. Job-scoped `packages: write` is not package-level access.
 - The post-publication package check covers repository linkage, Actions access,
   visibility, and organization policy.
 - A new personal-account package is private by default. Making it public is an
@@ -225,7 +237,9 @@ State all of the following:
 - The supported handoff remains private authenticated GHCR. Its future Dokploy
   pull uses a dedicated identity and a personal access token (classic) limited
   to `read:packages`; create them only in the later authorized Dokploy setup
-  window.
+  window. The account also needs package read access, the token needs
+  organization SSO authorization when required, and the exact approved digest
+  must be pulled with those credentials before any Dokploy mutation.
 - Record no token value or registry password in the runbook/readiness record.
 
 Link to the official primary sources:
@@ -269,9 +283,10 @@ State the portability gate:
 
 - the Dokploy adapter keeps its operation-specific byte-for-byte equality guard;
 - after successful target Stage evidence and before any future Dokploy mutation,
-  a fresh descendant or `backend-codex` replaces every starter-specific
-  candidate, revision, and rollback pin in its target runbooks with one reviewed
-  target-owned pair;
+  a fresh descendant or `backend-codex` replaces the starter-specific candidate
+  digest/revision with a newly approved target pair and the rollback
+  digest/revision with a separate previously verified, schema-compatible target
+  pair;
 - historical starter pins are not target defaults or reusable evidence.
 
 - [ ] **Step 7: Document production and infrastructure input contracts**
@@ -308,6 +323,8 @@ Separate repository preparation from future secret injection:
 - `API_DOCS_MODE` is `protected` or `off`;
 - public API and CORS origins use HTTPS;
 - trusted proxy CIDRs are non-empty and environment-owned;
+- `SERVICE_REVISION` equals the Stage revision and the approved digest's OCI
+  revision;
 - four auth secrets are independent 32-byte base64url values stored only in the
   future secret provider;
 - the migrator receives `MIGRATION_DATABASE_URL` mapped to process-owned
@@ -339,6 +356,8 @@ Include a copyable record containing no secret slots:
 
 - Target repository:
 - Target identity manifest reference:
+- Repo-wide starter identity inventory and retained-literal allowlist reference:
+- GHCR package state before Stage: absent/existing; pre-publication access evidence if existing:
 - Stage workflow run ID/URL:
 - Stage revision:
 - Approved GHCR image@digest:
@@ -350,7 +369,9 @@ Include a copyable record containing no secret slots:
 - GHCR Actions access check and evidence reference:
 - GHCR visibility: private; owner and evidence reference:
 - GitHub organization policy check and evidence reference:
-- Target-owned Dokploy candidate/revision/rollback pins review reference:
+- Target-owned candidate digest/revision review reference:
+- Target-owned rollback digest/revision and schema-compatibility review reference:
+- SERVICE_REVISION = Stage revision = OCI revision evidence reference:
 - Runtime configuration contract owner:
 - Runtime non-secret expected values/reference:
 - PostgreSQL role contract owner:
@@ -365,6 +386,8 @@ Include a copyable record containing no secret slots:
 - Backup/restore policy owner:
 - Backup target/prefix/schedule/retention/restore inputs/reference:
 - Future GHCR pull identity owner and authorized creation-window reference:
+- Future pull identity package-read grant/SSO authorization evidence reference:
+- Authenticated pull of approved digest and OCI revision evidence reference:
 - Remaining hosted prerequisites:
 ```
 
@@ -507,14 +530,17 @@ Complete [deployment-preparation.md](deployment-preparation.md) and retain its
 redacted readiness record before any mutation in this adapter. Repository
 documentation alone is not hosted evidence: require the target Stage workflow
 run/revision/digest linkage, full-gate/Trivy/pull-smoke and package checks,
-reviewed target-owned candidate/revision/rollback pins, and concrete
-environment inputs or protected-record references with owners.
+independently reviewed target-owned candidate and rollback digest/revision
+pairs, rollback schema compatibility, and concrete environment inputs or
+protected-record references with owners.
 
 Retain the operation-specific byte-for-byte pin guards. Historical starter pins
 are not target defaults or reusable evidence. The current adapter supports only
 private authenticated GHCR; public anonymous pull remains outside its contract.
 Require the dedicated future identity and PAT classic `read:packages` only in
-the authorized Dokploy window.
+the authorized Dokploy window. Before any mutation, require package read access,
+SSO authorization when applicable, authenticated pull of the approved digest,
+and equality of its OCI revision with `SERVICE_REVISION`.
 
 Stop if Dokploy, VPS, domain/TLS, PostgreSQL, Redis, telemetry, backup storage,
 or credentials are still being inferred rather than supplied by the authorized

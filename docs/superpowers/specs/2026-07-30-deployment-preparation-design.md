@@ -71,10 +71,12 @@ Repository readiness requires:
 - configuration validation and all repository gates passing;
 - no real secrets or target connection URLs committed.
 
-The first successful push creates the GHCR package; the runbook must not tell an
-operator to pre-create a container package manually. Package visibility,
-repository linkage, Actions access, and organization policy still require an
-explicit post-publication check.
+The first successful image push creates the GHCR package, even if a later
+Trivy/smoke gate fails; the runbook must not tell an operator to pre-create a
+container package manually. If the package already exists, repository linkage
+and Actions write access are pre-publication gates. Package visibility, linkage,
+Actions access, and organization policy require an explicit post-run check in
+both cases.
 
 ### Environment inputs ready
 
@@ -127,9 +129,10 @@ approved for deployment.
 
 The later Dokploy adapter retains its operation-specific byte-for-byte pin
 guard. After successful target Stage evidence and before any future Dokploy
-mutation, a fresh descendant or `backend-codex` must replace every
-starter-specific candidate, revision, and rollback pin in its target runbooks
-with one reviewed target-owned pair. Historical starter pins are neither target
+mutation, a fresh descendant or `backend-codex` must replace the
+starter-specific candidate digest/revision with a newly approved target pair
+and the rollback digest/revision with a separate previously verified,
+schema-compatible target pair. Historical starter pins are neither target
 defaults nor reusable evidence, and the equality guards are not weakened.
 
 ## Target identity manifest
@@ -161,11 +164,16 @@ The copyable readiness record binds repository readiness to concrete evidence:
 - full gate, Trivy, and pull-same-digest OCI smoke evidence references;
 - GHCR repository linkage, Actions access, private visibility, and organization
   policy check results;
-- the reviewed target-owned candidate/revision/rollback pin replacement;
+- a repo-wide starter identity inventory and reviewed retained-literal allowlist;
+- independently reviewed target-owned candidate and rollback digest/revision
+  replacements, including rollback schema compatibility;
+- equality evidence for Stage revision, OCI revision, and `SERVICE_REVISION`;
 - owners plus concrete non-secret expected values or protected-record
   references for runtime configuration, public boundary and proxy inputs,
   PostgreSQL roles, Redis namespace/durability, auth secret-provider contract,
-  telemetry, backup/restore, and future private GHCR pull identity.
+  telemetry, backup/restore, and future private GHCR pull identity;
+- future pull-identity package read grant, required SSO authorization, and
+  authenticated pull-by-digest evidence before any Dokploy mutation.
 
 The record contains no credentials, registry passwords, token values, secret
 values, or connection URLs. Its Stop gate fails closed on a missing field,

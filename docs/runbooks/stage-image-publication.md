@@ -7,6 +7,13 @@ workflow and return to Steps 5–9 to close publication, package and environment
 evidence. A fresh backend must replace starter identity before this run; an
 existing backend must produce its own target evidence.
 
+If the target GHCR package already exists, verify before the run that it is
+linked to the target repository and grants that repository Actions write
+access; job-scoped `packages: write` cannot repair missing package-level access.
+For a package that does not yet exist, the first successful image push creates
+it even if a later Trivy or OCI smoke gate fails. Recheck linkage, Actions
+access, visibility, and organization policy after the run in both cases.
+
 The pull-request workflow runs `pnpm check` only; it does not build or publish
 an image. A push to `stage` runs the read-only gate first, then the publisher
 job with GHCR package write permission.
