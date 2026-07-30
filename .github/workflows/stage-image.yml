@@ -23,6 +23,10 @@ jobs:
         with:
           node-version-file: .node-version
           check-latest: false
+      - name: Setup Docker Compose
+        uses: docker/setup-compose-action@4eb059ff7f16592f9c84d5ca339c53cb7c5064e2 # v2.3.0
+        with:
+          version: v2.39.4
       - run: corepack pnpm@11.15.1 install --frozen-lockfile
       - name: Run full gate
         run: corepack pnpm@11.15.1 run check
