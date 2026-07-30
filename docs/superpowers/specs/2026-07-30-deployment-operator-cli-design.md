@@ -292,7 +292,9 @@ the roll-forward decision in `docs/runbooks/rollback.md`.
 
 Successful and failed apply executions write a JSON document to an
 operator-selected path. The CLI refuses to overwrite an existing evidence
-file. It writes a mode-`0600` temporary sibling and renames it atomically.
+file. It writes and syncs a mode-`0600` temporary sibling, publishes that file
+through a same-directory hard link that fails atomically when the destination
+already exists, then removes the temporary link.
 
 Evidence contains only:
 
