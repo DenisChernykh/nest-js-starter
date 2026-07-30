@@ -36,7 +36,12 @@ function readFlagValue(arguments_: readonly string[], index: number): string {
 export function parseDeploymentCliOptions(
   arguments_: readonly string[],
 ): DeploymentCliOptions {
-  const values = arguments_[0] === '--' ? arguments_.slice(1) : [...arguments_]
+  const values =
+    arguments_[0] === '--'
+      ? arguments_.slice(1)
+      : arguments_[1] === '--'
+        ? [arguments_[0]!, ...arguments_.slice(2)]
+        : [...arguments_]
   const command = values[0]
   if (
     command !== 'preflight' &&

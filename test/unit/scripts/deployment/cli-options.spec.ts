@@ -44,6 +44,21 @@ describe('parseDeploymentCliOptions', () => {
     })
   })
 
+  it('accepts the pnpm separator after a package-script command', () => {
+    expect(
+      parseDeploymentCliOptions([
+        'preflight',
+        '--',
+        '--manifest',
+        'release.json',
+      ]),
+    ).toEqual({
+      command: 'preflight',
+      manifestPath: 'release.json',
+      apply: false,
+    })
+  })
+
   it.each([
     {
       name: 'rollback without apply',
