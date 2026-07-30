@@ -321,7 +321,7 @@ describe('local Compose runtime contract', () => {
     )
     const loki = readFileSync('config/observability/loki/loki.yaml', 'utf8')
     const tempo = readFileSync('config/observability/tempo/tempo.yaml', 'utf8')
-    const labelsStage = /stage\.labels \{([\s\S]*?)\n  \}/u.exec(alloy)?.[1]
+    const labelsStage = /stage\.labels \{([\s\S]*?)\n {2}\}/u.exec(alloy)?.[1]
 
     expect(provisioning).toContain("'$${__value.raw}'")
     expect(provisioning).toContain('$${__resource.service.name}')
