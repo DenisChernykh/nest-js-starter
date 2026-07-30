@@ -65,6 +65,32 @@ async function readWorkflow(path: string): Promise<WorkflowDocument> {
   return parse(await readFile(path, 'utf8')) as WorkflowDocument
 }
 
+async function projectPublishComposeSetup(path: string): Promise<
+  | Readonly<{
+      uses: string | undefined
+      version: unknown
+      beforeImageSmoke: boolean
+    }>
+  | undefined
+> {
+  const workflow = await readWorkflow(path)
+  const steps = workflow.jobs?.publish?.steps ?? []
+  const setupIndex = steps.findIndex(
+    ({ name }) => name === 'Setup Docker Compose',
+  )
+  if (setupIndex === -1) return undefined
+
+  const smokeIndex = steps.findIndex(({ run }) =>
+    run?.includes('scripts/oci/run-image-smoke.ts'),
+  )
+  const setup = steps[setupIndex]!
+  return Object.freeze({
+    uses: setup.uses,
+    version: setup.with?.version,
+    beforeImageSmoke: smokeIndex !== -1 && setupIndex < smokeIndex,
+  })
+}
+
 describe('CI workflow Docker Compose contract', () => {
   it('pins the supported Compose release before every full gate', async () => {
     await expect(
@@ -73,6 +99,16 @@ describe('CI workflow Docker Compose contract', () => {
     await expect(
       projectComposeSetup('.github/workflows/stage-image.yml', 'gate'),
     ).resolves.toEqual(composeSetup)
+  })
+
+  it('pins the supported Compose release before published image smoke', async () => {
+    await expect(
+      projectPublishComposeSetup('.github/workflows/stage-image.yml'),
+    ).resolves.toEqual({
+      uses: 'docker/setup-compose-action@4eb059ff7f16592f9c84d5ca339c53cb7c5064e2',
+      version: 'v2.39.4',
+      beforeImageSmoke: true,
+    })
   })
 
   it('runs the exact image pipeline for stage pushes and pull requests', async () => {
