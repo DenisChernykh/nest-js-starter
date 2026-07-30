@@ -89,6 +89,7 @@ there. The API does not run migrations; run the migrator role first.
 - `docs/architecture/module-boundaries.md` — five module layers and allowed dependencies;
 - `docs/architecture/runtime-lifecycle.md` — startup, readiness and shutdown;
 - `docs/architecture/openapi-contracts.md` — committed wire contract;
+- `docs/runbooks/deployment-preparation.md` — repository, GHCR and environment-input readiness before any hosted deployment;
 - `docs/runbooks/` — local PostgreSQL, Redis loss, telemetry and image publication.
 
 The core grows only from a concrete consumer and failure model. Queues, object
