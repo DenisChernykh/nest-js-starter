@@ -14,3 +14,6 @@ export interface LoginRateLimiterPort {
   /** Consumes one attempt in both buckets or fails closed on dependency loss. */
   consume(input: LoginRateLimitInput): Promise<LoginRateLimitDecision>
 }
+
+/** Injection token for distributed login-attempt coordination. */
+export const LOGIN_RATE_LIMITER: unique symbol = Symbol('LOGIN_RATE_LIMITER')

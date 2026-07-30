@@ -152,10 +152,49 @@ export default tseslint.config(
     },
   },
   {
-    files: [
-      'src/modules/*/application/**/*.ts',
-      'src/shared/application/**/*.ts',
-    ],
+    files: ['src/modules/*/application/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@nestjs/common',
+              allowImportNames: ['Inject', 'Injectable'],
+              message:
+                'Module application code may use only Inject and Injectable as Nest DI metadata.',
+            },
+          ],
+          patterns: [
+            { group: ['@test/**'] },
+            {
+              regex:
+                '^@nestjs/(?!common$)|^@prisma/|^@opentelemetry/|^express$|^ioredis$|^pino$|^redis$',
+              message:
+                'Application code depends on ports; only Nest DI metadata is allowed.',
+            },
+            {
+              group: [
+                '@/bootstrap',
+                '@/bootstrap/**',
+                '@/platform',
+                '@/platform/**',
+                '@/modules/*/composition',
+                '@/modules/*/composition/**',
+                '@/modules/*/infrastructure',
+                '@/modules/*/infrastructure/**',
+                '@/modules/*/presentation',
+                '@/modules/*/presentation/**',
+              ],
+              message: 'Application code cannot depend on outer adapters.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/shared/application/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -172,7 +211,7 @@ export default tseslint.config(
                 'pino',
                 'redis',
               ],
-              message: 'Application code depends on ports, not frameworks.',
+              message: 'Shared application code must remain framework-free.',
             },
             {
               group: [
@@ -187,7 +226,8 @@ export default tseslint.config(
                 '@/modules/*/presentation',
                 '@/modules/*/presentation/**',
               ],
-              message: 'Application code cannot depend on outer adapters.',
+              message:
+                'Shared application code cannot depend on modules or outer adapters.',
             },
           ],
         },

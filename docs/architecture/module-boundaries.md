@@ -8,6 +8,10 @@ five local layers.
 - `domain` imports its own domain through relative paths and may import
   `src/shared/domain`; it never imports another module.
 - `application` imports its own domain/application and stable shared contracts.
+  Runtime application classes may additionally use only `Inject` and
+  `Injectable` from `@nestjs/common` as dependency-injection metadata.
+  Constructor dependencies remain application ports; application code never
+  imports adapter classes.
 - `infrastructure` implements application ports and may use platform adapters.
 - `presentation` calls application contracts; it never imports persistence or
   Redis adapters.
@@ -43,6 +47,13 @@ module-specific errors or codes.
 `platform` implements technical capabilities and never imports business
 modules. `shared/domain` and `shared/application` contain only contracts with at
 least two independent consumers; they never import modules or platform code.
+Both shared layers remain framework-free.
+
+Nest dependency-injection metadata is a narrow exception for module-local
+application classes, not permission to use Nest as an application API.
+Application code cannot import HTTP exceptions, `Logger`, `ConfigService`, any
+other Nest package, Prisma, Redis, presentation, infrastructure, composition,
+platform or bootstrap code.
 
 ## Empty layers
 

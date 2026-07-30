@@ -1,17 +1,31 @@
+import { Inject, Injectable } from '@nestjs/common'
+
 import {
   AuthDependencyUnavailableError,
   AuthError,
   AuthenticationFailedError,
   AuthRateLimitedError,
 } from './auth-errors'
-import type { AuthPersistencePort } from './auth-persistence.port'
-import type { LoginRateLimiterPort } from './login-rate-limiter.port'
-import type { PasswordHasherPort } from './password-hasher.port'
-import type {
-  IssuedBrowserSession,
-  SessionStorePort,
-} from './session-store.port'
-import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
+import {
+  AUTH_AUDIT,
+  NOOP_AUTH_AUDIT,
+  type AuthAuditPort,
+} from './auth-audit.port'
+import {
+  AUTH_PERSISTENCE,
+  type AuthPersistencePort,
+} from './auth-persistence.port'
+import { AUTH_DUMMY_PASSWORD_HASH } from './auth.types'
+import {
+  LOGIN_RATE_LIMITER,
+  type LoginRateLimiterPort,
+} from './login-rate-limiter.port'
+import {
+  PASSWORD_HASHER,
+  type PasswordHasherPort,
+} from './password-hasher.port'
+import type { IssuedBrowserSession } from './session-store.port'
+import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Untrusted login fields plus safe request metadata. */
 export interface LoginInput {
@@ -24,13 +38,20 @@ export interface LoginInput {
 }
 
 /** Executes generic-failure login and issues an opaque browser session. */
+@Injectable()
 export class LoginUseCase {
   public constructor(
+    @Inject(AUTH_PERSISTENCE)
     private readonly persistence: AuthPersistencePort,
+    @Inject(PASSWORD_HASHER)
     private readonly passwords: PasswordHasherPort,
+    @Inject(LOGIN_RATE_LIMITER)
     private readonly limiter: LoginRateLimiterPort,
+    @Inject(SESSION_STORE)
     private readonly sessions: SessionStorePort,
+    @Inject(AUTH_DUMMY_PASSWORD_HASH)
     private readonly dummyPasswordHash: string,
+    @Inject(AUTH_AUDIT)
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}
 

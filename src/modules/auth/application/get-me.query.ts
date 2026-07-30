@@ -1,3 +1,5 @@
+import { Injectable } from '@nestjs/common'
+
 import type { AuthenticatedPrincipal } from './auth.types'
 import type { PermissionKey } from './permission'
 
@@ -10,6 +12,7 @@ export interface CurrentUserView {
 }
 
 /** Projects the already refreshed authenticated principal without new I/O. */
+@Injectable()
 export class GetMeQuery {
   public execute(principal: AuthenticatedPrincipal): CurrentUserView {
     return Object.freeze({

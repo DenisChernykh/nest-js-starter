@@ -30,6 +30,9 @@ export interface AuthAuditPort {
   emit(event: AuthAuditEvent): void
 }
 
+/** Injection token for security-sensitive auth audit events. */
+export const AUTH_AUDIT: unique symbol = Symbol('AUTH_AUDIT')
+
 /** No-op audit boundary used only by isolated application construction. */
 export const NOOP_AUTH_AUDIT: AuthAuditPort = Object.freeze({
   emit: () => undefined,

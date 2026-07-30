@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Inject, Injectable } from '@nestjs/common'
 
 import {
   AuthPersistenceIntegrityError,
@@ -14,8 +14,11 @@ import type {
 } from '../application/auth.types'
 import { mapAuthProjection, mapCredentialSnapshot } from './prisma-auth.mapper'
 import { Prisma } from '@/generated/prisma/client'
-import type { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
-import type { TransactionPort } from '@/shared/application/transaction.port'
+import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
+import {
+  TRANSACTION_PORT,
+  type TransactionPort,
+} from '@/shared/application/transaction.port'
 
 const authProjectionInclude = {
   roles: { select: { roleKey: true } },
@@ -25,7 +28,9 @@ const authProjectionInclude = {
 @Injectable()
 export class PrismaAuthRepository implements AuthPersistencePort {
   public constructor(
+    @Inject(PrismaClientProvider)
     private readonly provider: PrismaClientProvider,
+    @Inject(TRANSACTION_PORT)
     private readonly transaction: TransactionPort,
   ) {}
 

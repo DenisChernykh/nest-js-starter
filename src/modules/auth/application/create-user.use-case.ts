@@ -1,9 +1,21 @@
+import { Inject, Injectable } from '@nestjs/common'
+
+import {
+  AUTH_AUDIT,
+  NOOP_AUTH_AUDIT,
+  type AuthAuditPort,
+} from './auth-audit.port'
 import { UnknownRoleAssignmentError } from './auth-errors'
-import type { AuthPersistencePort } from './auth-persistence.port'
+import {
+  AUTH_PERSISTENCE,
+  type AuthPersistencePort,
+} from './auth-persistence.port'
 import type { CreateUserResult } from './auth.types'
-import type { PasswordHasherPort } from './password-hasher.port'
-import type { RoleRegistry } from './role-registry'
-import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
+import {
+  PASSWORD_HASHER,
+  type PasswordHasherPort,
+} from './password-hasher.port'
+import { RoleRegistry } from './role-registry'
 
 /** Operator-supplied values for provisioning one product user. */
 export interface CreateUserInput {
@@ -15,11 +27,16 @@ export interface CreateUserInput {
 export type { CreateUserResult } from './auth.types'
 
 /** Validates code-owned roles and atomically provisions one durable user. */
+@Injectable()
 export class CreateUserUseCase {
   public constructor(
+    @Inject(AUTH_PERSISTENCE)
     private readonly persistence: AuthPersistencePort,
+    @Inject(PASSWORD_HASHER)
     private readonly passwords: PasswordHasherPort,
+    @Inject(RoleRegistry)
     private readonly roles: RoleRegistry,
+    @Inject(AUTH_AUDIT)
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}
 

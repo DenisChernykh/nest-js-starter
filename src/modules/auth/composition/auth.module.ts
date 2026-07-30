@@ -1,20 +1,30 @@
 import { Module, type DynamicModule } from '@nestjs/common'
 import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core'
 
+import { AUTH_AUDIT } from '../application/auth-audit.port'
+import { AUTH_PERSISTENCE } from '../application/auth-persistence.port'
+import {
+  AUTH_DUMMY_PASSWORD_HASH,
+  AUTH_SESSION_CLEANUP_OBSERVER,
+  NOOP_AUTH_SESSION_CLEANUP_OBSERVER,
+} from '../application/auth.types'
 import { AuthenticateSessionUseCase } from '../application/authenticate-session.use-case'
 import { ChangePasswordUseCase } from '../application/change-password.use-case'
 import { GetCsrfTokenQuery } from '../application/get-csrf-token.query'
 import { GetMeQuery } from '../application/get-me.query'
+import { LOGIN_RATE_LIMITER } from '../application/login-rate-limiter.port'
 import { ListSessionsQuery } from '../application/list-sessions.query'
 import { LoginUseCase } from '../application/login.use-case'
 import { LogoutAllUseCase } from '../application/logout-all.use-case'
 import { LogoutUseCase } from '../application/logout.use-case'
+import { PASSWORD_HASHER } from '../application/password-hasher.port'
 import {
   createAuthRoleRegistry,
   RoleRegistry,
   type RoleDefinition,
 } from '../application/role-registry'
 import { RevokeSessionUseCase } from '../application/revoke-session.use-case'
+import { SESSION_STORE } from '../application/session-store.port'
 import { Argon2PasswordHasher } from '../infrastructure/argon2-password.hasher'
 import { NodeAuthCryptoAdapter } from '../infrastructure/node-auth-crypto.adapter'
 import { PrismaAuthRepository } from '../infrastructure/prisma-auth.repository'
@@ -36,14 +46,9 @@ import { SessionCsrfGuard } from '../presentation/session-csrf.guard'
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { DatabaseModule } from '@/platform/database/database.module'
-import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisModule } from '@/platform/redis/redis.module'
 import { REDIS_COORDINATION_COMMAND_EXECUTOR } from '@/platform/redis/redis.tokens'
-import {
-  TRANSACTION_PORT,
-  type TransactionPort,
-} from '@/shared/application/transaction.port'
 import {
   DOCS_ACCESS_POLICY,
   type DocsAccessPolicy,
@@ -74,15 +79,7 @@ export interface AuthModuleOptions {
       inject: [AUTH_ROLE_DEFINITIONS],
       useFactory: createAuthRoleRegistry,
     },
-    {
-      provide: PrismaAuthRepository,
-      inject: [PrismaClientProvider, TRANSACTION_PORT],
-      useFactory: (
-        provider: PrismaClientProvider,
-        transaction: TransactionPort,
-      ): PrismaAuthRepository =>
-        new PrismaAuthRepository(provider, transaction),
-    },
+    PrismaAuthRepository,
     {
       provide: RedisSessionStore,
       inject: [
@@ -126,41 +123,18 @@ export interface AuthModuleOptions {
           windowMs: config.auth.loginWindowMs,
         }),
     },
+    { provide: AUTH_PERSISTENCE, useExisting: PrismaAuthRepository },
+    { provide: PASSWORD_HASHER, useExisting: Argon2PasswordHasher },
+    { provide: LOGIN_RATE_LIMITER, useExisting: RedisLoginRateLimiter },
+    { provide: SESSION_STORE, useExisting: RedisSessionStore },
+    { provide: AUTH_AUDIT, useExisting: AuthAuditLogger },
+    { provide: AUTH_DUMMY_PASSWORD_HASH, useValue: dummyPasswordHash },
     {
-      provide: LoginUseCase,
-      inject: [
-        PrismaAuthRepository,
-        Argon2PasswordHasher,
-        RedisLoginRateLimiter,
-        RedisSessionStore,
-        AuthAuditLogger,
-      ],
-      useFactory: (
-        persistence: PrismaAuthRepository,
-        passwords: Argon2PasswordHasher,
-        limiter: RedisLoginRateLimiter,
-        sessions: RedisSessionStore,
-        audit: AuthAuditLogger,
-      ): LoginUseCase =>
-        new LoginUseCase(
-          persistence,
-          passwords,
-          limiter,
-          sessions,
-          dummyPasswordHash,
-          audit,
-        ),
+      provide: AUTH_SESSION_CLEANUP_OBSERVER,
+      useValue: NOOP_AUTH_SESSION_CLEANUP_OBSERVER,
     },
-    {
-      provide: AuthenticateSessionUseCase,
-      inject: [RedisSessionStore, PrismaAuthRepository, RoleRegistry],
-      useFactory: (
-        sessions: RedisSessionStore,
-        persistence: PrismaAuthRepository,
-        roles: RoleRegistry,
-      ): AuthenticateSessionUseCase =>
-        new AuthenticateSessionUseCase(sessions, persistence, roles),
-    },
+    LoginUseCase,
+    AuthenticateSessionUseCase,
     {
       provide: DOCS_ACCESS_POLICY,
       inject: [
@@ -181,81 +155,12 @@ export interface AuthModuleOptions {
             )
           : null,
     },
-    {
-      provide: LogoutUseCase,
-      inject: [RedisSessionStore, AuthAuditLogger],
-      useFactory: (
-        sessions: RedisSessionStore,
-        audit: AuthAuditLogger,
-      ): LogoutUseCase => new LogoutUseCase(sessions, audit),
-    },
-    {
-      provide: GetCsrfTokenQuery,
-      inject: [RedisSessionStore],
-      useFactory: (sessions: RedisSessionStore): GetCsrfTokenQuery =>
-        new GetCsrfTokenQuery(sessions),
-    },
-    {
-      provide: ListSessionsQuery,
-      inject: [RedisSessionStore],
-      useFactory: (sessions: RedisSessionStore): ListSessionsQuery =>
-        new ListSessionsQuery(sessions),
-    },
-    {
-      provide: RevokeSessionUseCase,
-      inject: [RedisSessionStore, AuthAuditLogger],
-      useFactory: (
-        sessions: RedisSessionStore,
-        audit: AuthAuditLogger,
-      ): RevokeSessionUseCase => new RevokeSessionUseCase(sessions, audit),
-    },
-    {
-      provide: LogoutAllUseCase,
-      inject: [
-        PrismaAuthRepository,
-        TRANSACTION_PORT,
-        RedisSessionStore,
-        AuthAuditLogger,
-      ],
-      useFactory: (
-        persistence: PrismaAuthRepository,
-        transaction: TransactionPort,
-        sessions: RedisSessionStore,
-        audit: AuthAuditLogger,
-      ): LogoutAllUseCase =>
-        new LogoutAllUseCase(
-          persistence,
-          transaction,
-          sessions,
-          undefined,
-          audit,
-        ),
-    },
-    {
-      provide: ChangePasswordUseCase,
-      inject: [
-        PrismaAuthRepository,
-        Argon2PasswordHasher,
-        TRANSACTION_PORT,
-        RedisSessionStore,
-        AuthAuditLogger,
-      ],
-      useFactory: (
-        persistence: PrismaAuthRepository,
-        passwords: Argon2PasswordHasher,
-        transaction: TransactionPort,
-        sessions: RedisSessionStore,
-        audit: AuthAuditLogger,
-      ): ChangePasswordUseCase =>
-        new ChangePasswordUseCase(
-          persistence,
-          passwords,
-          transaction,
-          sessions,
-          undefined,
-          audit,
-        ),
-    },
+    LogoutUseCase,
+    GetCsrfTokenQuery,
+    ListSessionsQuery,
+    RevokeSessionUseCase,
+    LogoutAllUseCase,
+    ChangePasswordUseCase,
     {
       provide: AuthCookieAdapter,
       inject: [RuntimeConfigService],

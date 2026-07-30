@@ -62,3 +62,6 @@ export interface SessionStorePort {
   /** Revokes the currently indexed sessions for one user. */
   revokeAll(userId: string): Promise<number>
 }
+
+/** Injection token for the opaque browser-session coordination boundary. */
+export const SESSION_STORE: unique symbol = Symbol('SESSION_STORE')

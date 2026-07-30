@@ -1,10 +1,19 @@
-import type { SessionStorePort } from './session-store.port'
-import { NOOP_AUTH_AUDIT, type AuthAuditPort } from './auth-audit.port'
+import { Inject, Injectable } from '@nestjs/common'
+
+import {
+  AUTH_AUDIT,
+  NOOP_AUTH_AUDIT,
+  type AuthAuditPort,
+} from './auth-audit.port'
+import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Revokes the authenticated browser session by its public identifier. */
+@Injectable()
 export class LogoutUseCase {
   public constructor(
+    @Inject(SESSION_STORE)
     private readonly sessions: SessionStorePort,
+    @Inject(AUTH_AUDIT)
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}
 

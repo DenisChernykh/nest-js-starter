@@ -1,17 +1,25 @@
+import { Inject, Injectable } from '@nestjs/common'
+
 import {
   AuthDependencyUnavailableError,
   AuthError,
   AuthenticationRequiredError,
 } from './auth-errors'
-import type { AuthPersistencePort } from './auth-persistence.port'
+import {
+  AUTH_PERSISTENCE,
+  type AuthPersistencePort,
+} from './auth-persistence.port'
 import type { AuthenticatedPrincipal } from './auth.types'
-import type { RoleRegistry } from './role-registry'
-import type { SessionStorePort } from './session-store.port'
+import { RoleRegistry } from './role-registry'
+import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Authenticates one opaque token against fresh durable account state. */
+@Injectable()
 export class AuthenticateSessionUseCase {
   public constructor(
+    @Inject(SESSION_STORE)
     private readonly sessions: SessionStorePort,
+    @Inject(AUTH_PERSISTENCE)
     private readonly persistence: AuthPersistencePort,
     private readonly roles: RoleRegistry,
   ) {}
