@@ -154,8 +154,9 @@ Host `node_modules`, `dist`, Git state and environment files are not
 synchronized. Source changes must not recreate PostgreSQL, Redis, Alloy, Loki,
 Tempo or Grafana.
 
-The documented local prerequisite is a Docker Compose release that supports
-the selected Watch actions and `initial_sync`.
+`initial_sync` requires Docker Compose `v2.39.4` or newer. CI pins that minimum
+version so the lower compatibility boundary stays executable; the local
+Docker Desktop version may be newer.
 
 ### Grafana Alloy
 

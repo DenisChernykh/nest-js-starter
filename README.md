@@ -6,13 +6,16 @@ trace-only OpenTelemetry.
 
 ## Local workflow
 
-Use Node `24.18.0` and pnpm `11.15.1`. Install those exact versions with a
-user-level Node or package manager, then use the short `pnpm` commands below.
-The repository pins both versions through `engines` and `packageManager`.
+Use Node `24.18.0`, pnpm `11.15.1` and Docker Compose `2.39.4` or newer.
+Install those versions with a user-level Node or package manager and Docker
+Desktop, then use the short `pnpm` commands below. The repository pins Node and
+pnpm through `engines` and `packageManager`; CI pins the minimum compatible
+Compose release.
 
 ```sh
 node --version
 pnpm --version
+docker compose version
 pnpm install --frozen-lockfile
 cp .env.example .env
 pnpm dev

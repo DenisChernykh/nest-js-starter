@@ -2,11 +2,13 @@
 
 ## Happy path
 
-Use the repository-pinned Node.js `24.18.0` and pnpm `11.15.1`:
+Use the repository-pinned Node.js `24.18.0`, pnpm `11.15.1` and Docker Compose
+`2.39.4` or newer:
 
 ```sh
 node --version
 pnpm --version
+docker compose version
 pnpm install --frozen-lockfile
 cp .env.example .env
 pnpm dev
