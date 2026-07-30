@@ -18,3 +18,29 @@ safe error serialization and auth audit events. OpenTelemetry is intentionally
 trace-only: OTLP traces, HTTP/pg/Redis instrumentation and
 `SanitizingSpanExporter` remain. Runtime metrics, metric exporters and auth
 telemetry adapters are not part of the foundation.
+
+## Local signal pipeline
+
+The canonical local workflow keeps application code vendor-neutral:
+
+```text
+Nest API --Pino JSON stdout--> Docker logs --> Alloy --> Loki --> Grafana
+Nest API --trace-only OTLP/HTTP-------------> Alloy --> Tempo --> Grafana
+```
+
+Alloy discovers only the `api` container from the current Compose project.
+`service`, `environment` and `level` are the bounded Loki labels. Request ID,
+trace ID, span ID, event, module and reason code remain structured metadata or
+log content so their cardinality cannot expand the index.
+
+Loki and Tempo retain local data for `168h` in separate named volumes. Grafana
+also keeps its state in a named volume. Only the API, Alloy OTLP receiver and
+Grafana UI publish loopback ports; Loki and Tempo are reachable only over the
+Compose network.
+
+Alloy reads the Docker socket through a read-only mount scoped to this local
+Compose project. Read-only access is still a privileged host boundary.
+
+Alloy, Loki, Tempo and Grafana are not API startup, liveness or readiness
+dependencies. Their failure can lose new local telemetry, but it must not stop
+the API from serving requests.
