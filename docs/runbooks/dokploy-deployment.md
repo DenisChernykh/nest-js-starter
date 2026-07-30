@@ -13,6 +13,16 @@ returns deployment records with <code>deploymentId</code> and
 Sources: [Dokploy OpenAPI](https://raw.githubusercontent.com/Dokploy/dokploy/canary/openapi.json)
 and [Dokploy deployment schema](https://raw.githubusercontent.com/Dokploy/dokploy/canary/packages/server/src/db/schema/deployment.ts).
 
+## Preparation prerequisite
+
+Complete [deployment-preparation.md](deployment-preparation.md) and retain its
+redacted readiness record before any mutation in this adapter. Repository
+documentation alone is not hosted evidence: the record must identify a
+target-owned digest/revision pair from a fully successful Stage workflow and
+named owners for every environment input. Stop if Dokploy, VPS, domain/TLS,
+PostgreSQL, Redis, telemetry, backup storage, or credentials are still being
+inferred rather than supplied by the authorized environment owner.
+
 ## Environment and safety boundary
 
 Use a short-lived API key with only the permissions needed for this
