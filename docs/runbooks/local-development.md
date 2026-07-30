@@ -29,7 +29,9 @@ PostgreSQL becomes healthy first. The separate `migrator` container runs
 starts only after that successful exit and healthy Redis. The long-running API
 process never applies migrations. Inside the API container, the internal
 `pnpm dev:api` command generates Prisma Client and starts Nest CLI watch; it is
-not the public workflow command.
+not the public workflow command. Nest runs the API child without an
+intermediate shell so recompilation can terminate the previous listener before
+starting the next one.
 
 The API writes Pino JSON to stdout. Docker owns those logs, Alloy reads the API
 container through the Docker socket and forwards records to Loki. The API sends

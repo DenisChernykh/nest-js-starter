@@ -62,7 +62,7 @@ that migrations run as a separate one-shot role before the API starts.
 
 ### Keep host API and add only observability containers
 
-This preserves the current `nest start --watch` process on macOS, but Docker
+This preserves the current `nest start --watch --no-shell` process on macOS, but Docker
 stdout discovery cannot collect its logs. Adding a development log file or
 direct network transport would create a second logging path and diverge from
 the container runtime boundary.
@@ -212,7 +212,8 @@ binding.
   Watch mode. Named API, Alloy, Loki, Tempo and Grafana services pull in
   PostgreSQL, Redis and the one-shot migrator through explicit dependencies.
 - `pnpm dev:api`: internal Nest CLI watch command used by the development
-  image. It generates Prisma Client and runs `nest start --watch`.
+  image. It generates Prisma Client and runs `nest start --watch --no-shell` so
+  Nest CLI owns the actual API child process across recompilations.
 - `pnpm dev:host`: limited macOS debugging escape hatch. It runs `dev:api` with
   `OTEL_SDK_DISABLED=true`, writes logs only to the terminal and expects
   PostgreSQL/Redis plus committed migrations to be prepared separately.

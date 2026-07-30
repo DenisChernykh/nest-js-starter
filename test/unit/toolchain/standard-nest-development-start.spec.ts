@@ -26,7 +26,7 @@ describe('standard Nest development start contract', () => {
     const scripts = readPackageManifest().scripts ?? {}
 
     expect(scripts['dev:api']).toBe(
-      'corepack pnpm@11.15.1 run prisma:generate && nest start --watch',
+      'corepack pnpm@11.15.1 run prisma:generate && nest start --watch --no-shell',
     )
     expect(scripts['dev:api']).not.toContain('tsx watch')
     expect(scripts['dev:api']).not.toContain('docker')

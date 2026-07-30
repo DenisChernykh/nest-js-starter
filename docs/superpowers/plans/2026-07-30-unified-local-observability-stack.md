@@ -128,7 +128,7 @@ it('keeps dev:api as the internal Nest CLI watcher', () => {
   const scripts = readPackageManifest().scripts ?? {}
 
   expect(scripts['dev:api']).toBe(
-    'corepack pnpm@11.15.1 run prisma:generate && nest start --watch',
+    'corepack pnpm@11.15.1 run prisma:generate && nest start --watch --no-shell',
   )
   expect(scripts['dev:api']).not.toContain('tsx watch')
   expect(scripts['dev:api']).not.toContain('docker')
@@ -185,7 +185,7 @@ Set only these scripts:
 ```json
 {
   "dev": "docker compose --profile development --profile observability up --watch api alloy loki tempo grafana",
-  "dev:api": "corepack pnpm@11.15.1 run prisma:generate && nest start --watch",
+  "dev:api": "corepack pnpm@11.15.1 run prisma:generate && nest start --watch --no-shell",
   "dev:down": "docker compose --profile development --profile observability stop api migrator alloy loki tempo grafana postgres redis-coordination",
   "dev:host": "OTEL_SDK_DISABLED=true corepack pnpm@11.15.1 run dev:api"
 }
