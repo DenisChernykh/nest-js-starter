@@ -10,8 +10,19 @@ interface WorkflowStep {
 }
 
 interface WorkflowDocument {
+  readonly on?: Readonly<
+    Record<string, { readonly branches?: readonly string[] }>
+  >
   readonly jobs?: Readonly<
-    Record<string, { readonly steps?: readonly WorkflowStep[] }>
+    Record<
+      string,
+      {
+        readonly if?: string
+        readonly needs?: string
+        readonly permissions?: Readonly<Record<string, string>>
+        readonly steps?: readonly WorkflowStep[]
+      }
+    >
   >
 }
 
@@ -32,7 +43,7 @@ async function projectComposeSetup(
     }>
   | undefined
 > {
-  const workflow = parse(await readFile(path, 'utf8')) as WorkflowDocument
+  const workflow = await readWorkflow(path)
   const steps = workflow.jobs?.[jobName]?.steps ?? []
   const setupIndex = steps.findIndex(
     ({ name }) => name === 'Setup Docker Compose',
@@ -50,6 +61,10 @@ async function projectComposeSetup(
   })
 }
 
+async function readWorkflow(path: string): Promise<WorkflowDocument> {
+  return parse(await readFile(path, 'utf8')) as WorkflowDocument
+}
+
 describe('CI workflow Docker Compose contract', () => {
   it('pins the supported Compose release before every full gate', async () => {
     await expect(
@@ -58,5 +73,27 @@ describe('CI workflow Docker Compose contract', () => {
     await expect(
       projectComposeSetup('.github/workflows/stage-image.yml', 'gate'),
     ).resolves.toEqual(composeSetup)
+  })
+
+  it('runs the exact image pipeline for stage pushes and pull requests', async () => {
+    const workflow = await readWorkflow('.github/workflows/stage-image.yml')
+
+    expect(workflow.on).toEqual({
+      pull_request: { branches: ['stage'] },
+      push: { branches: ['stage'] },
+    })
+  })
+
+  it('publishes only stage pushes and trusted same-repository pull requests', async () => {
+    const workflow = await readWorkflow('.github/workflows/stage-image.yml')
+
+    expect(workflow.jobs?.publish).toMatchObject({
+      if: "github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')",
+      needs: 'gate',
+      permissions: {
+        contents: 'read',
+        packages: 'write',
+      },
+    })
   })
 })

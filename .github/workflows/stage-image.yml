@@ -3,6 +3,8 @@ name: Stage image
 on:
   push:
     branches: [stage]
+  pull_request:
+    branches: [stage]
 
 permissions:
   contents: read
@@ -35,6 +37,7 @@ jobs:
 
   publish:
     needs: gate
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     permissions:
       contents: read
       packages: write
