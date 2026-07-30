@@ -37,6 +37,13 @@ adapter; short links make the new entry point discoverable.
   digest and run OCI smoke.
 - A pushed digest from a failed Trivy or smoke run exists in GHCR but is not
   approved for deployment.
+- The current Dokploy handoff supports private authenticated GHCR only. Public
+  anonymous GHCR is a GitHub capability outside the adapter contract until
+  intentionally implemented.
+- Keep the Dokploy adapter's operation-specific byte-for-byte pin guard. After
+  fresh target Stage evidence and before any future mutation, descendants and
+  `backend-codex` replace every starter-specific candidate, revision, and
+  rollback pin with one reviewed target-owned pair.
 - Use only repository-pinned Node `24.18.0` and pnpm `11.15.1` for verification.
 - Finish with `pnpm check:quick`; documentation checks do not prove any hosted
   operation occurred.
@@ -139,29 +146,28 @@ State at the top that it prepares repository contracts and a future input
 bundle but performs no Dokploy, VPS, DNS, database, Redis, telemetry, or S3
 mutation.
 
-Under `Два режима применения`, define:
+Under `Два режима применения`, define one Russian normative formulation:
 
-```text
-Fresh descendant:
-replace every starter-owned identity before the first Stage publication.
+- fresh descendants replace every starter-owned identity before the first
+  Stage publication;
+- existing backend adoption audits the target, classifies each contract as
+  `adopt` / `reconcile` / `reject`, preserves product modules, replaces identity
+  atomically, and requires fresh target evidence.
 
-Existing backend adoption:
-audit the target, classify each contract as adopt/reconcile/reject, preserve
-product modules, replace identity atomically, and require fresh target evidence.
-```
+Under `Уровни готовности`, define separate acceptance in one Russian normative
+formulation:
 
-Under `Уровни готовности`, define separate acceptance:
+- repository readiness binds a successful target Stage workflow run ID/URL,
+  revision, digest/OCI revision pair, and package checks;
+- environment-input readiness records owners and concrete non-secret values or
+  protected-record references for domain/TLS/proxy, PostgreSQL roles,
+  persistent Redis, auth secret-provider contract, telemetry, backup, and
+  private authenticated GHCR pull; hosted resources are not claimed as
+  provisioned.
 
-```text
-Repository ready:
-the target repository has passed its own Stage publication through Trivy and
-OCI smoke and has an approved target-owned digest/revision pair.
-
-Environment inputs ready:
-owners and non-secret expected values are recorded for domain/TLS/proxy,
-PostgreSQL roles, persistent Redis, auth secrets, telemetry, backup, and future
-GHCR pull access; hosted resources are not claimed as provisioned.
-```
+State the phase boundary explicitly: canonical Steps 1–4 are pre-publication
+prerequisites; then the target Stage workflow runs; Steps 5–9 close publication,
+package, and environment evidence.
 
 - [ ] **Step 4: Add the target identity manifest and adoption rules**
 
@@ -213,10 +219,13 @@ State all of the following:
   visibility, and organization policy.
 - A new personal-account package is private by default. Making it public is an
   explicit irreversible operator decision.
-- A public GHCR package can be pulled anonymously.
-- A future private-package pull from Dokploy uses a dedicated identity and a
-  personal access token (classic) limited to `read:packages`; create that token
-  only in the later authorized Dokploy setup window.
+- GitHub can pull a public GHCR package anonymously, but the current Dokploy
+  adapter does not support that path because its provider mutation always
+  requires username/password.
+- The supported handoff remains private authenticated GHCR. Its future Dokploy
+  pull uses a dedicated identity and a personal access token (classic) limited
+  to `read:packages`; create them only in the later authorized Dokploy setup
+  window.
 - Record no token value or registry password in the runbook/readiness record.
 
 Link to the official primary sources:
@@ -255,6 +264,15 @@ State these failure rules:
 - a pushed digest from a failed Trivy or smoke run is unapproved;
 - a tag, including the commit-SHA tag, is not a deployment reference;
 - starter CI/digest evidence cannot approve `backend-codex`.
+
+State the portability gate:
+
+- the Dokploy adapter keeps its operation-specific byte-for-byte equality guard;
+- after successful target Stage evidence and before any future Dokploy mutation,
+  a fresh descendant or `backend-codex` replaces every starter-specific
+  candidate, revision, and rollback pin in its target runbooks with one reviewed
+  target-owned pair;
+- historical starter pins are not target defaults or reusable evidence.
 
 - [ ] **Step 7: Document production and infrastructure input contracts**
 
@@ -320,34 +338,46 @@ Include a copyable record containing no secret slots:
 ## Readiness record
 
 - Target repository:
+- Target identity manifest reference:
+- Stage workflow run ID/URL:
 - Stage revision:
-- Approved GHCR digest:
+- Approved GHCR image@digest:
 - OCI revision label:
-- Full gate: passed/failed
-- Trivy HIGH/CRITICAL gate: passed/failed
-- Pull-by-digest smoke: passed/failed
-- GHCR visibility/access policy: private/public and owner
+- Full gate result and evidence reference:
+- Trivy HIGH/CRITICAL result and evidence reference:
+- Pull-same-digest OCI smoke result and evidence reference:
+- GHCR repository linkage check and evidence reference:
+- GHCR Actions access check and evidence reference:
+- GHCR visibility: private; owner and evidence reference:
+- GitHub organization policy check and evidence reference:
+- Target-owned Dokploy candidate/revision/rollback pins review reference:
 - Runtime configuration contract owner:
+- Runtime non-secret expected values/reference:
 - PostgreSQL role contract owner:
+- PostgreSQL database/migrator/runtime role names/reference:
 - Coordination Redis durability owner:
+- Redis key prefix and durability inputs/reference:
 - Domain/TLS/proxy input owner:
+- Public origin/browser origins/trusted proxy CIDRs/reference:
+- Auth secret provider and four-secret contract owner/reference:
 - Telemetry decision owner:
+- Telemetry enabled/disabled input/reference:
 - Backup/restore policy owner:
+- Backup target/prefix/schedule/retention/restore inputs/reference:
+- Future GHCR pull identity owner and authorized creation-window reference:
 - Remaining hosted prerequisites:
 ```
 
-Explain that the labels after each colon contain only identifiers, status, or
-owner names; connection URLs and credentials are forbidden.
+Explain that fields contain only identifiers, results, owner names, concrete
+non-secret values, or protected-record references. Credentials, registry
+passwords, token/secret values, and connection URLs are forbidden.
 
-End with a fail-closed stop gate:
-
-```text
-Stop before Dokploy unless repository readiness has fresh target evidence and
-every environment input has a named owner. Do not infer that Dokploy, VPS, DNS,
-PostgreSQL, Redis, telemetry, or S3 exists. Continue later with
-docs/runbooks/dokploy-deployment.md only under explicit hosted-operation
-authorization.
-```
+End with one Russian fail-closed Stop gate. It must require the exact workflow
+run/revision/digest linkage, full-gate/Trivy/pull-smoke references, all package
+checks, the reviewed target-owned pin replacement, and an owner plus concrete
+value/reference for every environment input. It must also forbid inferring
+Dokploy, VPS, DNS, PostgreSQL, Redis, telemetry, or S3 and permit continuation
+only under explicit hosted-operation authorization.
 
 - [ ] **Step 9: Verify the new runbook in isolation**
 
@@ -442,15 +472,21 @@ In `README.md` under `## Repository guide`, add this bullet before the generic
 After the title in `docs/runbooks/stage-image-publication.md`, add:
 
 ```markdown
-Complete [deployment-preparation.md](deployment-preparation.md) before treating
-this workflow as a target-owned publication contract. A fresh backend must
-replace starter identity first; an existing backend must produce its own
-target evidence.
+Complete Steps 1–4 of
+[deployment-preparation.md](deployment-preparation.md) before treating this
+workflow as a target-owned publication contract. Then run the target Stage
+workflow and return to Steps 5–9 to close publication, package and environment
+evidence. A fresh backend must replace starter identity before this run; an
+existing backend must produce its own target evidence.
 ```
 
 After the paragraph describing Trivy and OCI smoke, add:
 
 ```markdown
+The workflow pulls the same published digest from GHCR after Trivy and before
+OCI smoke. Preserve the binding order
+`Trivy -> pull same published digest -> OCI smoke`.
+
 The push creates or updates the GHCR package before those gates finish. A digest
 from a failed Trivy or OCI smoke step exists in the registry but is not approved
 for deployment.
@@ -469,11 +505,20 @@ After the opening paragraph and official-source links in
 
 Complete [deployment-preparation.md](deployment-preparation.md) and retain its
 redacted readiness record before any mutation in this adapter. Repository
-documentation alone is not hosted evidence: the record must identify a
-target-owned digest/revision pair from a fully successful Stage workflow and
-named owners for every environment input. Stop if Dokploy, VPS, domain/TLS,
-PostgreSQL, Redis, telemetry, backup storage, or credentials are still being
-inferred rather than supplied by the authorized environment owner.
+documentation alone is not hosted evidence: require the target Stage workflow
+run/revision/digest linkage, full-gate/Trivy/pull-smoke and package checks,
+reviewed target-owned candidate/revision/rollback pins, and concrete
+environment inputs or protected-record references with owners.
+
+Retain the operation-specific byte-for-byte pin guards. Historical starter pins
+are not target defaults or reusable evidence. The current adapter supports only
+private authenticated GHCR; public anonymous pull remains outside its contract.
+Require the dedicated future identity and PAT classic `read:packages` only in
+the authorized Dokploy window.
+
+Stop if Dokploy, VPS, domain/TLS, PostgreSQL, Redis, telemetry, backup storage,
+or credentials are still being inferred rather than supplied by the authorized
+environment owner.
 ```
 
 Do not alter the adapter API calls, credentials handling, polling, or pinned

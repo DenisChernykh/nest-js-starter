@@ -15,24 +15,14 @@ focused runbooks из [Source-of-truth map](#source-of-truth-map).
 
 ## Два режима применения
 
-```text
-Fresh descendant:
-replace every starter-owned identity before the first Stage publication.
-
-Existing backend adoption:
-audit the target, classify each contract as adopt/reconcile/reject, preserve
-product modules, replace identity atomically, and require fresh target evidence.
-```
-
-**Fresh descendant:** до первой публикации Stage замените каждую
-starter-owned identity на target-owned identity. Starter-значения нельзя
-оставлять как fallback или совместимый alias.
-
-**Existing backend adoption:** сначала проведите аудит target, затем
-классифицируйте каждый контракт как `adopt` / `reconcile` / `reject`, сохраните
-product modules и module-local boundaries, атомарно замените identity и получите
-свежие доказательства именно target repository. Не создавайте второй deployment
-architecture или переходный dual-mode путь.
+- **Fresh descendant:** до первой публикации Stage замените каждую
+  starter-owned identity на target-owned identity. Starter-значения нельзя
+  оставлять как fallback или совместимый alias.
+- **Existing backend adoption:** сначала проведите аудит target, затем
+  классифицируйте каждый контракт как `adopt` / `reconcile` / `reject`,
+  сохраните product modules и module-local boundaries, атомарно замените
+  identity и получите свежие доказательства именно target repository. Не
+  создавайте второй deployment architecture или переходный dual-mode путь.
 
 Оба режима сходятся к одним и тем же критериям repository readiness и
 environment-input readiness. Дополнительный аудит существующего backend не
@@ -40,29 +30,24 @@ environment-input readiness. Дополнительный аудит сущес�
 
 ## Уровни готовности
 
-```text
-Repository ready:
-the target repository has passed its own Stage publication through Trivy and
-OCI smoke and has an approved target-owned digest/revision pair.
-
-Environment inputs ready:
-owners and non-secret expected values are recorded for domain/TLS/proxy,
-PostgreSQL roles, persistent Redis, auth secrets, telemetry, backup, and future
-GHCR pull access; hosted resources are not claimed as provisioned.
-```
-
-**Repository ready:** target repository прошёл собственную публикацию Stage
-через Trivy и OCI smoke; для него зафиксирована одобренная target-owned пара
-immutable digest/revision. Gate считается пройденным только по свежему успешному
-workflow target, а не по PR, локальной сборке или историческому evidence другого
-repository.
-
-**Environment inputs ready:** для domain/TLS/proxy, PostgreSQL roles,
-persistent Redis, auth secrets, telemetry, backup и будущего GHCR pull access
-записаны владельцы и ожидаемые non-secret значения. Ни один hosted resource при
-этом не считается созданным, настроенным или доступным.
+- **Repository ready:** target repository прошёл собственную публикацию Stage
+  через Trivy и OCI smoke; workflow run ID/URL связывает target Stage revision,
+  одобренную target-owned пару immutable digest/revision и результаты package
+  checks. Gate считается пройденным только по свежему успешному workflow target,
+  а не по PR, локальной сборке или историческому evidence другого repository.
+- **Environment inputs ready:** для domain/TLS/proxy, PostgreSQL roles,
+  persistent Redis, auth secrets, telemetry, backup и будущего private
+  authenticated GHCR pull записаны владельцы и конкретные ожидаемые non-secret
+  значения либо ссылки на защищённые записи, содержащие эти значения. Ни один
+  hosted resource при этом не считается созданным, настроенным или доступным.
 
 Один уровень не доказывает другой. До перехода к Dokploy требуются оба.
+
+Канонический flow разделён на фазы. Сначала выполните шаги 1–4 как
+pre-publication prerequisites. Затем запустите target Stage workflow. Только
+после его завершения выполняйте шаги 5–9, чтобы проверить опубликованный
+artifact, закрыть package и environment evidence и сформировать readiness
+record.
 
 ## Шаг 1. Зафиксировать authority и target identity
 
@@ -109,14 +94,6 @@ service identity, Redis prefix, PostgreSQL identities и backup ownership —
 Сохраните product modules. Не заменяйте их demo CRUD, generic
 repository/controller/service abstraction или starter-specific infrastructure.
 Каждый repository-owned контракт классифицируйте без неоднозначности:
-
-```text
-adopt = target capability is absent; port and rename it for the target
-reconcile = target already has an equivalent capability; retain it only after
-            proving every invariant
-reject = do not copy starter identity, digest, URL, secret, historical evidence,
-         or obsolete compatibility path
-```
 
 - `adopt` — target capability отсутствует; перенесите её и переименуйте для
   target;
@@ -171,17 +148,23 @@ policy. PR gate сам по себе не публикует и не одобр�
 - image name выводится из lowercased target `GITHUB_REPOSITORY`.
 
 Первый успешный push workflow автоматически создаёт GHCR container package.
-Оператор не создаёт package заранее вручную. После первой публикации отдельно
-проверьте repository linkage, Actions access, visibility и organization policy.
+Оператор не создаёт package заранее вручную. Проверки repository linkage,
+Actions access, visibility и organization policy выполняются после target Stage
+run в шаге 5.
 
 Новый package в personal account по умолчанию private. Перевод package в public
 — отдельное необратимое решение оператора: его нельзя выдавать за технический
-шаг workflow. Public GHCR package можно pull анонимно.
+шаг workflow. GitHub поддерживает anonymous pull для public GHCR package, но
+текущий [Dokploy adapter](dokploy-deployment.md) всегда передаёт username и
+password в `application.saveDockerProvider`. Поэтому public anonymous GHCR
+находится вне текущего adapter contract до отдельной намеренной реализации.
 
-Для будущего pull private package из Dokploy потребуется dedicated identity и
-personal access token (classic), ограниченный `read:packages`. Создавайте этот
-token только позднее, в явно разрешённом окне настройки Dokploy. Не записывайте
-token value или registry password ни в этот runbook, ни в readiness record.
+Текущий поддерживаемый handoff использует private authenticated GHCR. Для
+будущего pull потребуется dedicated identity и personal access token (classic),
+ограниченный `read:packages`. Создавайте и передавайте эту identity и token
+только позднее, в явно разрешённом окне настройки Dokploy. Не записывайте
+identity credential, token value или registry password ни в этот runbook, ни в
+readiness record.
 
 Primary sources:
 
@@ -189,29 +172,23 @@ Primary sources:
 - [GitHub: Working with the Container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 - [GitHub: Package access and visibility](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility)
 
+После выполнения pre-publication prerequisites шагов 1–4 запустите target Stage
+workflow. Не переходите к шагу 5 до его завершения.
+
 ## Шаг 5. Проверить Trivy, OCI smoke и immutable digest
 
-Единственный разрешённый порядок Stage publication:
+Проверьте единственный разрешённый порядок Stage publication:
 
-```text
-full repository gate
--> build linux/amd64 non-root image
--> push commit-SHA tag to target GHCR
--> scan the action-produced digest with Trivy
--> fail on fixable HIGH/CRITICAL findings
--> pull the same digest from GHCR
--> run OCI smoke against that digest and exact revision
--> record the digest/revision pair
-```
-
-- [ ] Пройти full repository gate.
-- [ ] Собрать non-root image для `linux/amd64`.
-- [ ] Push commit-SHA tag в target GHCR.
-- [ ] Просканировать action-produced digest с Trivy.
-- [ ] Завершить workflow ошибкой при fixable `HIGH` / `CRITICAL` findings.
-- [ ] Pull тот же digest из GHCR.
-- [ ] Запустить OCI smoke для этого digest и exact revision.
-- [ ] Записать immutable digest/revision pair.
+- [ ] full repository gate;
+- [ ] build non-root image для `linux/amd64`;
+- [ ] push commit-SHA tag в target GHCR;
+- [ ] scan action-produced digest с Trivy;
+- [ ] fail при fixable `HIGH` / `CRITICAL` findings;
+- [ ] pull того же digest из GHCR;
+- [ ] OCI smoke для этого digest и exact revision;
+- [ ] запись immutable digest/revision pair.
+- [ ] Проверка GHCR repository linkage, Actions access, private visibility и
+      organization policy с evidence references.
 
 `ignore-unfixed: true` исключает findings, для которых нет известного fix. Это
 не превращает оставшийся fixable `HIGH` или `CRITICAL` finding в успех. Перед
@@ -234,10 +211,20 @@ Fail-closed правила:
 Если любая часть цепочки отсутствует либо относится к другому source revision,
 repository readiness остаётся неподтверждённой.
 
+Dokploy adapter сохраняет operation-specific byte-for-byte pin guard. Поэтому
+fresh descendant и `backend-codex` после получения собственного Stage evidence,
+но до любой будущей Dokploy mutation обязаны атомарно заменить во всех своих
+target runbooks каждый starter-specific candidate, revision и rollback pin на
+проверенную target-owned пару. Historical pins starter нельзя использовать как
+target defaults, переносить в readiness record или принимать как повторно
+используемое evidence. Ревью замены pins и ссылка на него входят в readiness
+record; сами equality guards удалять или ослаблять нельзя.
+
 ## Шаг 6. Подготовить production configuration contract
 
-Зафиксируйте владельца и expected non-secret semantics для всех runtime inputs,
-не записывая значения:
+Зафиксируйте владельца и expected non-secret semantics для всех runtime inputs.
+В этом runbook оставьте только имена переменных; конкретные non-secret значения
+поместите в readiness record либо в доступную владельцу защищённую input record:
 
 ```text
 NODE_ENV
@@ -270,7 +257,7 @@ secret injection. Production contract требует:
 - `API_DOCS_MODE` равен `protected` или `off`;
 - public API и CORS origins используют HTTPS;
 - `TRUST_PROXY_CIDRS` непуст и принадлежит конкретному environment;
-- coordination Redis использует не logical database selection;
+- coordination Redis не использует logical database selection;
 - четыре auth secrets независимы друг от друга, каждый является 32-byte
   base64url value и хранится только в будущем secret provider;
 - telemetry либо имеет назначенного владельца endpoint, либо сознательно
@@ -329,8 +316,8 @@ inputs:
 - TLS termination owner, certificate/hostname policy и HTTP-to-HTTPS policy;
 - непустой список environment-owned trusted proxy CIDRs;
 - private network boundary между reverse proxy и API;
-- будущий GHCR pull mode: anonymous для public package либо dedicated
-  least-privilege identity для private package.
+- будущий GHCR pull mode: private authenticated с dedicated least-privilege
+  identity; public anonymous pull не поддерживается текущим Dokploy adapter.
 
 Сверьте эти решения с [deployment security runbook](deployment-security.md).
 Не публикуйте DNS record, не заказывайте certificate, не открывайте network port
@@ -345,39 +332,59 @@ inputs:
 ## Readiness record
 
 - Target repository:
+- Target identity manifest reference:
+- Stage workflow run ID/URL:
 - Stage revision:
-- Approved GHCR digest:
+- Approved GHCR image@digest:
 - OCI revision label:
-- Full gate: passed/failed
-- Trivy HIGH/CRITICAL gate: passed/failed
-- Pull-by-digest smoke: passed/failed
-- GHCR visibility/access policy: private/public and owner
+- Full gate result and evidence reference:
+- Trivy HIGH/CRITICAL result and evidence reference:
+- Pull-same-digest OCI smoke result and evidence reference:
+- GHCR repository linkage check and evidence reference:
+- GHCR Actions access check and evidence reference:
+- GHCR visibility: private; owner and evidence reference:
+- GitHub organization policy check and evidence reference:
+- Target-owned Dokploy candidate/revision/rollback pins review reference:
 - Runtime configuration contract owner:
+- Runtime non-secret expected values/reference:
 - PostgreSQL role contract owner:
+- PostgreSQL database/migrator/runtime role names/reference:
 - Coordination Redis durability owner:
+- Redis key prefix and durability inputs/reference:
 - Domain/TLS/proxy input owner:
+- Public origin/browser origins/trusted proxy CIDRs/reference:
+- Auth secret provider and four-secret contract owner/reference:
 - Telemetry decision owner:
+- Telemetry enabled/disabled input/reference:
 - Backup/restore policy owner:
+- Backup target/prefix/schedule/retention/restore inputs/reference:
+- Future GHCR pull identity owner and authorized creation-window reference:
 - Remaining hosted prerequisites:
 
-После каждого двоеточия допустимы только identifiers, status или owner names.
-Connection URLs, credentials, token values, registry passwords и secret values
-запрещены. Пустой owner означает, что соответствующий input не готов.
+Поля содержат только identifiers, результаты, owner names, конкретные
+non-secret values или ссылки на защищённые deployment records. Connection URLs,
+credentials, token values, registry passwords и secret values запрещены.
+Public origins и telemetry endpoint указывайте ссылкой на защищённую input
+record, если выбранное место readiness record не предназначено для таких
+адресов. Пустое обязательное поле, ссылка без доступного владельцу record либо
+несовпадение revision/digest означает, что соответствующий уровень не готов.
 
 ## Stop gate перед Dokploy
 
-```text
-Stop before Dokploy unless repository readiness has fresh target evidence and
-every environment input has a named owner. Do not infer that Dokploy, VPS, DNS,
-PostgreSQL, Redis, telemetry, or S3 exists. Continue later with
-docs/runbooks/dokploy-deployment.md only under explicit hosted-operation
-authorization.
-```
+Остановитесь перед Dokploy, если readiness record не содержит workflow run
+ID/URL для exact target Stage revision, совпадающую пару image digest/OCI
+revision, ссылки на успешные full gate, Trivy и pull-same-digest OCI smoke,
+результаты repository linkage, Actions access, private visibility и
+organization policy checks, а также review reference для target-owned
+candidate/revision/rollback pins. Для каждого environment input обязательны
+владелец и конкретное non-secret значение либо доступная защищённая record
+reference. Dedicated future GHCR pull identity и окно создания PAT classic с
+`read:packages` должны иметь владельца; сам credential до этого окна не
+создаётся и не записывается.
 
-Остановитесь перед Dokploy, если repository readiness не имеет свежего target
-evidence либо хотя бы у одного environment input нет назначенного владельца. Не
-делайте вывод, что Dokploy, VPS, DNS, PostgreSQL, Redis, telemetry или S3
-существует.
+Не делайте вывод, что Dokploy, VPS, DNS, PostgreSQL, Redis, telemetry или S3
+существует. Historical starter pins и evidence не закрывают ни одно из этих
+условий.
 
 Продолжать разрешено только позднее, по
 [Dokploy deployment runbook](dokploy-deployment.md) и только при явной

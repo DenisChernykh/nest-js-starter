@@ -17,11 +17,32 @@ and [Dokploy deployment schema](https://raw.githubusercontent.com/Dokploy/dokplo
 
 Complete [deployment-preparation.md](deployment-preparation.md) and retain its
 redacted readiness record before any mutation in this adapter. Repository
-documentation alone is not hosted evidence: the record must identify a
-target-owned digest/revision pair from a fully successful Stage workflow and
-named owners for every environment input. Stop if Dokploy, VPS, domain/TLS,
-PostgreSQL, Redis, telemetry, backup storage, or credentials are still being
-inferred rather than supplied by the authorized environment owner.
+documentation alone is not hosted evidence: the record must identify the
+successful target Stage workflow run ID/URL, exact Stage revision,
+digest/revision pair, full-gate/Trivy/pull-same-digest smoke evidence, package
+linkage/Actions access/private visibility/organization policy checks, and
+concrete non-secret environment inputs or protected-record references with
+named owners.
+
+This adapter intentionally keeps an operation-specific byte-for-byte pin guard.
+For a fresh descendant or `backend-codex`, after its own successful Stage
+evidence and before any mutation, replace every starter-specific candidate,
+revision and rollback pin in the target runbooks with one reviewed target-owned
+pair. Retain the equality guards. The historical starter pins below are not
+target defaults and are not reusable evidence; stop unless the readiness record
+links the target pin review.
+
+The current adapter supports only private authenticated GHCR because
+`application.saveDockerProvider` below always receives `GHCR_USERNAME` and
+`GHCR_PASSWORD`. GitHub supports anonymous pulls from public GHCR packages, but
+that mode is outside this adapter contract until it is intentionally
+implemented. The authorized environment owner must supply a dedicated future
+identity and PAT classic limited to `read:packages`, created only in the
+authorized Dokploy window.
+
+Stop if Dokploy, VPS, domain/TLS, PostgreSQL, Redis, telemetry, backup storage,
+or credentials are still being inferred rather than supplied by the authorized
+environment owner.
 
 ## Environment and safety boundary
 

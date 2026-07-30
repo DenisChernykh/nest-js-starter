@@ -91,39 +91,46 @@ provisioning the future host:
 - telemetry decision and endpoint ownership;
 - off-host PostgreSQL backup owner, schedule, retention, and isolated restore
   policy;
-- GHCR pull policy for the future Dokploy application.
+- private authenticated GHCR pull policy for the future Dokploy application.
 
-For a private GHCR package, the document records that the future external pull
-credential is a dedicated identity with a personal access token (classic)
-limited to `read:packages`. The token is created only during the authorized
-Dokploy setup window, not during repository preparation. Public GHCR packages
-need no pull credential. A public visibility change is treated as an explicit,
-irreversible operator decision.
+The current Dokploy adapter requires username/password inputs, so the supported
+handoff is a private GHCR package pulled by a dedicated identity with a personal
+access token (classic) limited to `read:packages`. The identity and token are
+created only during the authorized Dokploy setup window, not during repository
+preparation. GitHub supports anonymous pulls from public GHCR packages, but that
+capability is outside the current adapter contract until intentionally
+implemented. A public visibility change remains an explicit, irreversible
+operator decision and is not a supported handoff shortcut.
 
 ## Canonical flow
 
-The runbook presents one linear flow:
+The runbook presents one phased linear flow:
 
-1. Freeze the target repository and authority boundary.
-2. Inventory target-owned identity and configuration values.
-3. Audit the target against the starter source-of-truth files.
-4. Replace starter identity atomically; never retain dual starter/product
-   values.
-5. Verify GitHub Actions and GHCR permissions.
-6. Merge through a regular pull request into `stage`.
-7. Require the Stage workflow sequence:
+1. Complete canonical Steps 1–4 as pre-publication prerequisites: freeze the
+   authority boundary, inventory target identity, audit/adapt repository-owned
+   contracts, and verify GitHub Actions/GHCR publication inputs.
+2. Merge through a regular pull request into `stage` and run the target Stage
+   workflow.
+3. Require the Stage workflow sequence:
    full gate, build, GHCR push, Trivy scan of the immutable digest, pull by
    digest, OCI smoke, digest capture.
-8. Confirm package access and record the approved digest/revision pair.
-9. Verify production configuration, database-role, Redis, domain/TLS,
-   telemetry, and backup input contracts.
-10. Produce a redacted readiness record and stop before Dokploy.
+4. Complete canonical Steps 5–9 to confirm package access, bind workflow
+   run/revision/digest evidence, verify production/database/Redis/perimeter/
+   telemetry/backup inputs, and produce the redacted readiness record.
+5. Stop before Dokploy.
 
 Trivy is a mandatory publication gate. It scans vulnerabilities in the
 published digest, includes `HIGH` and `CRITICAL`, ignores findings without a
 known fix, and fails the workflow when remaining findings exist. A digest that
 was pushed but belongs to a failed Trivy or smoke run exists in GHCR but is not
 approved for deployment.
+
+The later Dokploy adapter retains its operation-specific byte-for-byte pin
+guard. After successful target Stage evidence and before any future Dokploy
+mutation, a fresh descendant or `backend-codex` must replace every
+starter-specific candidate, revision, and rollback pin in its target runbooks
+with one reviewed target-owned pair. Historical starter pins are neither target
+defaults nor reusable evidence, and the equality guards are not weakened.
 
 ## Target identity manifest
 
@@ -144,6 +151,26 @@ Before editing, the adopting agent records these names without secret values:
 The runbook uses symbolic examples such as `<github-owner>` and
 `<repository-name>`. It must not contain an approved historical digest,
 production URL, connection string, API key, cookie, password, or token.
+
+## Readiness record contract
+
+The copyable readiness record binds repository readiness to concrete evidence:
+
+- target workflow run ID/URL, target Stage revision, immutable image digest,
+  and OCI revision;
+- full gate, Trivy, and pull-same-digest OCI smoke evidence references;
+- GHCR repository linkage, Actions access, private visibility, and organization
+  policy check results;
+- the reviewed target-owned candidate/revision/rollback pin replacement;
+- owners plus concrete non-secret expected values or protected-record
+  references for runtime configuration, public boundary and proxy inputs,
+  PostgreSQL roles, Redis namespace/durability, auth secret-provider contract,
+  telemetry, backup/restore, and future private GHCR pull identity.
+
+The record contains no credentials, registry passwords, token values, secret
+values, or connection URLs. Its Stop gate fails closed on a missing field,
+inaccessible protected record, revision/digest mismatch, unreviewed target pin,
+or environment input without both an owner and a concrete value/reference.
 
 ## Existing backend adoption contract
 
