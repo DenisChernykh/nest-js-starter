@@ -2,6 +2,7 @@ import { DeploymentInputError } from '@scripts/deployment/manifest'
 import { parseDeploymentLiveEnvironment } from '@scripts/deployment/live-environment'
 
 const revision = '1'.repeat(40)
+const rollbackRevision = '2'.repeat(40)
 const runtimeDatabaseUrl =
   'postgresql://runtime:runtime-secret@database.example.com/app?options=a=b'
 const migrationDatabaseUrl =
@@ -15,7 +16,7 @@ const applicationEnvironment = [
 const previousApplicationEnvironment = [
   'NODE_ENV=production',
   'DATABASE_URL=postgresql://previous:secret@database.example.com/app',
-  `SERVICE_REVISION=${'2'.repeat(40)}`,
+  `SERVICE_REVISION=${rollbackRevision}`,
 ].join('\n')
 
 const validEnvironment: NodeJS.ProcessEnv = {
@@ -33,7 +34,7 @@ const validEnvironment: NodeJS.ProcessEnv = {
 
 function captureInputError(input: NodeJS.ProcessEnv): DeploymentInputError {
   try {
-    parseDeploymentLiveEnvironment(input, revision)
+    parseDeploymentLiveEnvironment(input, revision, rollbackRevision)
   } catch (error) {
     if (error instanceof DeploymentInputError) return error
     throw error
@@ -43,7 +44,11 @@ function captureInputError(input: NodeJS.ProcessEnv): DeploymentInputError {
 
 describe('parseDeploymentLiveEnvironment', () => {
   it('projects and freezes the required live environment', () => {
-    const parsed = parseDeploymentLiveEnvironment(validEnvironment, revision)
+    const parsed = parseDeploymentLiveEnvironment(
+      validEnvironment,
+      revision,
+      rollbackRevision,
+    )
 
     expect(parsed).toEqual({
       dokployBaseUrl: 'https://dokploy.example.com',
@@ -160,6 +165,45 @@ describe('parseDeploymentLiveEnvironment', () => {
         path: 'DOKPLOY_APPLICATION_ENV.SERVICE_REVISION',
       }),
     ])
+  })
+
+  it.each([
+    {
+      name: 'missing previous DATABASE_URL',
+      environment: previousApplicationEnvironment
+        .split('\n')
+        .filter((line) => !line.startsWith('DATABASE_URL='))
+        .join('\n'),
+      path: 'DOKPLOY_PREVIOUS_APPLICATION_ENV.DATABASE_URL',
+    },
+    {
+      name: 'duplicated previous DATABASE_URL',
+      environment: `${previousApplicationEnvironment}\nDATABASE_URL=postgresql://other:secret@database.example.com/app`,
+      path: 'DOKPLOY_PREVIOUS_APPLICATION_ENV.DATABASE_URL',
+    },
+    {
+      name: 'missing previous SERVICE_REVISION',
+      environment: previousApplicationEnvironment
+        .split('\n')
+        .filter((line) => !line.startsWith('SERVICE_REVISION='))
+        .join('\n'),
+      path: 'DOKPLOY_PREVIOUS_APPLICATION_ENV.SERVICE_REVISION',
+    },
+    {
+      name: 'mismatched previous SERVICE_REVISION',
+      environment: previousApplicationEnvironment.replace(
+        rollbackRevision,
+        '3'.repeat(40),
+      ),
+      path: 'DOKPLOY_PREVIOUS_APPLICATION_ENV.SERVICE_REVISION',
+    },
+  ])('rejects $name', ({ environment, path }) => {
+    const error = captureInputError({
+      ...validEnvironment,
+      DOKPLOY_PREVIOUS_APPLICATION_ENV: environment,
+    })
+
+    expect(error.issues).toEqual([expect.objectContaining({ path })])
   })
 
   it('never serializes secret values or complete application environments', () => {

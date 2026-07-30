@@ -148,6 +148,7 @@ function createPromotionDependencies(
 type FailurePoint =
   | 'verify'
   | 'migrate-exit'
+  | 'migrate-throw'
   | 'list-before'
   | 'save-environment'
   | 'save-provider'
@@ -161,6 +162,8 @@ type FailurePoint =
   | 'poll-missing'
   | 'poll-duplicated'
   | 'poll-deadline'
+  | 'poll-deadline-done'
+  | 'poll-response-deadline'
   | 'smoke'
   | 'restoration'
 
@@ -204,6 +207,9 @@ function createFailureScenario(failurePoint: FailurePoint): FailureScenario {
         await settle()
         events.push('migrate:candidate')
         migratedImages.push(imageRef)
+        if (failurePoint === 'migrate-throw') {
+          throw new Error('private migration body')
+        }
         return { exitCode: failurePoint === 'migrate-exit' ? 1 : 0 }
       },
     },
@@ -231,6 +237,7 @@ function createFailureScenario(failurePoint: FailurePoint): FailureScenario {
         }
 
         events.push('list:poll')
+        if (failurePoint === 'poll-response-deadline') now += 600_000
         if (failurePoint === 'poll-missing') return [oldDeployment]
         if (failurePoint === 'poll-duplicated') {
           return [newDeployment, { ...newDeployment }]
@@ -294,6 +301,7 @@ function createFailureScenario(failurePoint: FailurePoint): FailureScenario {
         await settle()
         events.push(`sleep:${milliseconds}`)
         now += failurePoint === 'poll-deadline' ? 600_000 : milliseconds
+        if (failurePoint === 'poll-deadline-done') now += 600_000
       },
     },
     evidence: {
@@ -399,6 +407,11 @@ describe('DeploymentOrchestrator promotion', () => {
       mutationStarted: false,
     },
     {
+      failurePoint: 'migrate-throw' as const,
+      expectedStep: 'migrate-candidate',
+      mutationStarted: false,
+    },
+    {
       failurePoint: 'list-before' as const,
       expectedStep: 'list-deployments-before',
       mutationStarted: false,
@@ -460,6 +473,16 @@ describe('DeploymentOrchestrator promotion', () => {
     },
     {
       failurePoint: 'poll-deadline' as const,
+      expectedStep: 'poll-deployment',
+      mutationStarted: true,
+    },
+    {
+      failurePoint: 'poll-deadline-done' as const,
+      expectedStep: 'poll-deployment',
+      mutationStarted: true,
+    },
+    {
+      failurePoint: 'poll-response-deadline' as const,
       expectedStep: 'poll-deployment',
       mutationStarted: true,
     },
@@ -565,6 +588,24 @@ describe('DeploymentOrchestrator promotion', () => {
       'migrate:candidate',
       'evidence',
     ])
+  })
+
+  it('records a started migration as failed when the migrator throws', async () => {
+    const scenario = createFailureScenario('migrate-throw')
+    const orchestrator = new DeploymentOrchestrator(scenario.dependencies)
+
+    await expect(
+      orchestrator.promote({
+        manifest,
+        live,
+        evidencePath: 'failure-evidence.json',
+      }),
+    ).rejects.toBeInstanceOf(DeploymentExecutionError)
+
+    expect(scenario.evidence[0]).toMatchObject({
+      migrationOutcome: 'failed',
+      outcome: 'failed',
+    })
   })
 
   it('does not migrate or reach Dokploy after image verification fails', async () => {

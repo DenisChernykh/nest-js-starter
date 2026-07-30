@@ -81,6 +81,26 @@ function findAssignments(environment: string, key: string): readonly string[] {
     .map((line) => line.slice(key.length + 1))
 }
 
+function validateAssignment(
+  environment: string,
+  key: string,
+  path: string,
+  expectedValue?: string,
+): DeploymentInputIssue | undefined {
+  const assignments = findAssignments(environment, key)
+  if (assignments.length !== 1) {
+    return inputIssue(path, 'environment.assignmentCount')
+  }
+  const value = assignments[0]!
+  if (value.trim().length === 0) {
+    return inputIssue(path, 'environment.valueRequired')
+  }
+  if (expectedValue !== undefined && value !== expectedValue) {
+    return inputIssue(path, 'environment.valueMismatch')
+  }
+  return undefined
+}
+
 /**
  * Validates and projects the live operator environment for an apply command.
  *
@@ -90,12 +110,14 @@ function findAssignments(environment: string, key: string): readonly string[] {
  *
  * @param input - Untrusted process environment.
  * @param revision - Candidate revision already approved by the manifest.
+ * @param rollbackRevision - Rollback revision already approved by the manifest.
  * @returns A frozen projection containing only required apply inputs.
  * @throws DeploymentInputError when required values or runtime bindings differ.
  */
 export function parseDeploymentLiveEnvironment(
   input: NodeJS.ProcessEnv,
   revision: string,
+  rollbackRevision: string,
 ): DeploymentLiveEnvironment {
   const result = requiredEnvironmentSchema.validate(input, {
     abortEarly: false,
@@ -111,38 +133,36 @@ export function parseDeploymentLiveEnvironment(
   const baseUrlIssue = validateBaseUrl(value.DOKPLOY_BASE_URL)
   if (baseUrlIssue !== undefined) issues.push(baseUrlIssue)
 
-  const databaseUrls = findAssignments(
+  const candidateDatabaseIssue = validateAssignment(
     value.DOKPLOY_APPLICATION_ENV,
     'DATABASE_URL',
+    'DOKPLOY_APPLICATION_ENV.DATABASE_URL',
+    value.RUNTIME_DATABASE_URL,
   )
-  if (
-    databaseUrls.length !== 1 ||
-    databaseUrls[0] !== value.RUNTIME_DATABASE_URL
-  ) {
-    issues.push(
-      inputIssue(
-        'DOKPLOY_APPLICATION_ENV.DATABASE_URL',
-        databaseUrls.length === 1
-          ? 'environment.valueMismatch'
-          : 'environment.assignmentCount',
-      ),
-    )
-  }
+  if (candidateDatabaseIssue !== undefined) issues.push(candidateDatabaseIssue)
 
-  const revisions = findAssignments(
+  const candidateRevisionIssue = validateAssignment(
     value.DOKPLOY_APPLICATION_ENV,
     'SERVICE_REVISION',
+    'DOKPLOY_APPLICATION_ENV.SERVICE_REVISION',
+    revision,
   )
-  if (revisions.length !== 1 || revisions[0] !== revision) {
-    issues.push(
-      inputIssue(
-        'DOKPLOY_APPLICATION_ENV.SERVICE_REVISION',
-        revisions.length === 1
-          ? 'environment.valueMismatch'
-          : 'environment.assignmentCount',
-      ),
-    )
-  }
+  if (candidateRevisionIssue !== undefined) issues.push(candidateRevisionIssue)
+
+  const previousDatabaseIssue = validateAssignment(
+    value.DOKPLOY_PREVIOUS_APPLICATION_ENV,
+    'DATABASE_URL',
+    'DOKPLOY_PREVIOUS_APPLICATION_ENV.DATABASE_URL',
+  )
+  if (previousDatabaseIssue !== undefined) issues.push(previousDatabaseIssue)
+
+  const previousRevisionIssue = validateAssignment(
+    value.DOKPLOY_PREVIOUS_APPLICATION_ENV,
+    'SERVICE_REVISION',
+    'DOKPLOY_PREVIOUS_APPLICATION_ENV.SERVICE_REVISION',
+    rollbackRevision,
+  )
+  if (previousRevisionIssue !== undefined) issues.push(previousRevisionIssue)
 
   if (issues.length > 0) throw new DeploymentInputError(issues)
 

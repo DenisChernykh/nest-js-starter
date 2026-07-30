@@ -90,4 +90,19 @@ describe('NodeCommandRunner', () => {
     })
     expect(outcome.exitCode).not.toBe(0)
   })
+
+  it('rejects without starting a child when the operation is already aborted', async () => {
+    const runner = new NodeCommandRunner()
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      runner.run({
+        file: process.execPath,
+        arguments: ['-e', 'process.exit(0)'],
+        timeoutMs: 5_000,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+  })
 })

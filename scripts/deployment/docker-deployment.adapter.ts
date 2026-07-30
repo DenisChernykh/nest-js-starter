@@ -128,6 +128,7 @@ export class DockerDeploymentAdapter
     readonly registryUrl: string
     readonly username: string
     readonly password: string
+    readonly signal?: AbortSignal
   }): Promise<void> {
     if (input.registryUrl !== 'https://ghcr.io') {
       throw new DockerDeploymentError('validate-registry', 'input')
@@ -162,6 +163,7 @@ export class DockerDeploymentAdapter
         ],
         stdin: input.password,
         timeoutMs: commandTimeoutMs,
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
       })
       requireSuccessfulCommand('login', login)
       loginSucceeded = true
@@ -170,6 +172,7 @@ export class DockerDeploymentAdapter
         file: 'docker',
         arguments: ['--config', directory, 'pull', input.imageRef],
         timeoutMs: commandTimeoutMs,
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
       })
       requireSuccessfulCommand('pull', pull)
 
@@ -183,6 +186,7 @@ export class DockerDeploymentAdapter
           '{{index .Config.Labels "org.opencontainers.image.revision"}}',
         ],
         timeoutMs: commandTimeoutMs,
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
       })
       requireSuccessfulCommand('inspect-revision', inspection)
       if (inspection.stdout !== `${input.revision}\n`) {
@@ -235,6 +239,7 @@ export class DockerDeploymentAdapter
   async migrate(input: {
     readonly imageRef: string
     readonly databaseUrl: string
+    readonly signal?: AbortSignal
   }): Promise<{ readonly exitCode: number }> {
     const outcome = await this.#runner.run({
       file: 'docker',
@@ -251,6 +256,7 @@ export class DockerDeploymentAdapter
       ],
       environment: { DATABASE_URL: input.databaseUrl },
       timeoutMs: commandTimeoutMs,
+      ...(input.signal === undefined ? {} : { signal: input.signal }),
     })
     if (outcome.timedOut) {
       throw new DockerDeploymentError('migrate', 'timeout')

@@ -74,10 +74,19 @@ function transportCategory(error: unknown): string {
     typeof error === 'object' && error !== null
       ? (Reflect.get(error, 'name') as unknown)
       : undefined
-  if (name === 'TimeoutError' || name === 'AbortError') {
-    return 'timeout'
-  }
+  if (name === 'TimeoutError') return 'timeout'
+  if (name === 'AbortError') return 'aborted'
   return 'transport'
+}
+
+function requestSignal(timeoutMs: number, signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs)
+  return signal === undefined ? timeout : AbortSignal.any([signal, timeout])
+}
+
+function hasRequiredProblemString(body: object, field: string): boolean {
+  const value = Reflect.get(body, field) as unknown
+  return typeof value === 'string' && value.trim().length > 0
 }
 
 /**
@@ -112,13 +121,14 @@ export class ExternalSmokeAdapter implements ExternalSmokePort {
     origin: URL,
     endpoint: string,
     path: string,
+    signal?: AbortSignal,
   ): Promise<Response> {
     try {
       return await this.#fetch(new URL(path, origin), {
         method: 'GET',
         redirect: 'error',
         credentials: 'omit',
-        signal: AbortSignal.timeout(this.#requestTimeoutMs),
+        signal: requestSignal(this.#requestTimeoutMs, signal),
       })
     } catch (error) {
       throw new ExternalSmokeError(endpoint, transportCategory(error))
@@ -129,8 +139,9 @@ export class ExternalSmokeAdapter implements ExternalSmokePort {
     origin: URL,
     endpoint: 'live' | 'startup' | 'ready',
     path: string,
+    signal?: AbortSignal,
   ): Promise<void> {
-    const response = await this.#request(origin, endpoint, path)
+    const response = await this.#request(origin, endpoint, path, signal)
     if (response.status !== 200) {
       throw new ExternalSmokeError(
         endpoint,
@@ -140,9 +151,14 @@ export class ExternalSmokeAdapter implements ExternalSmokePort {
     }
   }
 
-  async #verifyAuth(origin: URL): Promise<void> {
+  async #verifyAuth(origin: URL, signal?: AbortSignal): Promise<void> {
     const endpoint = 'auth'
-    const response = await this.#request(origin, endpoint, '/v1/auth/me')
+    const response = await this.#request(
+      origin,
+      endpoint,
+      '/v1/auth/me',
+      signal,
+    )
     if (response.status !== 401) {
       throw new ExternalSmokeError(
         endpoint,
@@ -170,6 +186,11 @@ export class ExternalSmokeAdapter implements ExternalSmokePort {
     if (
       typeof body !== 'object' ||
       body === null ||
+      !hasRequiredProblemString(body, 'type') ||
+      !hasRequiredProblemString(body, 'title') ||
+      !hasRequiredProblemString(body, 'detail') ||
+      !hasRequiredProblemString(body, 'instance') ||
+      !hasRequiredProblemString(body, 'requestId') ||
       Reflect.get(body, 'code') !== 'AUTHENTICATION_REQUIRED' ||
       Reflect.get(body, 'status') !== 401
     ) {
@@ -188,12 +209,15 @@ export class ExternalSmokeAdapter implements ExternalSmokePort {
    * @returns Four true outcomes only after every contract passes.
    * @throws ExternalSmokeError at the first failed endpoint.
    */
-  async verify(publicApiUrl: string): Promise<ExternalSmokeResult> {
+  async verify(
+    publicApiUrl: string,
+    signal?: AbortSignal,
+  ): Promise<ExternalSmokeResult> {
     const origin = normalizePublicOrigin(publicApiUrl)
-    await this.#verifyHealth(origin, 'live', '/health/live')
-    await this.#verifyHealth(origin, 'startup', '/health/startup')
-    await this.#verifyHealth(origin, 'ready', '/health/ready')
-    await this.#verifyAuth(origin)
+    await this.#verifyHealth(origin, 'live', '/health/live', signal)
+    await this.#verifyHealth(origin, 'startup', '/health/startup', signal)
+    await this.#verifyHealth(origin, 'ready', '/health/ready', signal)
+    await this.#verifyAuth(origin, signal)
     return Object.freeze({
       live: true,
       startup: true,

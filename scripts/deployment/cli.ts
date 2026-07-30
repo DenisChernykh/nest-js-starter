@@ -31,6 +31,15 @@ export interface DeploymentCliDependencies {
   ) => DeploymentOrchestrator
 }
 
+/** Process signal boundary used to coordinate graceful CLI interruption. */
+export interface DeploymentSignalSource {
+  /** Registers a one-shot listener for an operator termination signal. */
+  once(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown
+
+  /** Removes a previously registered operator termination listener. */
+  off(signal: 'SIGINT' | 'SIGTERM', listener: () => void): unknown
+}
+
 function createProductionOrchestrator(
   live: DeploymentLiveEnvironment,
 ): DeploymentOrchestrator {
@@ -50,7 +59,10 @@ function createProductionOrchestrator(
     evidence,
     clock: {
       nowMs: () => Date.now(),
-      sleep: (milliseconds) => delay(milliseconds),
+      sleep: (milliseconds, signal) =>
+        signal === undefined
+          ? delay(milliseconds)
+          : delay(milliseconds, undefined, { signal }),
     },
   })
 }
@@ -99,6 +111,7 @@ function writeFailure(
  * @param environment - Process environment used only by explicit apply commands.
  * @param io - Output streams receiving redacted machine-readable messages.
  * @param dependencies - Optional apply composition for tests.
+ * @param signal - Optional interruption signal propagated to external operations.
  * @returns Zero on success and one for every handled failure.
  */
 export async function runDeploymentCli(
@@ -106,6 +119,7 @@ export async function runDeploymentCli(
   environment: NodeJS.ProcessEnv,
   io: DeploymentCliIo,
   dependencies: DeploymentCliDependencies = productionDependencies,
+  signal?: AbortSignal,
 ): Promise<number> {
   try {
     const options = parseDeploymentCliOptions(arguments_)
@@ -139,13 +153,19 @@ export async function runDeploymentCli(
     const live = parseDeploymentLiveEnvironment(
       environment,
       manifest.candidate.revision,
+      manifest.rollback.revision,
     )
     const orchestrator = dependencies.createOrchestrator(live)
     const evidencePath = options.evidencePath
     if (evidencePath === undefined) {
       throw new DeploymentExecutionError('validate-evidence-path', 'input')
     }
-    const input = { manifest, live, evidencePath }
+    const input = {
+      manifest,
+      live,
+      evidencePath,
+      ...(signal === undefined ? {} : { signal }),
+    }
     const evidence =
       options.command === 'promote'
         ? await orchestrator.promote(input)
@@ -168,9 +188,51 @@ export async function runDeploymentCli(
   }
 }
 
+/**
+ * Runs the CLI with graceful SIGINT and SIGTERM coordination.
+ *
+ * @remarks
+ * Signal listeners are installed before command execution. On interruption,
+ * the current operation is aborted and this function waits for orchestration
+ * restoration, evidence publication and local credential cleanup to settle.
+ *
+ * @param arguments_ - Arguments after the script path.
+ * @param environment - Process environment used only by explicit apply commands.
+ * @param io - Output streams receiving redacted machine-readable messages.
+ * @param dependencies - Optional apply composition for tests.
+ * @param signals - Injectable process signal source.
+ * @returns The handled CLI exit code after all cleanup has settled.
+ */
+export async function runDeploymentCliProcess(
+  arguments_: readonly string[],
+  environment: NodeJS.ProcessEnv,
+  io: DeploymentCliIo,
+  dependencies: DeploymentCliDependencies = productionDependencies,
+  signals: DeploymentSignalSource = process,
+): Promise<number> {
+  const controller = new AbortController()
+  const abort = (): void => {
+    controller.abort()
+  }
+  signals.once('SIGINT', abort)
+  signals.once('SIGTERM', abort)
+  try {
+    return await runDeploymentCli(
+      arguments_,
+      environment,
+      io,
+      dependencies,
+      controller.signal,
+    )
+  } finally {
+    signals.off('SIGINT', abort)
+    signals.off('SIGTERM', abort)
+  }
+}
+
 const invokedPath = process.argv[1]
 if (invokedPath !== undefined && resolve(invokedPath) === resolve(__filename)) {
-  runDeploymentCli(process.argv.slice(2), process.env, {
+  runDeploymentCliProcess(process.argv.slice(2), process.env, {
     stdout: process.stdout,
     stderr: process.stderr,
   })

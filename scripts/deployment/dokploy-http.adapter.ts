@@ -82,13 +82,16 @@ function isPlainEmptyObject(value: unknown): boolean {
 }
 
 function transportCategory(error: unknown): string {
-  if (
-    error instanceof DOMException &&
-    (error.name === 'TimeoutError' || error.name === 'AbortError')
-  ) {
+  if (error instanceof DOMException && error.name === 'TimeoutError')
     return 'timeout'
-  }
+  if (error instanceof DOMException && error.name === 'AbortError')
+    return 'aborted'
   return 'transport'
+}
+
+function requestSignal(timeoutMs: number, signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs)
+  return signal === undefined ? timeout : AbortSignal.any([signal, timeout])
 }
 
 /**
@@ -129,7 +132,11 @@ export class DokployHttpAdapter implements DokployPort {
   async #request(
     operation: string,
     path: string,
-    init: Readonly<{ method: 'GET' | 'POST'; body?: string }>,
+    init: Readonly<{
+      method: 'GET' | 'POST'
+      body?: string
+      signal?: AbortSignal
+    }>,
   ): Promise<unknown> {
     let response: Response
     try {
@@ -141,7 +148,8 @@ export class DokployHttpAdapter implements DokployPort {
           'x-api-key': this.#apiKey,
         },
         ...(init.body === undefined ? {} : { body: init.body }),
-        signal: AbortSignal.timeout(this.#requestTimeoutMs),
+        redirect: 'error',
+        signal: requestSignal(this.#requestTimeoutMs, init.signal),
       })
     } catch (error) {
       throw new DokployContractError(operation, transportCategory(error))
@@ -162,10 +170,12 @@ export class DokployHttpAdapter implements DokployPort {
     operation: string,
     path: string,
     body: Readonly<Record<string, unknown>>,
+    signal?: AbortSignal,
   ): Promise<void> {
     const result = await this.#request(operation, path, {
       method: 'POST',
       body: JSON.stringify(body),
+      ...(signal === undefined ? {} : { signal }),
     })
     if (!isPlainEmptyObject(result)) {
       throw new DokployContractError(operation, 'invalid-response')
@@ -181,12 +191,13 @@ export class DokployHttpAdapter implements DokployPort {
    */
   async listDeployments(
     applicationId: string,
+    signal?: AbortSignal,
   ): Promise<readonly DokployDeploymentRecord[]> {
     const query = new URLSearchParams({ applicationId })
     const result = await this.#request(
       'list-deployments',
       `/api/deployment.all?${query.toString()}`,
-      { method: 'GET' },
+      { method: 'GET', ...(signal === undefined ? {} : { signal }) },
     )
     if (!Array.isArray(result)) {
       throw new DokployContractError('list-deployments', 'invalid-response')
@@ -221,7 +232,11 @@ export class DokployHttpAdapter implements DokployPort {
    * @param environment - Complete secret-bearing runtime environment text.
    * @throws DokployContractError unless Dokploy returns an empty object.
    */
-  saveEnvironment(applicationId: string, environment: string): Promise<void> {
+  saveEnvironment(
+    applicationId: string,
+    environment: string,
+    signal?: AbortSignal,
+  ): Promise<void> {
     return this.#mutate(
       'save-environment',
       '/api/application.saveEnvironment',
@@ -232,6 +247,7 @@ export class DokployHttpAdapter implements DokployPort {
         buildSecrets: null,
         createEnvFile: false,
       },
+      signal,
     )
   }
 
@@ -247,6 +263,7 @@ export class DokployHttpAdapter implements DokployPort {
     readonly registryUrl: string
     readonly username: string
     readonly password: string
+    readonly signal?: AbortSignal
   }): Promise<void> {
     return this.#mutate(
       'save-docker-provider',
@@ -258,6 +275,7 @@ export class DokployHttpAdapter implements DokployPort {
         username: input.username,
         password: input.password,
       },
+      input.signal,
     )
   }
 
@@ -271,11 +289,17 @@ export class DokployHttpAdapter implements DokployPort {
     readonly applicationId: string
     readonly title: string
     readonly description: string
+    readonly signal?: AbortSignal
   }): Promise<void> {
-    return this.#mutate('deploy', '/api/application.deploy', {
-      applicationId: input.applicationId,
-      title: input.title,
-      description: input.description,
-    })
+    return this.#mutate(
+      'deploy',
+      '/api/application.deploy',
+      {
+        applicationId: input.applicationId,
+        title: input.title,
+        description: input.description,
+      },
+      input.signal,
+    )
   }
 }

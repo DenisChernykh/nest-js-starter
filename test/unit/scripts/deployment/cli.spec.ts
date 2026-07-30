@@ -7,6 +7,7 @@ import {
   type DeploymentCliIo,
   runDeploymentCli,
 } from '@scripts/deployment/cli'
+import * as deploymentCliModule from '@scripts/deployment/cli'
 import {
   DeploymentExecutionError,
   type ApplyDeploymentInput,
@@ -352,5 +353,88 @@ describe('runDeploymentCli', () => {
 
     expect(output.stderr()).toContain('"error":"input"')
     expect(output.stderr()).not.toContain(sentinel)
+  })
+
+  it('aborts an apply on SIGTERM and waits for its cleanup before returning', async () => {
+    const listeners = new Map<string, () => void>()
+    const signalSource = {
+      once: (signal: string, listener: () => void) => {
+        listeners.set(signal, listener)
+        return signalSource
+      },
+      off: (signal: string, listener: () => void) => {
+        if (listeners.get(signal) === listener) listeners.delete(signal)
+        return signalSource
+      },
+    }
+    let operationStarted: (() => void) | undefined
+    const started = new Promise<void>((resolveStarted) => {
+      operationStarted = resolveStarted
+    })
+    let cleanupFinished = false
+    const dependencies: DeploymentCliDependencies = {
+      createOrchestrator: () =>
+        ({
+          promote: async (input: ApplyDeploymentInput) => {
+            const signal = Reflect.get(input, 'signal') as unknown
+            if (!(signal instanceof AbortSignal)) {
+              throw new Error('Missing deployment signal')
+            }
+            operationStarted?.()
+            await new Promise<void>((_resolve, reject) => {
+              signal.addEventListener(
+                'abort',
+                () => {
+                  void Promise.resolve().then(() => {
+                    cleanupFinished = true
+                    reject(new Error('operation aborted'))
+                  })
+                },
+                { once: true },
+              )
+            })
+            throw new Error('unreachable')
+          },
+          rollback: () => Promise.reject(new Error('not used')),
+        }) as never,
+    }
+    const runProcess = Reflect.get(
+      deploymentCliModule,
+      'runDeploymentCliProcess',
+    ) as unknown
+
+    expect(typeof runProcess).toBe('function')
+    if (typeof runProcess !== 'function') return
+
+    const output = createIo()
+    const running = (
+      runProcess as (
+        arguments_: readonly string[],
+        environment: NodeJS.ProcessEnv,
+        io: DeploymentCliIo,
+        dependencies: DeploymentCliDependencies,
+        signals: typeof signalSource,
+      ) => Promise<number>
+    )(
+      [
+        'promote',
+        '--manifest',
+        manifestPath,
+        '--apply',
+        '--evidence',
+        'promotion.json',
+      ],
+      validEnvironment(),
+      output.io,
+      dependencies,
+      signalSource,
+    )
+
+    await started
+    listeners.get('SIGTERM')?.()
+
+    await expect(running).resolves.toBe(1)
+    expect(cleanupFinished).toBe(true)
+    expect(listeners.size).toBe(0)
   })
 })

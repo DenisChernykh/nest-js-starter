@@ -20,6 +20,7 @@ export interface ImageVerificationPort {
     readonly registryUrl: string
     readonly username: string
     readonly password: string
+    readonly signal?: AbortSignal
   }): Promise<void>
 }
 
@@ -39,6 +40,7 @@ export interface MigratorPort {
   migrate(input: {
     readonly imageRef: string
     readonly databaseUrl: string
+    readonly signal?: AbortSignal
   }): Promise<{ readonly exitCode: number }>
 }
 
@@ -73,6 +75,7 @@ export interface DokployPort {
    */
   listDeployments(
     applicationId: string,
+    signal?: AbortSignal,
   ): Promise<readonly DokployDeploymentRecord[]>
 
   /**
@@ -80,7 +83,11 @@ export interface DokployPort {
    *
    * @throws Error when Dokploy does not confirm the request.
    */
-  saveEnvironment(applicationId: string, environment: string): Promise<void>
+  saveEnvironment(
+    applicationId: string,
+    environment: string,
+    signal?: AbortSignal,
+  ): Promise<void>
 
   /**
    * Replaces the Docker provider with an immutable private-registry image.
@@ -93,6 +100,7 @@ export interface DokployPort {
     readonly registryUrl: string
     readonly username: string
     readonly password: string
+    readonly signal?: AbortSignal
   }): Promise<void>
 
   /**
@@ -104,6 +112,7 @@ export interface DokployPort {
     readonly applicationId: string
     readonly title: string
     readonly description: string
+    readonly signal?: AbortSignal
   }): Promise<void>
 }
 
@@ -124,7 +133,10 @@ export interface ExternalSmokePort {
    *
    * @throws Error when transport or response decoding prevents verification.
    */
-  verify(publicApiUrl: string): Promise<ExternalSmokeResult>
+  verify(
+    publicApiUrl: string,
+    signal?: AbortSignal,
+  ): Promise<ExternalSmokeResult>
 }
 
 /**
@@ -135,7 +147,7 @@ export interface ClockPort {
   nowMs(): number
 
   /** Resolves after the requested non-negative delay. */
-  sleep(milliseconds: number): Promise<void>
+  sleep(milliseconds: number, signal?: AbortSignal): Promise<void>
 }
 
 /** Mutating operator workflow recorded in deployment evidence. */

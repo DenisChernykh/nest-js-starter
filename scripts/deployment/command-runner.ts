@@ -10,6 +10,7 @@ export interface CommandInput {
   readonly environment?: Readonly<Record<string, string>>
   readonly stdin?: string
   readonly timeoutMs: number
+  readonly signal?: AbortSignal
 }
 
 /** Captured bounded child-process result. */
@@ -58,9 +59,10 @@ export class NodeCommandRunner implements CommandRunner {
    *
    * @param input - Validated process request.
    * @returns A frozen outcome; launch, exit and timeout failures remain data.
+   * @throws DOMException when the caller aborts the operation.
    */
   run(input: CommandInput): Promise<CommandOutcome> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const child = execFile(
         input.file,
         [...input.arguments],
@@ -70,8 +72,15 @@ export class NodeCommandRunner implements CommandRunner {
           env: { ...process.env, ...input.environment },
           maxBuffer: maximumOutputBytes,
           timeout: input.timeoutMs,
+          signal: input.signal,
         },
         (error, stdout, stderr) => {
+          if (error?.name === 'AbortError') {
+            const abortError = new Error('Command aborted')
+            abortError.name = 'AbortError'
+            reject(abortError)
+            return
+          }
           resolve(
             Object.freeze({
               exitCode: exitCode(error),

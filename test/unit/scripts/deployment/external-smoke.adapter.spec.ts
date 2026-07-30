@@ -38,8 +38,18 @@ function healthResponse(status = 200): Response {
   return new Response('', { status })
 }
 
+const completeAuthProblem = {
+  type: 'https://nest-js-starter.invalid/problems/authentication-required',
+  title: 'Authentication required',
+  status: 401,
+  detail: 'Authentication is required.',
+  instance: 'urn:request:019219c3-dc52-7cc1-9e70-f293ca14c198',
+  code: 'AUTHENTICATION_REQUIRED',
+  requestId: '019219c3-dc52-7cc1-9e70-f293ca14c198',
+} as const
+
 function authResponse(
-  body: unknown = { code: 'AUTHENTICATION_REQUIRED', status: 401 },
+  body: unknown = completeAuthProblem,
   contentType = 'application/problem+json; charset=utf-8',
 ): Response {
   return new Response(JSON.stringify(body), {
@@ -121,10 +131,7 @@ describe('ExternalSmokeAdapter', () => {
     },
     {
       name: 'wrong auth content type',
-      response: authResponse(
-        { code: 'AUTHENTICATION_REQUIRED', status: 401 },
-        'text/html',
-      ),
+      response: authResponse(completeAuthProblem, 'text/html'),
     },
     {
       name: 'malformed auth JSON',
@@ -168,6 +175,33 @@ describe('ExternalSmokeAdapter', () => {
     expect(JSON.stringify(failure)).not.toContain('sentinel-private-body')
     expect(JSON.stringify(failure)).not.toContain('private.example.com')
   })
+
+  it.each(['type', 'title', 'detail', 'instance', 'requestId'] as const)(
+    'rejects an auth problem missing %s',
+    async (field) => {
+      const incomplete = { ...completeAuthProblem } as Record<string, unknown>
+      delete incomplete[field]
+      const adapter = new ExternalSmokeAdapter({
+        fetchImplementation: createFetchFake(
+          [
+            healthResponse(),
+            healthResponse(),
+            healthResponse(),
+            authResponse(incomplete),
+          ],
+          [],
+        ),
+      })
+
+      await expect(
+        adapter.verify('https://stage-api.example.com'),
+      ).rejects.toMatchObject({
+        name: 'ExternalSmokeError',
+        endpoint: 'auth',
+        category: 'unexpected-problem',
+      })
+    },
+  )
 
   it('maps a timeout without exposing its message', async () => {
     const adapter = new ExternalSmokeAdapter({

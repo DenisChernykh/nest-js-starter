@@ -33,6 +33,7 @@ export interface ApplyDeploymentInput {
   readonly manifest: DeploymentReleaseManifest
   readonly live: DeploymentLiveEnvironment
   readonly evidencePath: string
+  readonly signal?: AbortSignal
 }
 
 /**
@@ -199,6 +200,7 @@ async function pollDeployment(
   applicationId: string,
   initial: DokployDeploymentRecord,
   observe: (deployment: DokployDeploymentRecord) => void,
+  signal?: AbortSignal,
 ): Promise<DokployDeploymentRecord> {
   const deadline = clock.nowMs() + pollDeadlineMs
   let current = initial
@@ -212,8 +214,16 @@ async function pollDeployment(
       throw new DeploymentExecutionError('poll-deployment', 'deadline')
     }
 
-    await clock.sleep(pollIntervalMs)
-    const records = await dokploy.listDeployments(applicationId)
+    const remainingMs = deadline - clock.nowMs()
+    await clock.sleep(Math.min(pollIntervalMs, remainingMs), signal)
+    if (clock.nowMs() >= deadline) {
+      throw new DeploymentExecutionError('poll-deployment', 'deadline')
+    }
+
+    const records = await dokploy.listDeployments(applicationId, signal)
+    if (clock.nowMs() >= deadline) {
+      throw new DeploymentExecutionError('poll-deployment', 'deadline')
+    }
     const matches = records.filter(
       (deployment) => deployment.deploymentId === initial.deploymentId,
     )
@@ -324,17 +334,19 @@ export class DeploymentOrchestrator {
           registryUrl: input.live.ghcrRegistryUrl,
           username: input.live.ghcrUsername,
           password: input.live.ghcrPassword,
+          ...(input.signal === undefined ? {} : { signal: input.signal }),
         }),
       )
 
       activeStep = 'migrate-candidate'
       await performStep(recorder, activeStep, async () => {
+        recorder.migrationOutcome = 'failed'
         const migration = await this.#dependencies.migrator.migrate({
           imageRef: input.manifest.candidate.imageRef,
           databaseUrl: input.live.migrationDatabaseUrl,
+          ...(input.signal === undefined ? {} : { signal: input.signal }),
         })
         if (migration.exitCode !== 0) {
-          recorder.migrationOutcome = 'failed'
           throw new DeploymentExecutionError(activeStep, 'non-zero-exit')
         }
         recorder.migrationOutcome = 'succeeded'
@@ -344,6 +356,7 @@ export class DeploymentOrchestrator {
       const before = await performStep(recorder, activeStep, () =>
         this.#dependencies.dokploy.listDeployments(
           input.live.dokployApplicationId,
+          input.signal,
         ),
       )
 
@@ -353,6 +366,7 @@ export class DeploymentOrchestrator {
         this.#dependencies.dokploy.saveEnvironment(
           input.live.dokployApplicationId,
           input.live.dokployApplicationEnvironment,
+          input.signal,
         ),
       )
 
@@ -364,6 +378,7 @@ export class DeploymentOrchestrator {
           registryUrl: input.live.ghcrRegistryUrl,
           username: input.live.ghcrUsername,
           password: input.live.ghcrPassword,
+          ...(input.signal === undefined ? {} : { signal: input.signal }),
         }),
       )
 
@@ -374,6 +389,7 @@ export class DeploymentOrchestrator {
           applicationId: input.live.dokployApplicationId,
           title,
           description: `Deploy ${input.manifest.candidate.revision}`,
+          ...(input.signal === undefined ? {} : { signal: input.signal }),
         }),
       )
 
@@ -381,6 +397,7 @@ export class DeploymentOrchestrator {
       const after = await performStep(recorder, activeStep, () =>
         this.#dependencies.dokploy.listDeployments(
           input.live.dokployApplicationId,
+          input.signal,
         ),
       )
 
@@ -401,6 +418,7 @@ export class DeploymentOrchestrator {
           (deployment) => {
             recorder.terminalStatus = deployment.status
           },
+          input.signal,
         ),
       )
       recorder.terminalStatus = terminal.status
@@ -409,6 +427,7 @@ export class DeploymentOrchestrator {
       const smoke = await performStep(recorder, activeStep, async () => {
         const result = await this.#dependencies.smoke.verify(
           input.manifest.publicApiUrl,
+          input.signal,
         )
         recorder.smoke = result
         requireSuccessfulSmoke(result)
@@ -472,6 +491,7 @@ export class DeploymentOrchestrator {
           registryUrl: input.live.ghcrRegistryUrl,
           username: input.live.ghcrUsername,
           password: input.live.ghcrPassword,
+          ...(input.signal === undefined ? {} : { signal: input.signal }),
         }),
       )
 
@@ -479,6 +499,7 @@ export class DeploymentOrchestrator {
       const before = await performStep(recorder, activeStep, () =>
         this.#dependencies.dokploy.listDeployments(
           input.live.dokployApplicationId,
+          input.signal,
         ),
       )
 
@@ -488,6 +509,7 @@ export class DeploymentOrchestrator {
         this.#dependencies.dokploy.saveEnvironment(
           input.live.dokployApplicationId,
           input.live.dokployPreviousApplicationEnvironment,
+          input.signal,
         ),
       )
 
@@ -499,6 +521,7 @@ export class DeploymentOrchestrator {
           registryUrl: input.live.ghcrRegistryUrl,
           username: input.live.ghcrUsername,
           password: input.live.ghcrPassword,
+          ...(input.signal === undefined ? {} : { signal: input.signal }),
         }),
       )
 
@@ -509,6 +532,7 @@ export class DeploymentOrchestrator {
           applicationId: input.live.dokployApplicationId,
           title,
           description: `Rollback ${input.manifest.rollback.revision}`,
+          ...(input.signal === undefined ? {} : { signal: input.signal }),
         }),
       )
 
@@ -516,6 +540,7 @@ export class DeploymentOrchestrator {
       const after = await performStep(recorder, activeStep, () =>
         this.#dependencies.dokploy.listDeployments(
           input.live.dokployApplicationId,
+          input.signal,
         ),
       )
 
@@ -536,6 +561,7 @@ export class DeploymentOrchestrator {
           (deployment) => {
             recorder.terminalStatus = deployment.status
           },
+          input.signal,
         ),
       )
       recorder.terminalStatus = terminal.status
@@ -544,6 +570,7 @@ export class DeploymentOrchestrator {
       const smoke = await performStep(recorder, activeStep, async () => {
         const result = await this.#dependencies.smoke.verify(
           input.manifest.publicApiUrl,
+          input.signal,
         )
         recorder.smoke = result
         requireSuccessfulSmoke(result)

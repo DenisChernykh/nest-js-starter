@@ -173,6 +173,29 @@ describe('DokployHttpAdapter', () => {
     ])
   })
 
+  it('refuses redirects for every secret-bearing Dokploy request', async () => {
+    const redirects: unknown[] = []
+    const adapter = new DokployHttpAdapter({
+      baseUrl: 'https://dokploy.example.com',
+      apiKey: 'dokploy-secret',
+      fetchImplementation: (_input, init) => {
+        redirects.push(init?.redirect)
+        return Promise.resolve(Response.json({}))
+      },
+    })
+
+    await adapter.saveDockerProvider({
+      applicationId: 'app-1',
+      imageRef:
+        'ghcr.io/denischernykh/nest-js-starter@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      registryUrl: 'https://ghcr.io',
+      username: 'operator',
+      password: 'registry-secret',
+    })
+
+    expect(redirects).toEqual(['error'])
+  })
+
   it.each([
     {
       name: '401',
