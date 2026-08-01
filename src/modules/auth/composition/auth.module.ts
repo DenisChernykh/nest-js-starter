@@ -48,7 +48,7 @@ import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { DatabaseModule } from '@/platform/database/database.module'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisModule } from '@/platform/redis/redis.module'
-import { REDIS_COORDINATION_COMMAND_EXECUTOR } from '@/platform/redis/redis.tokens'
+import { REDIS_AUTH_COMMAND_EXECUTOR } from '@/platform/redis/redis.tokens'
 import {
   DOCS_ACCESS_POLICY,
   type DocsAccessPolicy,
@@ -83,7 +83,7 @@ export interface AuthModuleOptions {
     {
       provide: RedisSessionStore,
       inject: [
-        REDIS_COORDINATION_COMMAND_EXECUTOR,
+        REDIS_AUTH_COMMAND_EXECUTOR,
         NodeAuthCryptoAdapter,
         RuntimeConfigService,
       ],
@@ -105,7 +105,7 @@ export interface AuthModuleOptions {
     {
       provide: RedisLoginRateLimiter,
       inject: [
-        REDIS_COORDINATION_COMMAND_EXECUTOR,
+        REDIS_AUTH_COMMAND_EXECUTOR,
         NodeAuthCryptoAdapter,
         RuntimeConfigService,
       ],

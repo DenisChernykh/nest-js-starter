@@ -28,7 +28,7 @@ export async function startTestRuntime(
   const baseUrl = `http://127.0.0.1:${port}`
   Object.assign(process.env, {
     DATABASE_URL: postgres.getConnectionUri(),
-    REDIS_COORDINATION_URL: redis.getConnectionUrl(),
+    REDIS_AUTH_URL: redis.getConnectionUrl(),
     AUTH_SESSION_KEY_SECRET: Buffer.alloc(32, 1).toString('base64url'),
     AUTH_CSRF_SECRET: Buffer.alloc(32, 2).toString('base64url'),
     AUTH_RATE_LIMIT_KEY_SECRET: Buffer.alloc(32, 3).toString('base64url'),
@@ -48,7 +48,7 @@ export async function startTestRuntime(
 export function clearTestRuntimeEnvironment(): void {
   for (const key of [
     'DATABASE_URL',
-    'REDIS_COORDINATION_URL',
+    'REDIS_AUTH_URL',
     'AUTH_SESSION_KEY_SECRET',
     'AUTH_CSRF_SECRET',
     'AUTH_RATE_LIMIT_KEY_SECRET',

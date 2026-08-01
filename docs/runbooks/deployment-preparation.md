@@ -300,7 +300,7 @@ CORS_ORIGINS
 TRUST_PROXY_CIDRS
 DATABASE_URL
 DATABASE_POOL_MAX
-REDIS_COORDINATION_URL
+REDIS_AUTH_URL
 REDIS_KEY_PREFIX
 AUTH_SESSION_KEY_SECRET
 AUTH_CSRF_SECRET
@@ -318,7 +318,7 @@ secret injection. Production contract требует:
 - `SERVICE_REVISION` ровно один раз присутствует в complete runtime environment
   и byte-for-byte равен Stage revision и
   `org.opencontainers.image.revision` одобренного digest;
-- coordination Redis не использует logical database selection;
+- auth Redis не использует logical database selection;
 - четыре auth secrets независимы друг от друга, каждый является 32-byte
   base64url value и хранится только в будущем secret provider;
 - telemetry либо имеет назначенного владельца endpoint, либо сознательно
@@ -344,7 +344,7 @@ PostgreSQL:
 [PostgreSQL role runbook](deployment-database-roles.md). Repository preparation
 только фиксирует target database/role identities и владельца будущей операции.
 
-Coordination Redis содержит authoritative persistent session/rate-limit state,
+Auth Redis содержит authoritative persistent session/rate-limit state,
 а не disposable cache. Для будущего environment зафиксируйте владельца:
 
 - persistent storage и AOF;
@@ -355,7 +355,7 @@ Coordination Redis содержит authoritative persistent session/rate-limit 
 
 Ни deployment, ни recovery не выполняет `FLUSHDB` / `FLUSHALL`. Подробности
 находятся в [security baseline](deployment-security.md) и
-[coordination Redis loss runbook](coordination-redis-loss.md).
+[auth Redis loss runbook](auth-redis-loss.md).
 
 Backup policy должен иметь явного владельца, off-host target, retention и
 изолированный restore drill. Не считайте bucket, credentials, schedule или
@@ -417,7 +417,7 @@ inputs:
 - Runtime non-secret expected values/reference:
 - PostgreSQL role contract owner:
 - PostgreSQL database/migrator/runtime role names/reference:
-- Coordination Redis durability owner:
+- Auth Redis durability owner:
 - Redis key prefix and durability inputs/reference:
 - Domain/TLS/proxy input owner:
 - Public origin/browser origins/trusted proxy CIDRs/reference:
@@ -483,7 +483,7 @@ Focused runbooks и repository files остаются authoritative; этот д
 | Public perimeter, credentials and Redis durability    | [`deployment-security.md`](deployment-security.md)                                                                                                                                                             |
 | PostgreSQL backup ownership and isolated restore      | [`postgres-backup-restore.md`](postgres-backup-restore.md)                                                                                                                                                     |
 | Stage publication semantics                           | [`stage-image-publication.md`](stage-image-publication.md)                                                                                                                                                     |
-| Redis-loss procedure                                  | [`coordination-redis-loss.md`](coordination-redis-loss.md)                                                                                                                                                     |
+| Redis-loss procedure                                  | [`auth-redis-loss.md`](auth-redis-loss.md)                                                                                                                                                                     |
 | Secret-compromise procedure                           | [`session-secret-compromise.md`](session-secret-compromise.md)                                                                                                                                                 |
 | Telemetry-loss procedure                              | [`telemetry-collector-loss.md`](telemetry-collector-loss.md)                                                                                                                                                   |
 | Later hosted deployment adapter                       | [`dokploy-deployment.md`](dokploy-deployment.md)                                                                                                                                                               |

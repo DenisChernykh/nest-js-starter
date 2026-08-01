@@ -31,14 +31,14 @@ runtime-конфигурацию приложения.
   runtime-identity не получает права на migration/DDL.
 - Выдавайте отдельные least-privilege credentials для PostgreSQL, Redis и
   deployment control plane. Ограничьте Redis ACL только командами и keyspace,
-  нужными coordination-сессиям и login limits.
+  нужными auth-сессиям и login limits.
 - Храните credentials и четыре auth secrets только в secret provider. Не
   помещайте их в image, Git, shell history, логи, evidence или support tickets.
   Отзывайте доступ уходящих людей и старые credentials по процедуре владельца.
 
-## Coordination Redis: durability contract
+## Auth Redis: durability contract
 
-Coordination Redis содержит активные opaque sessions и login-limit state, это
+Auth Redis содержит активные opaque sessions и login-limit state, это
 не disposable cache. Его data directory должен находиться на persistent storage,
 который переживает replacement container/VM и имеет проверяемое резервное
 копирование.
@@ -64,7 +64,7 @@ automatic `FLUSHDB`/`FLUSHALL` как часть deployment или recovery.
 2. Убедитесь, что все API replicas получают один согласованный configuration
    revision и что Redis использует authoritative persistent storage.
 3. После запуска проверьте `/health/live`, `/health/startup` и `/health/ready`;
-   readiness допускает traffic только при доступных PostgreSQL и coordination
+   readiness допускает traffic только при доступных PostgreSQL и auth
    Redis.
 4. Если security input или Redis durability contract не подтверждён, остановите
    promotion и эскалируйте владельцу infrastructure. Не исправляйте это

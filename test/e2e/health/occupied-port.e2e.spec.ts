@@ -56,7 +56,7 @@ describe('compiled API occupied port startup failure', () => {
       ...process.env,
       NODE_ENV: 'test',
       DATABASE_URL: `postgresql://user:${databaseSentinel}@127.0.0.1:1/app`,
-      REDIS_COORDINATION_URL: 'redis://127.0.0.1:1',
+      REDIS_AUTH_URL: 'redis://127.0.0.1:1',
       AUTH_SESSION_KEY_SECRET: Buffer.alloc(32, 1).toString('base64url'),
       AUTH_CSRF_SECRET: Buffer.alloc(32, 2).toString('base64url'),
       AUTH_RATE_LIMIT_KEY_SECRET: Buffer.alloc(32, 3).toString('base64url'),

@@ -17,12 +17,19 @@ export interface DatabaseRuntimeDefaults {
   readonly transactionTimeoutMs: number
 }
 
-/** Fixed coordination Redis connection and command deadlines. */
+/** Fixed auth Redis connection and command deadlines. */
 export interface RedisRuntimeDefaults {
   readonly connectTimeoutMs: number
   readonly commandTimeoutMs: number
   readonly healthTimeoutMs: number
   readonly shutdownTimeoutMs: number
+}
+
+/** Fixed optional BullMQ queue connection and worker deadlines. */
+export interface QueueRuntimeDefaults {
+  readonly connectTimeoutMs: number
+  readonly healthTimeoutMs: number
+  readonly shutdownGraceMs: number
 }
 
 /** Fixed browser-session and distributed-login policy. */
@@ -50,6 +57,7 @@ export interface RuntimeDefaults {
   readonly http: HttpRuntimeDefaults
   readonly database: DatabaseRuntimeDefaults
   readonly redis: RedisRuntimeDefaults
+  readonly queue: QueueRuntimeDefaults
   readonly auth: AuthRuntimeDefaults
   readonly observability: ObservabilityRuntimeDefaults
 }
@@ -76,6 +84,11 @@ export const runtimeDefaults: RuntimeDefaults = Object.freeze({
     commandTimeoutMs: 2_000,
     healthTimeoutMs: 2_500,
     shutdownTimeoutMs: 1_000,
+  }),
+  queue: Object.freeze({
+    connectTimeoutMs: 2_000,
+    healthTimeoutMs: 2_500,
+    shutdownGraceMs: 10_000,
   }),
   auth: Object.freeze({
     sessionIdleTimeoutMs: 604_800_000,

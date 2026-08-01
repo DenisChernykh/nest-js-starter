@@ -56,6 +56,6 @@ auth secrets. При неизвестном scope считайте скомпр�
 4. Выполните новый login, запросите protected endpoint и зафиксируйте успешную
    новую session. Не записывайте cookie, secret или URL.
 
-Если readiness не возвращается, следуйте runbook потери coordination Redis.
+Если readiness не возвращается, следуйте runbook потери auth Redis.
 Не откатывайте secret rotation частично и не смешивайте revisions ради
 кратковременного сохранения старых sessions.

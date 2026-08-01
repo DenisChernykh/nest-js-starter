@@ -62,7 +62,8 @@ export class RuntimeConfigService {
       corsOriginCount: this.httpConfig.corsOrigins.length,
       trustedProxyCount: this.httpConfig.trustedProxyCidrs.length,
       databasePoolMax: this.databaseConfig.poolMax,
-      redisCoordinationConfigured: true,
+      redisAuthConfigured: true,
+      redisQueueConfigured: this.redisConfig.queueUrl !== undefined,
       authCookieName: this.authConfig.sessionCookieName,
     })
   }

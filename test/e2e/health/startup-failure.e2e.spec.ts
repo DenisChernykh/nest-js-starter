@@ -44,7 +44,7 @@ describe('compiled API startup failure', () => {
     child = spawnBuiltApi({
       ...process.env,
       DATABASE_URL: container.getConnectionUri(),
-      REDIS_COORDINATION_URL: 'redis://127.0.0.1:1',
+      REDIS_AUTH_URL: 'redis://127.0.0.1:1',
       OTEL_SDK_DISABLED: 'true',
       AUTH_SESSION_KEY_SECRET: Buffer.alloc(32, 1).toString('base64url'),
       AUTH_CSRF_SECRET: Buffer.alloc(32, 2).toString('base64url'),

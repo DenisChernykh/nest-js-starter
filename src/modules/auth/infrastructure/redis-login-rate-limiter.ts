@@ -64,7 +64,7 @@ export class RedisLoginRateLimiter implements LoginRateLimiterPort {
       throw new Error('Redis login limiter policy is invalid')
     }
     this.keys = new RedisKeyBuilder(
-      [config.keyPrefix, config.environment, 'coordination'],
+      [config.keyPrefix, config.environment, 'auth'],
       'v1',
     )
     this.scripts = new RedisScriptRunner(executor)

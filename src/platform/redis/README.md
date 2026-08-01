@@ -1,7 +1,7 @@
 # Redis platform
 
-The platform owns one required `coordination` connection. Its
-`RedisCoordinationConnectionManager` exports a bounded command executor,
+The platform owns one required `auth` connection. Its
+`RedisAuthConnectionManager` exports a bounded command executor,
 lifecycle and readiness indicator. Auth session and distributed rate-limit
 adapters receive the executor directly.
 

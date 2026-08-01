@@ -57,7 +57,7 @@ function authEnvironment(
   return {
     ...process.env,
     DATABASE_URL: databaseUrl,
-    REDIS_COORDINATION_URL: redisUrl,
+    REDIS_AUTH_URL: redisUrl,
     API_HOST: '127.0.0.1',
     API_PORT: new URL(baseUrl).port,
     PUBLIC_API_URL: baseUrl,

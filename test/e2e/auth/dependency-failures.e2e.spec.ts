@@ -53,7 +53,7 @@ describe('auth dependency failure policy', () => {
     await runtime.stop()
   })
 
-  it('keeps readiness limited to required coordination dependencies', async () => {
+  it('keeps readiness limited to required auth dependencies', async () => {
     const readiness = await fetch(`${baseUrl}/health/ready`)
     expect(readiness.status).toBe(200)
     const body = (await readiness.json()) as {
@@ -62,7 +62,7 @@ describe('auth dependency failure policy', () => {
     expect(body.checks).toEqual({
       draining: 'up',
       postgresql: 'up',
-      'redis-coordination': 'up',
+      'redis-auth': 'up',
       startup: 'up',
     })
     expect(
@@ -71,7 +71,7 @@ describe('auth dependency failure policy', () => {
     ).toBe(200)
   })
 
-  it('fails auth closed and readiness red during coordination loss', async () => {
+  it('fails auth closed and readiness red during auth Redis loss', async () => {
     const session = await loginResponse(
       baseUrl,
       'dependency@example.com',

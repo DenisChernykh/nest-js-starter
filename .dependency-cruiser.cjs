@@ -60,7 +60,7 @@ module.exports = {
       severity: 'error',
       from: { path: '(^|/)domain(/|$)' },
       to: {
-        path: '(^|/)(node_modules/)?(@nestjs/|@prisma/|@opentelemetry/|express(/|$)|ioredis(/|$)|pino(/|$)|redis(/|$))',
+        path: '(^|/)(node_modules/)?(@nestjs/|@prisma/|@opentelemetry/|bullmq(/|$)|express(/|$)|ioredis(/|$)|pino(/|$)|redis(/|$))',
       },
     },
     {
@@ -76,7 +76,7 @@ module.exports = {
       severity: 'error',
       from: { path: '(^|/)application(/|$)' },
       to: {
-        path: '(^|/)(node_modules/)?(@nestjs/(?!common(/|$))|@prisma/|@opentelemetry/|express(/|$)|ioredis(/|$)|pino(/|$)|redis(/|$))',
+        path: '(^|/)(node_modules/)?(@nestjs/(?!common(/|$))|@prisma/|@opentelemetry/|bullmq(/|$)|express(/|$)|ioredis(/|$)|pino(/|$)|redis(/|$))',
       },
     },
     {
@@ -100,7 +100,7 @@ module.exports = {
       severity: 'error',
       from: { path: '(^|/)presentation(/|$)' },
       to: {
-        path: '(^|/)infrastructure(/|$)|(^|/)(node_modules/)?(@prisma/|ioredis(/|$)|redis(/|$))',
+        path: '(^|/)infrastructure(/|$)|(^|/)(node_modules/)?(@nestjs/bullmq(/|$)|@prisma/|bullmq(/|$)|ioredis(/|$)|redis(/|$))',
       },
     },
     {

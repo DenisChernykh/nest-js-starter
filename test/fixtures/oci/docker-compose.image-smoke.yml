@@ -2,7 +2,7 @@ services:
   postgres:
     ports: !reset []
 
-  redis-coordination:
+  redis-auth:
     command:
       - redis-server
       - --appendonly
@@ -54,6 +54,6 @@ services:
     depends_on:
       migrator:
         condition: service_completed_successfully
-      redis-coordination:
+      redis-auth:
         condition: service_healthy
     restart: 'no'

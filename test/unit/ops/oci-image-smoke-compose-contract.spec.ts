@@ -24,7 +24,7 @@ interface ResolvedComposeConfiguration {
 
 const image =
   'ghcr.io/example/nest-js-starter@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-const redisUrl = 'redis://default:smoke-password@redis-coordination:6379'
+const redisUrl = 'redis://default:smoke-password@redis-auth:6379'
 
 function resolveImageSmokeCompose(): ResolvedComposeConfiguration {
   const temporaryDirectory = mkdtempSync(
@@ -53,10 +53,10 @@ function resolveImageSmokeCompose(): ResolvedComposeConfiguration {
       'POSTGRES_PORT=0',
       'POSTGRES_USER=starter',
       'PUBLIC_API_URL=https://api.invalid',
-      `REDIS_COORDINATION_URL=${redisUrl}`,
+      `REDIS_AUTH_URL=${redisUrl}`,
       'REDIS_KEY_PREFIX=smoke-contract',
       'REDIS_PASSWORD=smoke-password',
-      'REDIS_PORT=0',
+      'REDIS_AUTH_PORT=0',
       'SERVICE_REVISION=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       'SERVICE_VERSION=0.0.0-smoke',
       `SMOKE_ENV_FILE=${envFilePath}`,
@@ -132,7 +132,7 @@ describe('OCI image smoke Compose contract', () => {
     expect(api.environment).toMatchObject({
       NODE_ENV: 'production',
       OTEL_SDK_DISABLED: 'true',
-      REDIS_COORDINATION_URL: redisUrl,
+      REDIS_AUTH_URL: redisUrl,
     })
     expect(api.environment).not.toHaveProperty('OTEL_EXPORTER_OTLP_ENDPOINT')
     expect(api.ports).toEqual([
@@ -146,7 +146,7 @@ describe('OCI image smoke Compose contract', () => {
       DATABASE_URL:
         'postgresql://starter:postgres-password@postgres:5432/starter?schema=public',
       NODE_ENV: 'production',
-      REDIS_COORDINATION_URL: redisUrl,
+      REDIS_AUTH_URL: redisUrl,
     })
   })
 })

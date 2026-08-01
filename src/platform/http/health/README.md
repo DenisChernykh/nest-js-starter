@@ -6,7 +6,7 @@ readiness is skipped while starting or draining and re-checks lifecycle after
 dependency probes settle.
 
 `HealthRegistry` receives one immutable list containing the PostgreSQL and
-coordination Redis probes. It runs them concurrently with bounded child
+auth Redis probes. It runs them concurrently with bounded child
 signals, without registration or sealing ceremony. Probe failures are mapped
 to `down` without exposing driver details.
 

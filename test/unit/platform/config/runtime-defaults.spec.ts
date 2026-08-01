@@ -23,6 +23,11 @@ describe('runtimeDefaults', () => {
       healthTimeoutMs: 2_500,
       shutdownTimeoutMs: 1_000,
     })
+    expect(runtimeDefaults.queue).toEqual({
+      connectTimeoutMs: 2_000,
+      healthTimeoutMs: 2_500,
+      shutdownGraceMs: 10_000,
+    })
     expect(runtimeDefaults.auth).toEqual({
       sessionIdleTimeoutMs: 604_800_000,
       sessionAbsoluteTimeoutMs: 2_592_000_000,
@@ -38,6 +43,7 @@ describe('runtimeDefaults', () => {
     })
     expect(Object.isFrozen(runtimeDefaults)).toBe(true)
     expect(Object.isFrozen(runtimeDefaults.http)).toBe(true)
+    expect(Object.isFrozen(runtimeDefaults.queue)).toBe(true)
     expect(Object.isFrozen(runtimeDefaults.auth)).toBe(true)
   })
 })

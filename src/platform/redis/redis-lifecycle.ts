@@ -1,12 +1,12 @@
-import type { RedisCoordinationConnectionManager } from './redis-coordination.connection'
+import type { RedisAuthConnectionManager } from './redis-auth.connection'
 
-/** Connects and closes the single Redis coordination dependency. */
+/** Connects and closes the single Redis auth dependency. */
 export class RedisLifecycle {
   private connectPromise?: Promise<void>
   private closePromise?: Promise<void>
 
   public constructor(
-    private readonly connection: RedisCoordinationConnectionManager,
+    private readonly connection: RedisAuthConnectionManager,
     private readonly shutdownTimeoutMs: number,
   ) {}
 
