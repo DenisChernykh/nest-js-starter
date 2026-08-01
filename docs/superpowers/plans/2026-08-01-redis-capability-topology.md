@@ -575,9 +575,11 @@ ci` against the dirty implementation checkout because it recreates
 output; a registry or sandbox failure is an environment boundary and permits
 one identical host retry, not a policy change.
 
-Once the clean install passes, return to the preserved implementation checkout
-and resume the existing Milestone 3 from its aggregate gate. Do not repeat its
-already-green focused tests unless a corrective file overlaps them.
+Once the clean install passes, return to the preserved implementation checkout,
+confirm the Milestone 3 diff is intact, report the corrective milestone packet
+and stop. Do not run `check:quick` or resume Milestone 3 until this corrective
+milestone is accepted. When M3 resumes, do not repeat its already-green focused
+tests unless a corrective file overlaps them.
 
 ---
 
