@@ -46,7 +46,7 @@ describe('ApiModule composition', () => {
     expect(Object.isFrozen(roleSnapshot?.[0]?.permissions)).toBe(true)
   })
 
-  it('compiles the configured runtime providers and health controller', async () => {
+  it('compiles the API without requiring the opt-in queue configuration', async () => {
     const rawEnvironment = {
       DATABASE_URL: 'postgresql://test:test@localhost:5432/test',
       REDIS_AUTH_URL: 'redis://127.0.0.1:6379',
@@ -57,6 +57,7 @@ describe('ApiModule composition', () => {
       OTEL_SDK_DISABLED: 'true',
     }
     const config = buildApiRuntimeConfig(rawEnvironment)
+    expect(config.redis.queueUrl).toBeUndefined()
     const apiModule =
       (await import('../../../src/bootstrap/api/api.module.js')) as {
         readonly ApiModule: typeof ApiModuleClass
