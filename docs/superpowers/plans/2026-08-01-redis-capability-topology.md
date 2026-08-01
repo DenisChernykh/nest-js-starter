@@ -1,9 +1,12 @@
 # Redis Capability Topology Implementation Plan
 
-> **Executor:** one `gpt-5.6-luna` agent with `max` reasoning. Do not use
+> **Executor:** one continuous execution task. Milestones 1-2.6 were executed
+> by `gpt-5.6-luna` with `max` reasoning. The repeated implementation/typecheck
+> blocker recorded in Corrective Milestone 2.7 activates the agreed switch of
+> this same task to `gpt-5.6-terra` with `xhigh` reasoning. Do not use
 > `subagent-driven-development`, do not create subagents and do not split the
-> milestones between implementers. Execute one accepted milestone at a time in
-> this same task.
+> milestones between execution tasks. Execute one accepted milestone at a time
+> in this same task.
 
 **Goal:** Atomically rename the starter's required Redis dependency to
 `redis-auth`, add an opt-in physical `redis-queue` and provide a reusable
@@ -672,6 +675,102 @@ Milestone 4 until Corrective Milestone 2.6 is accepted.
 
 ---
 
+## Corrective Milestone 2.7: Align the BullMQ ioredis type identity
+
+### Why this correction exists
+
+After the focused Milestone 3 checks passed, the repaired `check:quick` reached
+`typecheck:src` and exposed a committed Milestone 2 dependency mismatch.
+The starter directly installs `ioredis@5.11.1`, while `bullmq@5.79.0` installs
+its own `ioredis@5.10.1`. TypeScript therefore sees two distinct protected
+`AbstractConnector` type identities when `RedisOptions` is passed to
+`BullModule.forRoot` in `bullmq-connection.module.ts`. The two `TS2322` errors
+at lines 24 and 41 are a dependency-graph defect, not a Milestone 3 behavior
+failure.
+
+This is the repeated implementation/typecheck blocker defined by the
+escalation contract. Continue this same execution task with
+`gpt-5.6-terra`/`xhigh`; do not create or hand the work to another task.
+
+Preserve the complete uncommitted Milestone 3 working tree. Do not discard,
+stash, stage or rewrite any Milestone 3 path while completing this correction.
+
+### Files
+
+Modify only:
+
+- `pnpm-workspace.yaml`
+- `pnpm-lock.yaml`
+
+### Required correction
+
+1. Add this exact root pnpm override alongside the existing targeted override:
+
+   ```yaml
+   overrides:
+     '@nestjs/swagger>js-yaml': 5.2.2
+     'bullmq>ioredis': 5.11.1
+     find-my-way: 9.7.0
+   ```
+
+   Keep the direct exact dependency `ioredis@5.11.1`. Do not downgrade it,
+   change BullMQ/Nest versions, add a cast, import BullMQ's private nested
+   package, weaken TypeScript or use `skipLibCheck`.
+
+2. Regenerate `pnpm-lock.yaml` with Node `24.18.0` and pnpm `11.15.1`.
+   The resolved graph must contain one `ioredis@5.11.1` package and no
+   `ioredis@5.10.1` package.
+3. Treat the override as a compatibility hypothesis until both the focused
+   source typecheck and the existing real-Redis integration proof pass.
+4. Make no source, test, Compose, environment or product behavior change.
+
+### Verification and commit
+
+Use the project Node binary by prepending its directory to the inherited
+`PATH`. First update the dependency graph in the implementation checkout:
+
+```bash
+corepack pnpm@11.15.1 install --lockfile-only
+rg -n "ioredis@5\\.10\\.1|ioredis@5\\.11\\.1" pnpm-lock.yaml
+corepack pnpm@11.15.1 why ioredis
+corepack pnpm@11.15.1 run typecheck:src
+corepack pnpm@11.15.1 exec jest \
+  --config jest.unit.config.mjs --runInBand \
+  test/unit/platform/queue/bullmq-redis-options.spec.ts \
+  test/unit/platform/queue/bullmq-connection.module.spec.ts
+corepack pnpm@11.15.1 exec jest \
+  --config jest.integration.config.mjs --runInBand \
+  test/integration/platform/queue/bullmq-connection.integration.spec.ts
+git diff --check
+```
+
+If Docker/Testcontainers is unavailable, retain the exact output and retry the
+identical integration command once in a capable host environment. Do not
+replace the real Redis proof with a mock.
+
+Stage only the two corrective files and commit:
+
+```bash
+git add pnpm-workspace.yaml pnpm-lock.yaml
+git diff --cached --name-only
+git commit -m "fix(queue): align BullMQ ioredis dependency"
+```
+
+After the commit, prove the lockfile from a disposable clean checkout at the
+corrective commit:
+
+```bash
+corepack pnpm@11.15.1 ci
+corepack pnpm@11.15.1 run typecheck:src
+```
+
+Do not run `pnpm ci` in the dirty implementation checkout. Confirm the
+uncommitted Milestone 3 paths are unchanged and unstaged, report the corrective
+milestone packet and stop. Do not rerun the aggregate `check:quick`, commit M3
+or start Milestone 4 until Corrective Milestone 2.7 is accepted.
+
+---
+
 ## Milestone 3: Worker lifecycle and real physical queue proof
 
 ### Outcome
@@ -773,7 +872,7 @@ corepack pnpm@11.15.1 exec jest \
   test/unit/ops/local-compose-runtime-contract.spec.ts
 ```
 
-After Milestones 1-2 and Corrective Milestones 2.5-2.6 are committed and the
+After Milestones 1-2 and Corrective Milestones 2.5-2.7 are committed and the
 Milestone 3 focused checks are green, run the repaired implementation-batch
 gate once:
 
@@ -938,16 +1037,16 @@ milestones are not escalation conditions.
 
 ## Handoff after Milestone 4
 
-Luna returns:
+The continuous execution task returns:
 
 1. final branch and full HEAD;
 2. one-line result and commit for each milestone, including Corrective
-   Milestones 2.5 and 2.6;
+   Milestones 2.5, 2.6 and 2.7;
 3. exact focused, `check:quick`, `check` and OCI commands with fresh outcomes;
 4. any environment boundary or unverified gate;
 5. confirmation that no push, PR, merge, deployment or backend edit occurred.
 
 Then `Sol xhigh` performs one read-only whole-feature review against the design
-and this plan. Confirmed findings return as one batch to the same Luna task for
-one fix wave, followed by final verification here. Do not create parallel
+and this plan. Confirmed findings return as one batch to the same execution task
+for one fix wave, followed by final verification here. Do not create parallel
 implementers or per-milestone reviewers.
