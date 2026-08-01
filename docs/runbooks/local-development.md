@@ -113,7 +113,7 @@ replayed.
 ## Occupied ports and Docker socket
 
 All published ports bind to `127.0.0.1`. Override `API_PORT`, `GRAFANA_PORT`,
-`OTLP_HTTP_PORT`, `POSTGRES_PORT` or `REDIS_PORT` in `.env` when a local port is
+`OTLP_HTTP_PORT`, `POSTGRES_PORT` or `REDIS_AUTH_PORT` in `.env` when a local port is
 occupied, then restart the workflow.
 
 Alloy mounts `/var/run/docker.sock` read-only and filters discovery to the

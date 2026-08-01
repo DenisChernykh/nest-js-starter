@@ -97,7 +97,7 @@ authenticated requests.
 
 Internal timeouts and tuning are typed code defaults in
 `src/platform/config/runtime-defaults.ts`. Deployment inputs are documented in
-`.env.example`; local Compose-only `POSTGRES_*` and `REDIS_PORT` inputs remain
+`.env.example`; local Compose-only `POSTGRES_*` and `REDIS_AUTH_PORT` inputs remain
 there. The API process does not run migrations; local Compose starts a separate
 one-shot migrator and gates API startup on its successful exit.
 
