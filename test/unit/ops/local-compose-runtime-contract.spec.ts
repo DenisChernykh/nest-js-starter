@@ -64,7 +64,9 @@ interface ResolvedComposeConfiguration {
   readonly volumes?: Readonly<Record<string, unknown>>
 }
 
-function resolveLocalCompose(): ResolvedComposeConfiguration {
+function resolveLocalCompose(
+  profiles: readonly string[] = ['development', 'observability'],
+): ResolvedComposeConfiguration {
   const result = spawnSync(
     'docker',
     [
@@ -73,10 +75,7 @@ function resolveLocalCompose(): ResolvedComposeConfiguration {
       'nest-js-starter-contract',
       '--env-file',
       '.env.example',
-      '--profile',
-      'development',
-      '--profile',
-      'observability',
+      ...profiles.flatMap((profile) => ['--profile', profile]),
       'config',
       '--format',
       'json',
@@ -91,6 +90,7 @@ function resolveLocalCompose(): ResolvedComposeConfiguration {
         OTLP_HTTP_PORT: '34318',
         POSTGRES_PORT: '35432',
         REDIS_AUTH_PORT: '36379',
+        REDIS_QUEUE_PORT: '36380',
       },
     },
   )
@@ -147,9 +147,7 @@ describe('local Compose runtime contract', () => {
     expect(api.depends_on?.migrator?.condition).toBe(
       'service_completed_successfully',
     )
-    expect(api.depends_on?.['redis-auth']?.condition).toBe(
-      'service_healthy',
-    )
+    expect(api.depends_on?.['redis-auth']?.condition).toBe('service_healthy')
     expect(api.depends_on).not.toHaveProperty('alloy')
     expect(api.environment).toEqual(
       expect.objectContaining({
@@ -239,6 +237,49 @@ describe('local Compose runtime contract', () => {
         ),
       ).toBe(true)
     }
+  })
+
+  it('exposes an independent queue Redis only through the queues profile', () => {
+    const configuration = resolveLocalCompose(['queues'])
+    const queue = requireService(configuration, 'redis-queue')
+
+    expect(queue.profiles).toEqual(['queues'])
+    expect(queue.image).toBe(
+      'redis:8.8.0-trixie@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b',
+    )
+    expect(queue.command).toEqual([
+      'redis-server',
+      '--appendonly',
+      'yes',
+      '--appendfsync',
+      'always',
+      '--maxmemory-policy',
+      'noeviction',
+      '--requirepass',
+      'local-development-queue-only',
+    ])
+    expect(queue.ports).toEqual([
+      expect.objectContaining({
+        host_ip: '127.0.0.1',
+        published: '36380',
+        target: 6379,
+      }),
+    ])
+    expect(queue.volumes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'redis-queue-data',
+          target: '/data',
+          type: 'volume',
+        }),
+      ]),
+    )
+    expect(queue.healthcheck?.test).toEqual([
+      'CMD-SHELL',
+      'REDISCLI_AUTH=local-development-queue-only redis-cli ping | grep PONG',
+    ])
+    expect(configuration.volumes).toHaveProperty('redis-queue-data')
+    expect(configuration.services.api).toBeUndefined()
   })
 
   it('pins and isolates the local observability services', () => {

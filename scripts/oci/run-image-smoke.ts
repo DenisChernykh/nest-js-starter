@@ -14,6 +14,7 @@ interface RuntimeProbe {
   readonly devBinaries: readonly string[]
   readonly forbiddenPaths: readonly string[]
   readonly gid: number
+  readonly queueDependencies: readonly string[]
   readonly requiredPaths: readonly string[]
   readonly uid: number
 }
@@ -167,6 +168,7 @@ function assertRuntimeProbe(probe: RuntimeProbe): void {
     '/app/prisma',
     '/app/prisma.config.ts',
   ]
+  const queueDependencies = ['@nestjs/bullmq', 'bullmq', 'ioredis']
   if (
     !Number.isInteger(probe.uid) ||
     probe.uid <= 0 ||
@@ -174,7 +176,11 @@ function assertRuntimeProbe(probe: RuntimeProbe): void {
     probe.gid <= 0 ||
     probe.forbiddenPaths.length > 0 ||
     probe.devBinaries.length > 0 ||
-    required.some((path) => !probe.requiredPaths.includes(path))
+    required.some((path) => !probe.requiredPaths.includes(path)) ||
+    probe.queueDependencies.length !== queueDependencies.length ||
+    queueDependencies.some(
+      (dependency) => !probe.queueDependencies.includes(dependency),
+    )
   )
     throw new Error('Invalid OCI image runtime filesystem')
 }
@@ -450,7 +456,7 @@ async function main(): Promise<void> {
         'API container inspection',
       )
     ).stdout.trim()
-    const runtimeProbeScript = `const fs=require('node:fs');const required=['/app/dist','/app/node_modules','/app/package.json','/app/prisma','/app/prisma.config.ts'];const forbidden=['/app/src','/app/test','/app/coverage','/app/.env','/app/.git','/usr/local/lib/node_modules/npm','/usr/local/bin/npm','/usr/local/bin/npx'];const dev=['/app/node_modules/.bin/tsx','/app/node_modules/.bin/tsc','/app/node_modules/typescript'];console.log(JSON.stringify({uid:process.getuid(),gid:process.getgid(),requiredPaths:required.filter(fs.existsSync),forbiddenPaths:forbidden.filter(fs.existsSync),devBinaries:dev.filter(fs.existsSync)}))`
+    const runtimeProbeScript = `const fs=require('node:fs');const required=['/app/dist','/app/node_modules','/app/package.json','/app/prisma','/app/prisma.config.ts'];const forbidden=['/app/src','/app/test','/app/coverage','/app/.env','/app/.git','/usr/local/lib/node_modules/npm','/usr/local/bin/npm','/usr/local/bin/npx'];const dev=['/app/node_modules/.bin/tsx','/app/node_modules/.bin/tsc','/app/node_modules/typescript'];const queueDependencies=['@nestjs/bullmq','bullmq','ioredis'].filter((name)=>{try{return require.resolve(name,{paths:['/app']})!==''}catch{return false}});console.log(JSON.stringify({uid:process.getuid(),gid:process.getgid(),requiredPaths:required.filter(fs.existsSync),forbiddenPaths:forbidden.filter(fs.existsSync),devBinaries:dev.filter(fs.existsSync),queueDependencies}))}`
     const runtimeProbe = await requireCommand(
       'docker',
       ['exec', apiId, 'node', '-e', runtimeProbeScript],
