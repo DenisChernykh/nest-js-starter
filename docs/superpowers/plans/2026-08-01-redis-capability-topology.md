@@ -631,6 +631,7 @@ Modify only:
    Each producer/worker test calls the helper and retains its assertion that
    the outer `BullmqConnectionModule` has no providers. Do not change the
    production module.
+
 2. In `queue-runtime-config.spec.ts`, import `ApplicationRuntimeConfig` as a
    type and declare `createConfig(queueUrl?: string): ApplicationRuntimeConfig`.
 3. In `dependency-cruiser-policy.spec.ts`, import
@@ -736,7 +737,7 @@ Modify:
       `jest.MockedFunction<WorkerTerminationWaiter>`;
     - replace every `async` callback with no `await` by `Promise.resolve()`,
       `Promise.reject(error)` or direct `closeOnce()` return as appropriate.
-    Do not disable or suppress ESLint rules.
+      Do not disable or suppress ESLint rules.
 
 ### Focused verification
 
