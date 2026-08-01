@@ -2,7 +2,7 @@
 
 Date: 2026-08-01
 
-Status: architecture approved; document pending user review
+Status: approved for implementation planning
 
 ## Context
 

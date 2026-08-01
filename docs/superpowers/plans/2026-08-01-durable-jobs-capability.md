@@ -3,8 +3,8 @@
 > **Status: superseded. Do not execute this plan.** Its Redis naming and
 > topology no longer match the approved design. The replacement design is
 > [`2026-08-01-redis-capability-topology-design.md`](../specs/2026-08-01-redis-capability-topology-design.md);
-> a new implementation plan must be written from that document after user
-> review.
+> execute only the replacement
+> [`2026-08-01-redis-capability-topology.md`](2026-08-01-redis-capability-topology.md).
 
 > **Executor:** one `gpt-5.6-luna` agent with `max` reasoning. Do not split the
 > implementation between agents and do not start subagents. Follow the five
