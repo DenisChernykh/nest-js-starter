@@ -72,10 +72,30 @@ The following contracts are complete and remain in the core:
 7. A committed OpenAPI document with drift and lint gates.
 8. A non-root SHA-published GHCR image, one digest smoke and a Trivy
    High/Critical scan.
+9. An opt-in BullMQ platform foundation with an independent queue Redis URL,
+   producer/worker connection policies, queue readiness, standalone worker
+   lifecycle support, a local `queues` Compose profile and a real-Redis proof.
 
 The universal foundation does not include registration, password recovery,
-queues, object storage, application caching, durable events or mandatory
-project-specific business modules.
+product queues, object storage, application caching, durable events or
+mandatory project-specific business modules.
+
+## Optional durable-jobs platform foundation
+
+The starter-level BullMQ foundation is complete. It provides exact BullMQ and
+ioredis dependencies, an opt-in `REDIS_QUEUE_URL`, separate queue Redis
+connections, bounded readiness and standalone worker lifecycle support. The
+default API keeps its existing auth Redis dependency only: it does not receive
+the queue URL, import the queue connection module, register a queue or run a
+worker. Local queue Redis is available only through the explicit `queues`
+Compose profile.
+
+Product adoption remains deferred. A product still must add its feature-owned
+queue and payload, producer adapter, worker composition and processor, durable
+authoritative state, idempotency policy and operational evidence. An outbox,
+scheduling, dashboards and queue deployment topology are likewise deferred.
+The adoption and recovery contracts are `docs/architecture/durable-jobs.md` and
+`docs/runbooks/queue-redis-loss.md`.
 
 ## Roadmap rules
 
@@ -181,12 +201,12 @@ Candidates are independent product slices, not a sequential recipe program.
 Each candidate needs a consumer, its own design decision and an isolated
 acceptance gate before it enters the starter.
 
-| Candidate                 | Adoption trigger                                                        | Boundary that must remain explicit                                                                                                                                             |
-| ------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Durable jobs with BullMQ  | A real workflow needs retries, replay or work outside the API process   | Separate `REDIS_QUEUE_URL`, BullMQ-owned connections, PostgreSQL outbox where DB-to-queue durability is required, worker health/shutdown and a migrator → worker → API rollout |
-| Auth self-service         | A browser product needs registration, verification or password recovery | Builds on current auth without changing opaque session cookies; hashed single-use tokens, non-enumerating responses and a mail port are required                               |
-| Object storage            | A real module needs uploads or presigned access                         | Module-local storage port, S3 adapter, size/type policy and MinIO integration tests; no generic attachment business model                                                      |
-| Public cache invalidation | A frontend cache has a concrete tag/webhook contract                    | Prefer a typed application event and signed HTTP adapter; TTL remains the fallback. Add an outbox/queue only when loss across process failure is unacceptable                  |
+| Candidate                        | Adoption trigger                                                        | Boundary that must remain explicit                                                                                                                                                                                                                         |
+| -------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product durable jobs with BullMQ | A real workflow needs retries, replay or work outside the API process   | Adopt the completed platform foundation with a separate `REDIS_QUEUE_URL`, feature-owned queue/payload, BullMQ-owned connections, PostgreSQL outbox where DB-to-queue durability is required, worker health/shutdown and a migrator → worker → API rollout |
+| Auth self-service                | A browser product needs registration, verification or password recovery | Builds on current auth without changing opaque session cookies; hashed single-use tokens, non-enumerating responses and a mail port are required                                                                                                           |
+| Object storage                   | A real module needs uploads or presigned access                         | Module-local storage port, S3 adapter, size/type policy and MinIO integration tests; no generic attachment business model                                                                                                                                  |
+| Public cache invalidation        | A frontend cache has a concrete tag/webhook contract                    | Prefer a typed application event and signed HTTP adapter; TTL remains the fallback. Add an outbox/queue only when loss across process failure is unacceptable                                                                                              |
 
 The Amazing EKB backend demonstrates why these choices must remain
 requirement-driven. Its public-cache invalidation intentionally uses
