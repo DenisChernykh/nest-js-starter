@@ -28,8 +28,11 @@ application and presentation code.
 The copied product, not this starter, then adds a worker `main` under
 `src/bootstrap/workers`, a compiled package command for that entrypoint and a
 focused real-Redis integration test that exercises the feature payload. The
-worker creates its Nest application context and delegates only context lifecycle
-to `runWorkerApplication`.
+worker creates its Nest application context, obtains queue settings with
+`createQueueWorkerRuntimeConfig()` and delegates only context lifecycle to
+`runWorkerApplication`. The process owner passes
+`forceExit: (code) => process.exit(code)`; the lifecycle helper itself never
+calls `process.exit()`.
 
 ## Configuration and runtime separation
 
@@ -46,6 +49,12 @@ That profile supplies a separate persistent Redis container with AOF,
 `appendfsync always` and `noeviction`; it does not create a product queue or
 start a worker. The product's worker lifecycle, health endpoint and rollout
 order are independent from the API's auth Redis lifecycle.
+
+The API composition root uses `requireQueueRuntimeConfig` after the complete
+API configuration has been validated. A standalone worker uses
+`buildQueueWorkerRuntimeConfig` or `createQueueWorkerRuntimeConfig` instead;
+its only required deployment input is `REDIS_QUEUE_URL`, so it does not need
+`DATABASE_URL`, `REDIS_AUTH_URL` or auth secrets.
 
 ## Decisions the adopting product must make
 

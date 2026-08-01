@@ -6,13 +6,16 @@ import {
   type DatabaseRuntimeConfig,
   type LoggingRuntimeConfig,
   type PostgresCommandRuntimeConfig,
+  type QueueRuntimeConfig,
   type RuntimeConfigurationIssue,
   type ValidatedPostgresCommandEnvironment,
+  type ValidatedQueueWorkerEnvironment,
   type ValidatedRuntimeEnvironment,
 } from './runtime-config.types'
 import { runtimeDefaults } from './runtime-defaults'
 import {
   postgresCommandEnvironmentSchema,
+  queueWorkerEnvironmentSchema,
   runtimeEnvironmentSchema,
 } from './runtime-environment.schema'
 
@@ -58,6 +61,15 @@ function buildDatabaseConfig(
     url: environment.DATABASE_URL,
     poolMax: environment.DATABASE_POOL_MAX,
     ...runtimeDefaults.database,
+  })
+}
+
+function buildQueueRuntimeConfig(
+  environment: ValidatedQueueWorkerEnvironment,
+): QueueRuntimeConfig {
+  return Object.freeze({
+    redisUrl: environment.REDIS_QUEUE_URL,
+    ...runtimeDefaults.queue,
   })
 }
 
@@ -136,6 +148,30 @@ export function buildApiRuntimeConfig(
       csrfOrigins: Object.freeze(csrfOrigins),
     }),
   })
+}
+
+/**
+ * Builds the minimal standalone-worker queue configuration.
+ *
+ * @param input - Untrusted environment record containing only the queue URL.
+ * @returns Frozen queue settings with the reviewed platform defaults.
+ * @throws RuntimeConfigurationError with redacted path/rule issues only.
+ */
+export function buildQueueWorkerRuntimeConfig(
+  input: Record<string, unknown>,
+): QueueRuntimeConfig {
+  const environment = validateSchema(queueWorkerEnvironmentSchema, input)
+  return buildQueueRuntimeConfig(environment)
+}
+
+/**
+ * Builds standalone-worker queue configuration from process-owned variables.
+ *
+ * @returns Frozen queue settings for one worker process.
+ * @throws RuntimeConfigurationError with redacted path/rule issues only.
+ */
+export function createQueueWorkerRuntimeConfig(): QueueRuntimeConfig {
+  return buildQueueWorkerRuntimeConfig(process.env)
 }
 
 /** Builds the API configuration from the process-owned environment boundary. */

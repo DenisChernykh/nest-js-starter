@@ -1,6 +1,10 @@
 import { RuntimeConfigurationError } from '@/platform/config/runtime-config.types'
 import type { ApplicationRuntimeConfig } from '@/platform/config/runtime-config.types'
-import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
+import {
+  buildApiRuntimeConfig,
+  buildQueueWorkerRuntimeConfig,
+  createQueueWorkerRuntimeConfig,
+} from '@/platform/config/runtime-environment'
 import { requireQueueRuntimeConfig } from '@/platform/queue/queue-runtime-config'
 
 const databaseUrl =
@@ -50,5 +54,66 @@ describe('requireQueueRuntimeConfig', () => {
       shutdownGraceMs: 10_000,
     })
     expect(Object.isFrozen(result)).toBe(true)
+  })
+
+  it('keeps the API projection available for producer composition', () => {
+    const config = createConfig('redis://queue.internal:6380')
+
+    expect(config.redis.queueUrl).toBe('redis://queue.internal:6380')
+    expect(requireQueueRuntimeConfig(config).redisUrl).toBe(
+      'redis://queue.internal:6380',
+    )
+  })
+})
+
+describe('queue worker runtime configuration', () => {
+  it('builds frozen worker settings from only REDIS_QUEUE_URL', () => {
+    const result = buildQueueWorkerRuntimeConfig({
+      REDIS_QUEUE_URL: 'rediss://queue.internal:6380',
+    })
+
+    expect(result).toEqual({
+      redisUrl: 'rediss://queue.internal:6380',
+      connectTimeoutMs: 2_000,
+      healthTimeoutMs: 2_500,
+      shutdownGraceMs: 10_000,
+    })
+    expect(Object.isFrozen(result)).toBe(true)
+  })
+
+  it('creates worker settings from the process environment', () => {
+    const originalEnvironment = process.env
+    process.env = { REDIS_QUEUE_URL: 'redis://queue.internal:6379' }
+
+    try {
+      expect(createQueueWorkerRuntimeConfig().redisUrl).toBe(
+        'redis://queue.internal:6379',
+      )
+    } finally {
+      process.env = originalEnvironment
+    }
+  })
+
+  it.each([
+    ['missing queue URL', {}],
+    [
+      'invalid queue URL',
+      {
+        REDIS_QUEUE_URL:
+          'redis://queue.internal:6379/0?token=DO_NOT_LEAK_QUEUE_SECRET',
+      },
+    ],
+  ])('rejects %s with a redacted configuration error', (_name, input) => {
+    let thrown: unknown
+
+    try {
+      buildQueueWorkerRuntimeConfig(input)
+    } catch (error: unknown) {
+      thrown = error
+    }
+
+    expect(thrown).toBeInstanceOf(RuntimeConfigurationError)
+    expect(String(thrown)).not.toContain('DO_NOT_LEAK_QUEUE_SECRET')
+    expect(JSON.stringify(thrown)).not.toContain('DO_NOT_LEAK_QUEUE_SECRET')
   })
 })

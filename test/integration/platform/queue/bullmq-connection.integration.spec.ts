@@ -10,10 +10,8 @@ import type { Job, Queue } from 'bullmq'
 import type { StartedRedisContainer } from '@testcontainers/redis'
 
 import { runWorkerApplication } from '@/bootstrap/workers/run-worker-application'
-import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
+import { buildQueueWorkerRuntimeConfig } from '@/platform/config/runtime-environment'
 import { BullmqConnectionModule } from '@/platform/queue/bullmq-connection.module'
-import { requireQueueRuntimeConfig } from '@/platform/queue/queue-runtime-config'
-import { requiredRuntimeEnvironment } from '@test/support/required-runtime-environment'
 import { startRedisContainer } from '@test/integration/support/redis-container'
 import { waitForCondition } from '@test/integration/support/wait-for-condition'
 
@@ -76,15 +74,9 @@ describe('BullMQ connection foundation', () => {
     let workerRun: Promise<void> | undefined
 
     try {
-      const queueConfig = requireQueueRuntimeConfig(
-        buildApiRuntimeConfig(
-          requiredRuntimeEnvironment({
-            DATABASE_URL:
-              'postgresql://starter:test@127.0.0.1:5432/starter?schema=public',
-            REDIS_QUEUE_URL: container.getConnectionUrl(),
-          }),
-        ),
-      )
+      const queueConfig = buildQueueWorkerRuntimeConfig({
+        REDIS_QUEUE_URL: container.getConnectionUrl(),
+      })
       workerContext = await Test.createTestingModule({
         imports: [
           BullmqConnectionModule.forWorker(queueConfig),
@@ -96,6 +88,7 @@ describe('BullMQ connection foundation', () => {
         application: workerContext,
         shutdownGraceMs: queueConfig.shutdownGraceMs,
         onStarted: () => undefined,
+        forceExit: () => undefined,
         waitForTermination: async (close) => {
           await waitForCondition(
             () => Promise.resolve(delivered.length === 2),

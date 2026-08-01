@@ -110,6 +110,12 @@ export function requireQueueRuntimeConfig(
   config: ApplicationRuntimeConfig,
 ): QueueRuntimeConfig
 
+export function buildQueueWorkerRuntimeConfig(
+  input: Record<string, unknown>,
+): QueueRuntimeConfig
+
+export function createQueueWorkerRuntimeConfig(): QueueRuntimeConfig
+
 export function createBullmqProducerOptions(
   config: QueueRuntimeConfig,
 ): RedisOptions
@@ -150,6 +156,7 @@ export interface RunWorkerApplicationInput {
   readonly application: WorkerApplication
   readonly shutdownGraceMs: number
   readonly onStarted: () => void
+  readonly forceExit: (code: number) => void
   readonly waitForTermination?: WorkerTerminationWaiter
 }
 
@@ -838,10 +845,13 @@ Modify:
    same promise. Call `onStarted()` exactly once before waiting.
 3. Bound close with `shutdownGraceMs`. A startup/waiter failure attempts close
    but preserves the original failure. A normal close failure/timeout is
-   surfaced for a non-zero worker exit.
+   surfaced for a non-zero worker exit; on timeout the injected `forceExit(1)`
+   callback runs exactly once, then the existing timeout error is rejected if
+   the callback returns.
 4. `waitForWorkerTermination` installs one-shot `SIGINT` and `SIGTERM`
    listeners, accepts only the first signal, removes both listeners after close
-   settles and never calls `process.exit()`.
+   settles and never calls `process.exit()`. The copied worker main owns the
+   process policy by passing `forceExit: (code) => process.exit(code)`.
 5. The real-Redis integration test defines its queue name, payload, producer
    module and `@Processor` inside the test file only. Create independent Nest
    producer and worker application contexts using the fixed platform methods.

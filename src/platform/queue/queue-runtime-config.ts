@@ -1,16 +1,11 @@
 import {
   RuntimeConfigurationError,
   type ApplicationRuntimeConfig,
+  type QueueRuntimeConfig,
 } from '@/platform/config/runtime-config.types'
 import { runtimeDefaults } from '@/platform/config/runtime-defaults'
 
-/** Immutable configuration required to compose one BullMQ connection. */
-export interface QueueRuntimeConfig {
-  readonly redisUrl: string
-  readonly connectTimeoutMs: number
-  readonly healthTimeoutMs: number
-  readonly shutdownGraceMs: number
-}
+export type { QueueRuntimeConfig } from '@/platform/config/runtime-config.types'
 
 /**
  * Requires the opt-in queue URL at the queue composition boundary.

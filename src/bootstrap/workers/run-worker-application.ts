@@ -8,21 +8,29 @@ export type WorkerTerminationWaiter = (
   close: () => Promise<void>,
 ) => Promise<void>
 
-/** Input required to run one bounded standalone worker application. */
+/**
+ * Input required to run one bounded standalone worker application.
+ *
+ * @remarks The process owner injects the final exit policy. The lifecycle
+ * helper never calls `process.exit()` directly.
+ */
 export interface RunWorkerApplicationInput {
   readonly application: WorkerApplication
   readonly shutdownGraceMs: number
   readonly onStarted: () => void
+  readonly forceExit: (code: number) => void
   readonly waitForTermination?: WorkerTerminationWaiter
 }
 
 function closeWithDeadline(
   close: () => Promise<void>,
   shutdownGraceMs: number,
+  forceExit: (code: number) => void,
 ): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
+      forceExit(1)
       reject(new Error('Worker application close exceeded shutdown grace'))
     }, shutdownGraceMs)
   })
@@ -73,6 +81,7 @@ export async function runWorkerApplication(
     closePromise ??= closeWithDeadline(
       () => input.application.close(),
       input.shutdownGraceMs,
+      input.forceExit,
     )
     return closePromise
   }

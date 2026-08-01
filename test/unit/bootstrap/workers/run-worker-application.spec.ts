@@ -14,6 +14,7 @@ describe('runWorkerApplication', () => {
     const onStarted = jest.fn(() => {
       calls.push('started')
     })
+    const forceExit = jest.fn()
     const waitForTermination: jest.MockedFunction<WorkerTerminationWaiter> =
       jest.fn()
     waitForTermination.mockImplementation(async (closeOnce) => {
@@ -25,71 +26,87 @@ describe('runWorkerApplication', () => {
       calls.push('waited')
     })
 
-    await runWorkerApplication({
+    const input = {
       application: { close },
       shutdownGraceMs: 100,
       onStarted,
+      forceExit,
       waitForTermination,
-    })
+    }
+    await runWorkerApplication(input)
 
     expect(calls).toEqual(['started', 'wait', 'close', 'waited'])
     expect(onStarted).toHaveBeenCalledTimes(1)
     expect(close).toHaveBeenCalledTimes(1)
     expect(waitForTermination).toHaveBeenCalledTimes(1)
+    expect(forceExit).not.toHaveBeenCalled()
   })
 
   it('attempts close but preserves a startup failure', async () => {
     const startupFailure = new Error('worker startup failed')
     const close = jest.fn(() => Promise.resolve())
+    const forceExit = jest.fn()
+    const input = {
+      application: { close },
+      shutdownGraceMs: 100,
+      onStarted: () => {
+        throw startupFailure
+      },
+      forceExit,
+    }
 
-    await expect(
-      runWorkerApplication({
-        application: { close },
-        shutdownGraceMs: 100,
-        onStarted: () => {
-          throw startupFailure
-        },
-      }),
-    ).rejects.toBe(startupFailure)
+    await expect(runWorkerApplication(input)).rejects.toBe(startupFailure)
     expect(close).toHaveBeenCalledTimes(1)
+    expect(forceExit).not.toHaveBeenCalled()
   })
 
   it('attempts close but preserves a waiter failure', async () => {
     const waiterFailure = new Error('worker waiter failed')
     const close = jest.fn(() => Promise.resolve())
+    const forceExit = jest.fn()
+    const input = {
+      application: { close },
+      shutdownGraceMs: 100,
+      onStarted: jest.fn(),
+      forceExit,
+      waitForTermination: () => Promise.reject(waiterFailure),
+    }
 
-    await expect(
-      runWorkerApplication({
-        application: { close },
-        shutdownGraceMs: 100,
-        onStarted: jest.fn(),
-        waitForTermination: () => Promise.reject(waiterFailure),
-      }),
-    ).rejects.toBe(waiterFailure)
+    await expect(runWorkerApplication(input)).rejects.toBe(waiterFailure)
     expect(close).toHaveBeenCalledTimes(1)
+    expect(forceExit).not.toHaveBeenCalled()
   })
 
   it('surfaces a normal close failure and a close timeout', async () => {
     const closeFailure = new Error('worker close failed')
-    await expect(
-      runWorkerApplication({
-        application: {
-          close: jest.fn(() => Promise.reject(closeFailure)),
-        },
-        shutdownGraceMs: 100,
-        onStarted: jest.fn(),
-        waitForTermination: (closeOnce) => closeOnce(),
-      }),
-    ).rejects.toBe(closeFailure)
+    const closeFailureForceExit = jest.fn()
+    const closeFailureInput = {
+      application: {
+        close: jest.fn(() => Promise.reject(closeFailure)),
+      },
+      shutdownGraceMs: 100,
+      onStarted: jest.fn(),
+      forceExit: closeFailureForceExit,
+      waitForTermination: (closeOnce: () => Promise<void>) => closeOnce(),
+    }
+    await expect(runWorkerApplication(closeFailureInput)).rejects.toBe(
+      closeFailure,
+    )
+    expect(closeFailureForceExit).not.toHaveBeenCalled()
 
-    await expect(
-      runWorkerApplication({
-        application: { close: () => new Promise<void>(() => undefined) },
-        shutdownGraceMs: 1,
-        onStarted: jest.fn(),
-        waitForTermination: (closeOnce) => closeOnce(),
-      }),
-    ).rejects.toThrow('Worker application close exceeded shutdown grace')
+    const timeoutForceExit = jest.fn()
+    const timeoutInput = {
+      application: { close: () => new Promise<void>(() => undefined) },
+      shutdownGraceMs: 1,
+      onStarted: jest.fn(),
+      forceExit: timeoutForceExit,
+      waitForTermination: (closeOnce: () => Promise<void>) => closeOnce(),
+    }
+    await expect(runWorkerApplication(timeoutInput)).rejects.toThrow(
+      'Worker application close exceeded shutdown grace',
+    )
+    expect(timeoutForceExit).toHaveBeenCalledTimes(1)
+    expect(timeoutForceExit).toHaveBeenCalledWith(1)
   })
 })
 

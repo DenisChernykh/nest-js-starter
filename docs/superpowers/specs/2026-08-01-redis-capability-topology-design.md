@@ -189,6 +189,7 @@ It provides:
 - one process-level BullMQ root configuration;
 - separate producer and worker connection policies;
 - typed opt-in queue runtime configuration;
+- a minimal worker configuration path that requires only `REDIS_QUEUE_URL`;
 - a bounded readiness indicator for queue Redis;
 - bounded worker signal, drain and application-context shutdown behavior;
 - documentation for connection ownership and queue adoption.
@@ -200,6 +201,12 @@ processor or exports a generic enqueue service.
 
 Queue Redis does not pass through `RedisAuthConnectionManager` or its
 node-redis command executor. BullMQ owns its ioredis connections.
+
+API composition uses the complete validated application configuration and
+`requireQueueRuntimeConfig`. A standalone worker uses
+`buildQueueWorkerRuntimeConfig` or `createQueueWorkerRuntimeConfig`, which
+validates only `REDIS_QUEUE_URL` with the same Redis URL policy. This keeps
+worker startup independent from `DATABASE_URL`, auth Redis and auth secrets.
 
 ### Feature ownership
 
@@ -232,6 +239,11 @@ Every worker remains a separate
 `BullmqConnectionModule.forWorker(queueConfig)` and only the consumer-side
 composition required by that worker. It does not import HTTP controllers,
 browser authentication or unrelated product modules.
+
+The worker process owner passes
+`forceExit: (code) => process.exit(code)` to `runWorkerApplication`. The helper
+owns the close latch, first-signal semantics, listener cleanup and deadline,
+but never calls `process.exit()` itself.
 
 The worker lifecycle helper is technical and database-agnostic. A
 database-backed worker composes the existing database lifecycle explicitly.
@@ -331,8 +343,8 @@ The starter implementation must provide focused evidence for:
 5. Real boundary: a Redis Testcontainers integration test exchanges a test-only
    job between independent producer and worker application contexts and closes
    all handles.
-6. Worker lifecycle: one signal latch, bounded drain, application-context close
-   and non-zero timeout/failure behavior.
+6. Worker lifecycle: one signal latch, bounded drain, application-context close,
+   injected process-owner exit on timeout and non-zero timeout/failure behavior.
 7. Architecture: platform queue code cannot import product modules, and
    application/domain/presentation cannot import BullMQ or ioredis.
 8. Distribution: dependencies are available in the built image, while the

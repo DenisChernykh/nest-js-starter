@@ -6,6 +6,12 @@ function decodeCredential(value: string): string {
   return decodeURIComponent(value)
 }
 
+function normalizeHostname(hostname: string): string {
+  return hostname.startsWith('[') && hostname.endsWith(']')
+    ? hostname.slice(1, -1)
+    : hostname
+}
+
 function createOptions(
   config: QueueRuntimeConfig,
   maxRetriesPerRequest: number | null,
@@ -14,7 +20,7 @@ function createOptions(
   const hasCredentials = url.username !== '' || url.password !== ''
 
   return {
-    host: url.hostname,
+    host: normalizeHostname(url.hostname),
     port: url.port === '' ? 6379 : Number(url.port),
     ...(hasCredentials
       ? {

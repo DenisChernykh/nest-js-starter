@@ -26,5 +26,7 @@ with its worker-oriented BullMQ connection and registers its feature processor
 there. `runWorkerApplication` owns only that context's bounded close operation:
 it waits for the first `SIGINT` or `SIGTERM`, latches `application.close()` and
 returns a close failure or deadline as a non-zero worker outcome. The worker
-must define its own readiness, rollout order and recovery policy; see
+process owner injects `forceExit: (code) => process.exit(code)` for a deadline;
+the helper never calls `process.exit()` directly. The worker must define its own
+readiness, rollout order and recovery policy; see
 `durable-jobs.md` and `queue-redis-loss.md`.

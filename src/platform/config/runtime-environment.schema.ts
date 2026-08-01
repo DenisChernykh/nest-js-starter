@@ -4,6 +4,7 @@ import Joi from 'joi'
 
 import type {
   ValidatedPostgresCommandEnvironment,
+  ValidatedQueueWorkerEnvironment,
   ValidatedRuntimeEnvironment,
 } from './runtime-config.types'
 
@@ -245,6 +246,12 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     ? value
     : helpers.error('any.invalid')
 })
+
+/** Validates the minimal environment required by a standalone queue worker. */
+export const queueWorkerEnvironmentSchema =
+  Joi.object<ValidatedQueueWorkerEnvironment>({
+    REDIS_QUEUE_URL: redisUrl.required(),
+  })
 
 /** Validates only deployment inputs needed by a PostgreSQL one-shot command. */
 export const postgresCommandEnvironmentSchema =

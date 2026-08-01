@@ -42,4 +42,13 @@ describe('BullMQ Redis options', () => {
       tls: {},
     })
   })
+
+  it('normalizes bracketed IPv6 hostnames for ioredis', () => {
+    const options = createBullmqProducerOptions({
+      ...config,
+      redisUrl: 'redis://queue-user:queue-secret@[::1]:6379',
+    })
+
+    expect(options.host).toBe('::1')
+  })
 })

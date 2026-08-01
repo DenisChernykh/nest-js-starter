@@ -75,6 +75,14 @@ export interface RedisRuntimeConfig {
   readonly keyPrefix: string
 }
 
+/** Immutable queue URL and bounded lifecycle settings for one BullMQ context. */
+export interface QueueRuntimeConfig {
+  readonly redisUrl: string
+  readonly connectTimeoutMs: number
+  readonly healthTimeoutMs: number
+  readonly shutdownGraceMs: number
+}
+
 /**
  * Immutable browser-auth policy and owned cryptographic key material.
  *
@@ -196,6 +204,11 @@ export interface ValidatedRuntimeEnvironment {
   readonly AUTH_CSRF_SECRET: Uint8Array
   readonly AUTH_RATE_LIMIT_KEY_SECRET: Uint8Array
   readonly AUTH_NETWORK_METADATA_SECRET: Uint8Array
+}
+
+/** Minimal normalized environment accepted by a standalone queue worker. */
+export interface ValidatedQueueWorkerEnvironment {
+  readonly REDIS_QUEUE_URL: string
 }
 
 /** Normalized environment keys accepted by a PostgreSQL-only command. */
