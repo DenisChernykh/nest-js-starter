@@ -59,6 +59,12 @@ minimumReleaseAgeExclude:
   - '@opentelemetry/sdk-trace@2.10.0'
 overrides:
   '@nestjs/swagger>js-yaml': 5.2.2
+  'bullmq>ioredis': 5.11.1
+  'eslint-plugin-tsdoc@0.5.2>@typescript-eslint/utils': 8.65.0
   find-my-way: 9.7.0
+peerDependencyRules:
+  ignoreMissing:
+    - react
+    - react-dom
 saveExact: true
 strictPeerDependencies: true
