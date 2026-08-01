@@ -2,7 +2,13 @@
 
 Date: 2026-08-01
 
-Status: approved for implementation planning
+Status: superseded
+
+> Superseded by
+> [`2026-08-01-redis-capability-topology-design.md`](2026-08-01-redis-capability-topology-design.md).
+> Do not use this document as the implementation contract: it retains the
+> obsolete `redis-coordination` naming and does not include the approved
+> physical Redis separation.
 
 ## Context
 
