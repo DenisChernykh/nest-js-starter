@@ -789,9 +789,15 @@ corrective commit:
 ```bash
 corepack pnpm@11.15.1 ci
 corepack pnpm@11.15.1 peers check
+corepack pnpm@11.15.1 run prisma:generate
 corepack pnpm@11.15.1 run lint
 corepack pnpm@11.15.1 run typecheck:src
 ```
+
+Do not run clean-checkout lint or typecheck before `prisma:generate`. The
+generated client is intentionally absent from a clean Git checkout; without
+that step, ESLint reports cascading `error`-typed Prisma contracts that do not
+represent source defects.
 
 Do not run `pnpm ci` in the dirty implementation checkout. Confirm the
 uncommitted Milestone 3 paths are unchanged and unstaged, report the corrective
