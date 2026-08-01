@@ -704,12 +704,14 @@ Modify only:
 
 ### Required correction
 
-1. Add this exact root pnpm override alongside the existing targeted override:
+1. Add these exact root pnpm overrides alongside the existing targeted
+   override:
 
    ```yaml
    overrides:
      '@nestjs/swagger>js-yaml': 5.2.2
      'bullmq>ioredis': 5.11.1
+     'eslint-plugin-tsdoc@0.5.2>@typescript-eslint/utils': 8.65.0
      find-my-way: 9.7.0
    ```
 
@@ -717,12 +719,33 @@ Modify only:
    change BullMQ/Nest versions, add a cast, import BullMQ's private nested
    package, weaken TypeScript or use `skipLibCheck`.
 
-2. Regenerate `pnpm-lock.yaml` with Node `24.18.0` and pnpm `11.15.1`.
+   The TSDoc override aligns the plugin's private
+   `@typescript-eslint/utils@8.56.1`, whose peer range excludes TypeScript 6,
+   with the repository's existing `@typescript-eslint/utils@8.65.0`, whose
+   peer range includes the pinned TypeScript `6.0.2`. Do not add another
+   TypeScript version, downgrade TypeScript or replace the TSDoc plugin.
+
+2. Keep `strictPeerDependencies: true` and record the backend starter's exact
+   intentional peer omission:
+
+   ```yaml
+   peerDependencyRules:
+     ignoreMissing:
+       - react
+       - react-dom
+   ```
+
+   These missing peers belong to Prisma Studio's Radix/Visx dependency tree;
+   the backend starter does not run or ship that UI. Do not install React in
+   the backend, disable strict peer checking globally or ignore any other peer.
+
+3. Regenerate `pnpm-lock.yaml` with Node `24.18.0` and pnpm `11.15.1`.
    The resolved graph must contain one `ioredis@5.11.1` package and no
-   `ioredis@5.10.1` package.
-3. Treat the override as a compatibility hypothesis until both the focused
-   source typecheck and the existing real-Redis integration proof pass.
-4. Make no source, test, Compose, environment or product behavior change.
+   `ioredis@5.10.1` package. It must contain
+   `@typescript-eslint/utils@8.65.0` and no `8.56.1` package.
+4. Treat both dependency overrides as compatibility hypotheses until source
+   typecheck, strict lint and the existing real-Redis integration proof pass.
+5. Make no source, test, Compose, environment or product behavior change.
 
 ### Verification and commit
 
@@ -732,7 +755,11 @@ Use the project Node binary by prepending its directory to the inherited
 ```bash
 corepack pnpm@11.15.1 install --lockfile-only
 rg -n "ioredis@5\\.10\\.1|ioredis@5\\.11\\.1" pnpm-lock.yaml
+rg -n "@typescript-eslint/utils@8\\.(56\\.1|65\\.0)" pnpm-lock.yaml
 corepack pnpm@11.15.1 why ioredis
+corepack pnpm@11.15.1 why @typescript-eslint/utils
+corepack pnpm@11.15.1 peers check
+corepack pnpm@11.15.1 run lint
 corepack pnpm@11.15.1 run typecheck:src
 corepack pnpm@11.15.1 exec jest \
   --config jest.unit.config.mjs --runInBand \
@@ -761,6 +788,8 @@ corrective commit:
 
 ```bash
 corepack pnpm@11.15.1 ci
+corepack pnpm@11.15.1 peers check
+corepack pnpm@11.15.1 run lint
 corepack pnpm@11.15.1 run typecheck:src
 ```
 
