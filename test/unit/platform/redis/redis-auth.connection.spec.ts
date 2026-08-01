@@ -1,4 +1,7 @@
-import type { RedisClientFactory, RedisManagedClient } from '@/platform/redis/redis-client.factory'
+import type {
+  RedisClientFactory,
+  RedisManagedClient,
+} from '@/platform/redis/redis-client.factory'
 import {
   RedisAuthConnectionManager,
   type RedisAuthConnectionConfig,

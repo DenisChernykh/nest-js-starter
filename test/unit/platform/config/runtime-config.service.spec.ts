@@ -14,8 +14,7 @@ function createService(
   return new RuntimeConfigService(
     buildApiRuntimeConfig({
       DATABASE_URL: databaseUrl,
-      REDIS_AUTH_URL:
-        'redis://default:local-redis-password@127.0.0.1:6379',
+      REDIS_AUTH_URL: 'redis://default:local-redis-password@127.0.0.1:6379',
       AUTH_SESSION_KEY_SECRET: secret(1),
       AUTH_CSRF_SECRET: secret(2),
       AUTH_RATE_LIMIT_KEY_SECRET: secret(3),

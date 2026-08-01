@@ -4,6 +4,7 @@ allowBuilds:
   argon2: true
   'cpu-features@0.0.10': false
   esbuild: true
+  msgpackr-extract: false
   'prisma@7.9.0': true
   'protobufjs@7.6.5': false
   'ssh2@1.17.0': false

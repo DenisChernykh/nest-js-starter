@@ -7,3 +7,4 @@ pnpm-lock.yaml
 test/architecture/fixtures
 test/fixtures
 templates/**/*.tpl
+.superpowers/sdd/

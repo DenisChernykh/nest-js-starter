@@ -12,8 +12,7 @@ const secret = (byte: number): string =>
 function requiredEnvironment(): Record<string, unknown> {
   return {
     DATABASE_URL: databaseUrl,
-    REDIS_AUTH_URL:
-      'redis://default:local-redis-password@127.0.0.1:6379',
+    REDIS_AUTH_URL: 'redis://default:local-redis-password@127.0.0.1:6379',
     AUTH_SESSION_KEY_SECRET: secret(1),
     AUTH_CSRF_SECRET: secret(2),
     AUTH_RATE_LIMIT_KEY_SECRET: secret(3),
@@ -99,7 +98,10 @@ describe('runtime environment', () => {
     ],
     ['invalid Redis URL', { REDIS_AUTH_URL: 'http://redis:6379' }],
     ['auth logical Redis database', { REDIS_AUTH_URL: 'redis://redis:6379/0' }],
-    ['queue logical Redis database', { REDIS_QUEUE_URL: 'redis://queue:6379/15' }],
+    [
+      'queue logical Redis database',
+      { REDIS_QUEUE_URL: 'redis://queue:6379/15' },
+    ],
     ['invalid public origin', { PUBLIC_API_URL: 'https://api.example.com/v1' }],
     ['invalid CORS origin', { CORS_ORIGINS: '*' }],
     ['missing secret', { AUTH_CSRF_SECRET: undefined }],
