@@ -5,7 +5,7 @@ import { NodeAuthCryptoAdapter } from '@/modules/auth/infrastructure/node-auth-c
 import { RedisLoginRateLimiter } from '@/modules/auth/infrastructure/redis-login-rate-limiter'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'
-import { RedisCoordinationConnectionManager } from '@/platform/redis/redis-coordination.connection'
+import { RedisAuthConnectionManager } from '@/platform/redis/redis-auth.connection'
 import { RedisLifecycle } from '@/platform/redis/redis-lifecycle'
 import { startRedisContainer } from '@test/integration/support/redis-container'
 
@@ -41,13 +41,13 @@ describe('RedisLoginRateLimiter', () => {
     readonly lifecycle: RedisLifecycle
     readonly executor: RedisCommandExecutorPort
   } {
-    const connection = new RedisCoordinationConnectionManager(
+    const connection = new RedisAuthConnectionManager(
       new RedisClientFactory({
         connectTimeoutMs: 500,
         commandTimeoutMs: 500,
       }),
       {
-        coordinationUrl: target.getConnectionUrl(),
+        authUrl: target.getConnectionUrl(),
         connectTimeoutMs: 500,
         commandTimeoutMs: 500,
       },
@@ -96,8 +96,8 @@ describe('RedisLoginRateLimiter', () => {
     const ipDigest = crypto.hmac(hmacSecret, `ip:${ipAddress}`)
     const accountDigest = crypto.hmac(hmacSecret, `account:${email}`)
     const keys = [
-      `nest-js-starter:test:coordination:v1:login-rate-ip:${ipDigest}`,
-      `nest-js-starter:test:coordination:v1:login-rate-account:${accountDigest}`,
+      `nest-js-starter:test:auth:v1:login-rate-ip:${ipDigest}`,
+      `nest-js-starter:test:auth:v1:login-rate-account:${accountDigest}`,
     ]
 
     for (const key of keys) {

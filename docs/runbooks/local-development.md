@@ -14,7 +14,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-`pnpm dev` stays in the foreground and starts PostgreSQL, coordination Redis,
+`pnpm dev` stays in the foreground and starts PostgreSQL, auth Redis,
 the one-shot migrator, the watched Nest API, Alloy, Loki, Tempo and Grafana.
 
 Verify:
@@ -75,7 +75,7 @@ centralized Docker logs or Grafana correlation. Prepare infrastructure and
 migrations, then run the Nest watcher on the host:
 
 ```sh
-docker compose up -d --wait postgres redis-coordination
+docker compose up -d --wait postgres redis-auth
 pnpm start:migrate
 pnpm dev:host
 ```

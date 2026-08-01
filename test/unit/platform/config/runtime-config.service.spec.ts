@@ -8,11 +8,13 @@ const databaseUrl =
 const secret = (byte: number): string =>
   Buffer.alloc(32, byte).toString('base64url')
 
-function createService(): RuntimeConfigService {
+function createService(
+  overrides: Record<string, unknown> = {},
+): RuntimeConfigService {
   return new RuntimeConfigService(
     buildApiRuntimeConfig({
       DATABASE_URL: databaseUrl,
-      REDIS_COORDINATION_URL:
+      REDIS_AUTH_URL:
         'redis://default:local-redis-password@127.0.0.1:6379',
       AUTH_SESSION_KEY_SECRET: secret(1),
       AUTH_CSRF_SECRET: secret(2),
@@ -23,6 +25,7 @@ function createService(): RuntimeConfigService {
         'http://localhost:3000/, http://admin.local:3001/, http://localhost:3000',
       TRUST_PROXY_CIDRS: '127.0.0.1, 10.0.0.0/8',
       OTEL_SDK_DISABLED: true,
+      ...overrides,
     }),
   )
 }
@@ -58,7 +61,7 @@ describe('RuntimeConfigService', () => {
 
     expect(service.redis).toEqual(
       expect.objectContaining({
-        coordinationUrl: 'redis://default:local-redis-password@127.0.0.1:6379',
+        authUrl: 'redis://default:local-redis-password@127.0.0.1:6379',
         connectTimeoutMs: 2_000,
         commandTimeoutMs: 2_000,
         healthTimeoutMs: 2_500,
@@ -116,12 +119,32 @@ describe('RuntimeConfigService', () => {
       corsOriginCount: 2,
       trustedProxyCount: 2,
       databasePoolMax: 10,
-      redisCoordinationConfigured: true,
+      redisAuthConfigured: true,
+      redisQueueConfigured: false,
       authCookieName: 'nest-js-starter-session',
     })
     expect(JSON.stringify(summary)).not.toContain('local-password')
     expect(JSON.stringify(summary)).not.toContain(secret(1))
     expect(Object.isFrozen(summary)).toBe(true)
+  })
+
+  it('reports optional queue configuration without exposing its URL', () => {
+    const service = createService({
+      REDIS_QUEUE_URL: 'redis://queue-user:queue-secret@queue.internal:6380',
+    })
+
+    expect(service.redis).toEqual(
+      expect.objectContaining({
+        queueUrl: 'redis://queue-user:queue-secret@queue.internal:6380',
+      }),
+    )
+    expect(service.safeSummary).toEqual(
+      expect.objectContaining({
+        redisAuthConfigured: true,
+        redisQueueConfigured: true,
+      }),
+    )
+    expect(JSON.stringify(service.safeSummary)).not.toContain('queue-secret')
   })
 
   it('does not expose an arbitrary string-key accessor', () => {

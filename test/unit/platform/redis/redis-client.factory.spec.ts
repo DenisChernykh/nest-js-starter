@@ -25,11 +25,11 @@ describe('RedisClientFactory', () => {
     )
 
     expect(
-      factory.create('rediss://coordination-user:password@redis.internal:6380'),
+      factory.create('rediss://auth-user:password@redis.internal:6380'),
     ).toBe(client)
     expect(createDriver).toHaveBeenCalledWith(
       expect.objectContaining({
-        url: 'rediss://coordination-user:password@redis.internal:6380',
+        url: 'rediss://auth-user:password@redis.internal:6380',
         disableOfflineQueue: true,
         commandsQueueMaxLength: 1_000,
         commandTimeoutMs: 900,

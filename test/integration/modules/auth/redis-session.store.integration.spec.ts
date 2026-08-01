@@ -5,7 +5,7 @@ import { NodeAuthCryptoAdapter } from '@/modules/auth/infrastructure/node-auth-c
 import { RedisSessionStore } from '@/modules/auth/infrastructure/redis-session.store'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'
-import { RedisCoordinationConnectionManager } from '@/platform/redis/redis-coordination.connection'
+import { RedisAuthConnectionManager } from '@/platform/redis/redis-auth.connection'
 import { RedisLifecycle } from '@/platform/redis/redis-lifecycle'
 import { startRedisContainer } from '@test/integration/support/redis-container'
 
@@ -23,13 +23,13 @@ describe('RedisSessionStore', () => {
 
   beforeAll(async () => {
     container = await startRedisContainer()
-    const connection = new RedisCoordinationConnectionManager(
+    const connection = new RedisAuthConnectionManager(
       new RedisClientFactory({
         connectTimeoutMs: 1_000,
         commandTimeoutMs: 1_000,
       }),
       {
-        coordinationUrl: container.getConnectionUrl(),
+        authUrl: container.getConnectionUrl(),
         connectTimeoutMs: 1_000,
         commandTimeoutMs: 1_000,
       },
@@ -91,8 +91,8 @@ describe('RedisSessionStore', () => {
     const nowMs = Date.now()
     const issued = await issue(store, nowMs)
     const digest = crypto.hmac(sessionKeySecret, issued.rawToken)
-    const sessionKey = `nest-js-starter:test:coordination:v1:session:${digest}`
-    const indexKey = `nest-js-starter:test:coordination:v1:user-sessions:${userId}`
+    const sessionKey = `nest-js-starter:test:auth:v1:session:${digest}`
+    const indexKey = `nest-js-starter:test:auth:v1:user-sessions:${userId}`
     const [payload, sessionTtl, indexTtl] = await executor.execute(
       'test-inspect-session',
       async (client) =>
@@ -177,7 +177,7 @@ describe('RedisSessionStore', () => {
   it('fails closed and deletes a malformed record', async () => {
     const issued = await issue()
     const digest = crypto.hmac(sessionKeySecret, issued.rawToken)
-    const sessionKey = `nest-js-starter:test:coordination:v1:session:${digest}`
+    const sessionKey = `nest-js-starter:test:auth:v1:session:${digest}`
     await executor.execute('test-corrupt', (client) =>
       client.sendCommand<string>(['SET', sessionKey, '{', 'PX', '1000']),
     )

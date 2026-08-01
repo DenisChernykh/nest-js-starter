@@ -328,13 +328,13 @@ printf '%s\n' 'runtime DDL denial verified'
 Start an API only on loopback and only with restored runtime credentials. The
 supplied RESTORE_* values are secret-injected and never printed; the Redis key
 prefix is unique to this drill so it cannot share sessions, limits, or
-coordination state with the source environment.
+auth state with the source environment.
 
 ```bash
 set -eu
 set +x
 : "$RESTORE_RUNTIME_DATABASE_URL"
-: "$RESTORE_REDIS_COORDINATION_URL"
+: "$RESTORE_REDIS_AUTH_URL"
 : "$RESTORE_AUTH_SESSION_KEY_SECRET"
 : "$RESTORE_AUTH_CSRF_SECRET"
 : "$RESTORE_AUTH_RATE_LIMIT_KEY_SECRET"
@@ -360,7 +360,7 @@ export OTEL_SDK_DISABLED=true
 export SERVICE_VERSION=restore-drill
 export SERVICE_REVISION="$restore_run_id"
 export DATABASE_URL="$RESTORE_RUNTIME_DATABASE_URL"
-export REDIS_COORDINATION_URL="$RESTORE_REDIS_COORDINATION_URL"
+export REDIS_AUTH_URL="$RESTORE_REDIS_AUTH_URL"
 export REDIS_KEY_PREFIX="$restore_prefix"
 export AUTH_SESSION_KEY_SECRET="$RESTORE_AUTH_SESSION_KEY_SECRET"
 export AUTH_CSRF_SECRET="$RESTORE_AUTH_CSRF_SECRET"

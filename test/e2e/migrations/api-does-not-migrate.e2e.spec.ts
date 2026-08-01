@@ -36,7 +36,7 @@ describe('API migration ownership', () => {
     if (redis !== undefined) await redis.stop()
     for (const key of [
       'DATABASE_URL',
-      'REDIS_COORDINATION_URL',
+      'REDIS_AUTH_URL',
       'AUTH_SESSION_KEY_SECRET',
       'AUTH_CSRF_SECRET',
       'AUTH_RATE_LIMIT_KEY_SECRET',
@@ -58,7 +58,7 @@ describe('API migration ownership', () => {
     const port = await reservePort()
     const baseUrl = `http://127.0.0.1:${port}`
     process.env['DATABASE_URL'] = container.getConnectionUri()
-    process.env['REDIS_COORDINATION_URL'] = redis.getConnectionUrl()
+    process.env['REDIS_AUTH_URL'] = redis.getConnectionUrl()
     process.env['AUTH_SESSION_KEY_SECRET'] = Buffer.alloc(32, 1).toString(
       'base64url',
     )

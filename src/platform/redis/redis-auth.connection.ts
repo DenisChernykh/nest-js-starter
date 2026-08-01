@@ -7,15 +7,15 @@ import {
   type RedisCommandExecutorPort,
 } from './redis-command.executor'
 
-/** Configuration for the single Redis coordination connection. */
-export interface RedisCoordinationConnectionConfig {
-  readonly coordinationUrl: string
+/** Configuration for the single Redis auth connection. */
+export interface RedisAuthConnectionConfig {
+  readonly authUrl: string
   readonly connectTimeoutMs: number
   readonly commandTimeoutMs: number
 }
 
-/** Owns the coordination client, command executor and bounded lifecycle. */
-export class RedisCoordinationConnectionManager {
+/** Owns the auth client, command executor and bounded lifecycle. */
+export class RedisAuthConnectionManager {
   public readonly commandExecutor: RedisCommandExecutorPort
   private readonly client: RedisManagedClient
   private readonly executor: RedisCommandExecutor
@@ -25,9 +25,9 @@ export class RedisCoordinationConnectionManager {
 
   public constructor(
     factory: RedisClientFactory,
-    private readonly config: RedisCoordinationConnectionConfig,
+    private readonly config: RedisAuthConnectionConfig,
   ) {
-    this.client = factory.create(config.coordinationUrl)
+    this.client = factory.create(config.authUrl)
     this.executor = new RedisCommandExecutor(
       this.client,
       config.commandTimeoutMs,
@@ -41,7 +41,7 @@ export class RedisCoordinationConnectionManager {
     })
   }
 
-  /** Connects the required coordination dependency once. */
+  /** Connects the required auth dependency once. */
   public connect(signal: AbortSignal): Promise<void> {
     if (!this.connectionAdmissionOpen) {
       return Promise.reject(new Error('Redis connection admission is closed'))
@@ -53,7 +53,7 @@ export class RedisCoordinationConnectionManager {
     return this.connectPromise
   }
 
-  /** Closes the coordination dependency once within the supplied deadline. */
+  /** Closes the auth dependency once within the supplied deadline. */
   public close(signal: AbortSignal): Promise<void> {
     this.connectionAdmissionOpen = false
     this.closePromise ??= this.closeInternal(signal)

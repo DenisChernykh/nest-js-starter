@@ -32,7 +32,7 @@ describe('health HTTP contract', () => {
               check: () => Promise.resolve(databaseStatus),
             },
             {
-              name: 'redis-coordination',
+              name: 'redis-auth',
               required: true,
               timeoutMs: 100,
               check: () => Promise.resolve(redisStatus),
@@ -67,7 +67,7 @@ describe('health HTTP contract', () => {
         checks: {
           draining: 'up',
           postgresql: 'skipped',
-          'redis-coordination': 'skipped',
+          'redis-auth': 'skipped',
           startup: 'down',
         },
       })
@@ -85,7 +85,7 @@ describe('health HTTP contract', () => {
         checks: {
           draining: 'up',
           postgresql: 'up',
-          'redis-coordination': 'up',
+          'redis-auth': 'up',
           startup: 'up',
         },
       })
@@ -97,7 +97,7 @@ describe('health HTTP contract', () => {
         checks: {
           draining: 'up',
           postgresql: 'down',
-          'redis-coordination': 'up',
+          'redis-auth': 'up',
           startup: 'up',
         },
       })
@@ -115,7 +115,7 @@ describe('health HTTP contract', () => {
         checks: {
           draining: 'down',
           postgresql: 'skipped',
-          'redis-coordination': 'skipped',
+          'redis-auth': 'skipped',
           startup: 'up',
         },
       })

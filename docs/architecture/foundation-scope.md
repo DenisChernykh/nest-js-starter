@@ -1,7 +1,7 @@
 # Production foundation scope
 
 This starter keeps a small production boundary: configuration, PostgreSQL,
-coordination Redis, HTTP lifecycle/health, auth/RBAC, structured logging and
+auth Redis, HTTP lifecycle/health, auth/RBAC, structured logging and
 trace-only OpenTelemetry. The five local module layers remain
 `domain`, `application`, `infrastructure`, `presentation` and `composition`;
 their boundaries are documented in `module-boundaries.md`.

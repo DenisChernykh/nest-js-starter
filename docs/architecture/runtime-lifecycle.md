@@ -1,7 +1,7 @@
 # Runtime lifecycle
 
 `ApiRuntime` initializes Nest, opens the listener, then starts PostgreSQL and
-coordination Redis explicitly in that order. Only after both complete does it
+auth Redis explicitly in that order. Only after both complete does it
 mark the irreversible startup latch ready. A startup failure begins drain and
 rolls back Redis before PostgreSQL; the API never runs migrations.
 

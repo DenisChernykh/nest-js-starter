@@ -41,7 +41,7 @@ export interface BrowserSessionSummary {
   readonly current: boolean
 }
 
-/** Coordination-store boundary for opaque browser sessions. */
+/** Auth-store boundary for opaque browser sessions. */
 export interface SessionStorePort {
   /** Creates an indexed session with finite idle and absolute expiries. */
   issue(input: IssueSessionInput): Promise<IssuedBrowserSession>
@@ -63,5 +63,5 @@ export interface SessionStorePort {
   revokeAll(userId: string): Promise<number>
 }
 
-/** Injection token for the opaque browser-session coordination boundary. */
+/** Injection token for the opaque browser-session auth boundary. */
 export const SESSION_STORE: unique symbol = Symbol('SESSION_STORE')

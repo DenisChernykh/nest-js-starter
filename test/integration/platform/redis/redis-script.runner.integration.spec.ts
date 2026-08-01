@@ -1,25 +1,25 @@
 import type { StartedRedisContainer } from '@testcontainers/redis'
 
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'
-import { RedisCoordinationConnectionManager } from '@/platform/redis/redis-coordination.connection'
+import { RedisAuthConnectionManager } from '@/platform/redis/redis-auth.connection'
 import { RedisLifecycle } from '@/platform/redis/redis-lifecycle'
 import { RedisScriptRunner } from '@/platform/redis/redis-script.runner'
 import { startRedisContainer } from '@test/integration/support/redis-container'
 
 describe('RedisScriptRunner', () => {
   let container: StartedRedisContainer
-  let connection: RedisCoordinationConnectionManager
+  let connection: RedisAuthConnectionManager
   let lifecycle: RedisLifecycle
 
   beforeAll(async () => {
     container = await startRedisContainer()
-    connection = new RedisCoordinationConnectionManager(
+    connection = new RedisAuthConnectionManager(
       new RedisClientFactory({
         connectTimeoutMs: 1_000,
         commandTimeoutMs: 1_000,
       }),
       {
-        coordinationUrl: container.getConnectionUrl(),
+        authUrl: container.getConnectionUrl(),
         connectTimeoutMs: 1_000,
         commandTimeoutMs: 1_000,
       },

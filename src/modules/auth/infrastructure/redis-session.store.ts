@@ -45,7 +45,7 @@ export class RedisSessionStore implements SessionStorePort {
       throw new Error('Redis session expiry policy is invalid')
     }
     this.keys = new RedisKeyBuilder(
-      [config.keyPrefix, config.environment, 'coordination'],
+      [config.keyPrefix, config.environment, 'auth'],
       'v1',
     )
     this.scripts = new RedisScriptRunner(executor)

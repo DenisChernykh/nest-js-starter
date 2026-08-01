@@ -63,10 +63,11 @@ export interface DatabaseRuntimeConfig {
 }
 
 /**
- * Immutable coordination Redis URL and bounded lifecycle deadlines.
+ * Immutable auth Redis URL, optional queue URL and bounded lifecycle deadlines.
  */
 export interface RedisRuntimeConfig {
-  readonly coordinationUrl: string
+  readonly authUrl: string
+  readonly queueUrl?: string
   readonly connectTimeoutMs: number
   readonly commandTimeoutMs: number
   readonly healthTimeoutMs: number
@@ -131,7 +132,8 @@ export interface SafeRuntimeConfigSummary {
   readonly corsOriginCount: number
   readonly trustedProxyCount: number
   readonly databasePoolMax: number
-  readonly redisCoordinationConfigured: boolean
+  readonly redisAuthConfigured: boolean
+  readonly redisQueueConfigured: boolean
   readonly authCookieName: string
 }
 
@@ -187,7 +189,8 @@ export interface ValidatedRuntimeEnvironment {
   readonly TRUST_PROXY_CIDRS: readonly string[]
   readonly DATABASE_URL: string
   readonly DATABASE_POOL_MAX: number
-  readonly REDIS_COORDINATION_URL: string
+  readonly REDIS_AUTH_URL: string
+  readonly REDIS_QUEUE_URL?: string
   readonly REDIS_KEY_PREFIX: string
   readonly AUTH_SESSION_KEY_SECRET: Uint8Array
   readonly AUTH_CSRF_SECRET: Uint8Array

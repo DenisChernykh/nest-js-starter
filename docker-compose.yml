@@ -20,7 +20,7 @@ x-api-environment: &api-environment
   TRUST_PROXY_CIDRS: ${TRUST_PROXY_CIDRS}
   DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
   DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-10}
-  REDIS_COORDINATION_URL: redis://default:local-development-only@redis-coordination:6379
+  REDIS_AUTH_URL: redis://default:local-development-only@redis-auth:6379
   REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-nest-js-starter}
   AUTH_SESSION_KEY_SECRET: ${AUTH_SESSION_KEY_SECRET}
   AUTH_CSRF_SECRET: ${AUTH_CSRF_SECRET}
@@ -47,7 +47,7 @@ services:
       retries: 30
       start_period: 5s
 
-  redis-coordination:
+  redis-auth:
     image: redis:8.8.0-trixie@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
     command:
       - redis-server
@@ -60,9 +60,9 @@ services:
       - --requirepass
       - local-development-only
     ports:
-      - '127.0.0.1:${REDIS_PORT}:6379'
+      - '127.0.0.1:${REDIS_AUTH_PORT}:6379'
     volumes:
-      - redis-coordination-data:/data
+      - redis-auth-data:/data
     healthcheck:
       test:
         - CMD-SHELL
@@ -90,7 +90,7 @@ services:
     depends_on:
       migrator:
         condition: service_completed_successfully
-      redis-coordination:
+      redis-auth:
         condition: service_healthy
     ports:
       - '127.0.0.1:${API_PORT:-3000}:3000'
@@ -195,5 +195,5 @@ volumes:
   grafana-data:
   loki-data:
   postgres-data:
-  redis-coordination-data:
+  redis-auth-data:
   tempo-data:

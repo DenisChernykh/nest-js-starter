@@ -1,14 +1,14 @@
 import type { ReadinessIndicator } from '@/platform/http/health/readiness-indicator'
 
-import type { RedisCoordinationConnectionManager } from './redis-coordination.connection'
+import type { RedisAuthConnectionManager } from './redis-auth.connection'
 
-/** Required readiness indicator for the coordination Redis capability. */
+/** Required readiness indicator for the auth Redis capability. */
 export class RedisReadinessIndicator implements ReadinessIndicator {
-  public readonly name = 'redis-coordination' as const
+  public readonly name = 'redis-auth' as const
   public readonly required = true as const
 
   public constructor(
-    private readonly connection: RedisCoordinationConnectionManager,
+    private readonly connection: RedisAuthConnectionManager,
     public readonly timeoutMs: number,
   ) {}
 

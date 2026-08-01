@@ -42,7 +42,7 @@ describe('standard Nest development start contract', () => {
       'OTEL_SDK_DISABLED=true corepack pnpm@11.15.1 run dev:api',
     )
     expect(scripts['dev:down']).toBe(
-      'docker compose --profile development --profile observability stop api migrator alloy loki tempo grafana postgres redis-coordination',
+      'docker compose --profile development --profile observability stop api migrator alloy loki tempo grafana postgres redis-auth',
     )
     expect(scripts['dev:down']).not.toMatch(/\bdown\b|--volumes|docker volume/u)
   })

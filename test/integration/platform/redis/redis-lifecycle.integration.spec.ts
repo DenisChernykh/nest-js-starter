@@ -1,7 +1,7 @@
 import type { StartedRedisContainer } from '@testcontainers/redis'
 
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'
-import { RedisCoordinationConnectionManager } from '@/platform/redis/redis-coordination.connection'
+import { RedisAuthConnectionManager } from '@/platform/redis/redis-auth.connection'
 import { RedisLifecycle } from '@/platform/redis/redis-lifecycle'
 import { RedisReadinessIndicator } from '@/platform/redis/redis-readiness.indicator'
 import { startRedisContainer } from '@test/integration/support/redis-container'
@@ -19,14 +19,14 @@ describe('Redis lifecycle', () => {
   })
 
   function createRuntime(commandTimeoutMs = 250): {
-    readonly connection: RedisCoordinationConnectionManager
+    readonly connection: RedisAuthConnectionManager
     readonly lifecycle: RedisLifecycle
     readonly readiness: RedisReadinessIndicator
   } {
-    const connection = new RedisCoordinationConnectionManager(
+    const connection = new RedisAuthConnectionManager(
       new RedisClientFactory({ connectTimeoutMs: 1_000, commandTimeoutMs }),
       {
-        coordinationUrl: container.getConnectionUrl(),
+        authUrl: container.getConnectionUrl(),
         connectTimeoutMs: 1_000,
         commandTimeoutMs,
       },

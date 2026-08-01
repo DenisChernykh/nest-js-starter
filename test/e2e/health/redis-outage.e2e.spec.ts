@@ -13,7 +13,7 @@ import {
 import { startRedisContainer } from '@test/integration/support/redis-container'
 import { waitForCondition } from '@test/integration/support/wait-for-condition'
 
-describe('coordination Redis outage readiness', () => {
+describe('auth Redis outage readiness', () => {
   let postgres: StartedPostgreSqlContainer
   let redis: StartedRedisContainer
   let suspended = false

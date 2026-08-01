@@ -21,7 +21,7 @@ export function createOpenApiRuntimeConfig(): ApplicationRuntimeConfig {
     TRUST_PROXY_CIDRS: '127.0.0.1/32',
     DATABASE_URL:
       'postgresql://contract:contract@127.0.0.1:1/contract?schema=public',
-    REDIS_COORDINATION_URL: 'redis://default:contract@127.0.0.1:1',
+    REDIS_AUTH_URL: 'redis://default:contract@127.0.0.1:1',
     AUTH_SESSION_KEY_SECRET: contractSecrets[0],
     AUTH_CSRF_SECRET: contractSecrets[1],
     AUTH_RATE_LIMIT_KEY_SECRET: contractSecrets[2],

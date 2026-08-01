@@ -17,7 +17,7 @@ export interface DatabaseRuntimeDefaults {
   readonly transactionTimeoutMs: number
 }
 
-/** Fixed coordination Redis connection and command deadlines. */
+/** Fixed auth Redis connection and command deadlines. */
 export interface RedisRuntimeDefaults {
   readonly connectTimeoutMs: number
   readonly commandTimeoutMs: number

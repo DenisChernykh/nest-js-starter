@@ -49,6 +49,9 @@ interface ResolvedComposeService {
     readonly watch?: readonly ResolvedComposeWatchRule[]
   }
   readonly environment?: Readonly<Record<string, string>>
+  readonly healthcheck?: {
+    readonly test?: readonly string[]
+  }
   readonly image?: string
   readonly ports?: readonly ResolvedComposePort[]
   readonly profiles?: readonly string[]
@@ -87,7 +90,7 @@ function resolveLocalCompose(): ResolvedComposeConfiguration {
         GRAFANA_PORT: '33004',
         OTLP_HTTP_PORT: '34318',
         POSTGRES_PORT: '35432',
-        REDIS_PORT: '36379',
+        REDIS_AUTH_PORT: '36379',
       },
     },
   )
@@ -144,7 +147,7 @@ describe('local Compose runtime contract', () => {
     expect(api.depends_on?.migrator?.condition).toBe(
       'service_completed_successfully',
     )
-    expect(api.depends_on?.['redis-coordination']?.condition).toBe(
+    expect(api.depends_on?.['redis-auth']?.condition).toBe(
       'service_healthy',
     )
     expect(api.depends_on).not.toHaveProperty('alloy')
@@ -156,10 +159,40 @@ describe('local Compose runtime contract', () => {
           'postgresql://nest_js_starter:nest_js_starter@postgres:5432/nest_js_starter?schema=public',
         OTEL_EXPORTER_OTLP_ENDPOINT: 'http://alloy:4318',
         OTEL_SDK_DISABLED: 'false',
-        REDIS_COORDINATION_URL:
-          'redis://default:local-development-only@redis-coordination:6379',
+        REDIS_AUTH_URL:
+          'redis://default:local-development-only@redis-auth:6379',
       }),
     )
+    const redisAuth = requireService(configuration, 'redis-auth')
+    expect(redisAuth.command).toEqual([
+      'redis-server',
+      '--appendonly',
+      'yes',
+      '--appendfsync',
+      'always',
+      '--maxmemory-policy',
+      'noeviction',
+      '--requirepass',
+      'local-development-only',
+    ])
+    expect(redisAuth.ports).toEqual([
+      expect.objectContaining({ host_ip: '127.0.0.1', target: 6379 }),
+    ])
+    expect(redisAuth.volumes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: 'redis-auth-data',
+          target: '/data',
+          type: 'volume',
+        }),
+      ]),
+    )
+    expect(redisAuth.healthcheck?.test).toEqual([
+      'CMD-SHELL',
+      'REDISCLI_AUTH=local-development-only redis-cli ping | grep PONG',
+    ])
+    expect(configuration.services).not.toHaveProperty('redis-queue')
+    expect(api.environment).not.toHaveProperty('REDIS_QUEUE_URL')
     expect(api.ports).toEqual([
       expect.objectContaining({ host_ip: '127.0.0.1', target: 3000 }),
     ])
@@ -237,7 +270,7 @@ describe('local Compose runtime contract', () => {
 
     for (const serviceName of [
       'postgres',
-      'redis-coordination',
+      'redis-auth',
       'api',
       'alloy',
       'grafana',
@@ -292,6 +325,7 @@ describe('local Compose runtime contract', () => {
     )
     expect(configuration.volumes).toHaveProperty('grafana-data')
     expect(configuration.volumes).toHaveProperty('loki-data')
+    expect(configuration.volumes).toHaveProperty('redis-auth-data')
     expect(configuration.volumes).toHaveProperty('tempo-data')
   })
 

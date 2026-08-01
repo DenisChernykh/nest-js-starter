@@ -24,7 +24,7 @@
     "deployment:rollback": "tsx scripts/deployment/cli.ts rollback",
     "dev": "docker compose --profile development --profile observability up --watch api alloy loki tempo grafana",
     "dev:api": "corepack pnpm@11.15.1 run prisma:generate && nest start --watch --no-shell",
-    "dev:down": "docker compose --profile development --profile observability stop api migrator alloy loki tempo grafana postgres redis-coordination",
+    "dev:down": "docker compose --profile development --profile observability stop api migrator alloy loki tempo grafana postgres redis-auth",
     "dev:host": "OTEL_SDK_DISABLED=true corepack pnpm@11.15.1 run dev:api",
     "format": "prettier . --write",
     "format:check": "prettier . --check",

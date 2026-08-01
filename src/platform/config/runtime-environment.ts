@@ -112,7 +112,10 @@ export function buildApiRuntimeConfig(
     }),
     database: buildDatabaseConfig(environment),
     redis: Object.freeze({
-      coordinationUrl: environment.REDIS_COORDINATION_URL,
+      authUrl: environment.REDIS_AUTH_URL,
+      ...(environment.REDIS_QUEUE_URL === undefined
+        ? {}
+        : { queueUrl: environment.REDIS_QUEUE_URL }),
       ...runtimeDefaults.redis,
       keyPrefix: environment.REDIS_KEY_PREFIX,
     }),

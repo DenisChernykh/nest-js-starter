@@ -33,7 +33,7 @@ describe('compiled API process SIGTERM', () => {
     child = spawnBuiltApi({
       ...process.env,
       DATABASE_URL: container.getConnectionUri(),
-      REDIS_COORDINATION_URL: redis.getConnectionUrl(),
+      REDIS_AUTH_URL: redis.getConnectionUrl(),
       AUTH_SESSION_KEY_SECRET: Buffer.alloc(32, 1).toString('base64url'),
       AUTH_CSRF_SECRET: Buffer.alloc(32, 2).toString('base64url'),
       AUTH_RATE_LIMIT_KEY_SECRET: Buffer.alloc(32, 3).toString('base64url'),

@@ -1,11 +1,11 @@
-# Потеря coordination Redis
+# Потеря auth Redis
 
 ## Определите incident
 
 | Состояние            | Что происходит                                                                                                | Безопасное действие                                                                                                                   |
 | -------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Redis unavailable    | Authoritative instance, его сеть, ACL/TLS или процесс недоступны, но persistent data не признаны утраченными. | Восстановить доступ к тому же authoritative persistent instance.                                                                      |
-| Redis data loss      | Persistent volume/AOF/backup не содержит часть или все coordination state.                                    | Зафиксировать scope, восстановить согласованный authoritative dataset либо признать logout; users/passwords в PostgreSQL не теряются. |
+| Redis data loss      | Persistent volume/AOF/backup не содержит часть или все auth state.                                            | Зафиксировать scope, восстановить согласованный authoritative dataset либо признать logout; users/passwords в PostgreSQL не теряются. |
 | Auth-secret exposure | Скомпрометирован или подозрителен один из auth secrets, Redis может быть healthy.                             | Следовать `session-secret-compromise.md`: ротировать весь auth bundle без mixed replicas.                                             |
 
 Не подменяйте эти ветки друг другом: новая Redis instance не устраняет
@@ -15,18 +15,18 @@
 
 - `/health/live` остаётся `200`;
 - `/health/startup` остаётся `200`, если process ранее завершил startup;
-- `/health/ready` становится `503`, check `redis-coordination` — `down`;
+- `/health/ready` становится `503`, check `redis-auth` — `down`;
 - login и cookie-auth endpoints возвращают безопасный
   `DEPENDENCY_UNAVAILABLE` без connection URL/driver details.
 
 Это ожидаемый fail-closed режим. Не отключайте readiness check и не подменяйте
-authoritative coordination instance другим Redis без принятого решения о
+authoritative auth instance другим Redis без принятого решения о
 принудительном logout всех пользователей. Не выполняйте `FLUSHDB`/`FLUSHALL`,
 не меняйте `REDIS_KEY_PREFIX` и не меняйте Redis key bytes как recovery action.
 
 ## Redis unavailable: проверка и восстановление
 
-1. Проверьте доступность configured coordination endpoint, ACL/TLS и policy
+1. Проверьте доступность configured auth endpoint, ACL/TLS и policy
    `noeviction`, не печатая URL с credentials.
 2. Проверьте CPU, память, persistent storage, диск/AOF и сетевой путь Redis.
 3. Восстановите тот же authoritative persistent instance; не создавайте пустую
@@ -66,7 +66,7 @@ authoritative coordination instance другим Redis без принятого
 
 ## Локальный Redis-loss drill
 
-В изолированном local/test environment временно сделайте coordination Redis
+В изолированном local/test environment временно сделайте auth Redis
 недоступным, не удаляя его persistent data. Подтвердите последовательно:
 
 1. `/health/ready` становится `503`;

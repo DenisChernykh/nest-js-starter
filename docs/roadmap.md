@@ -64,7 +64,7 @@ The following contracts are complete and remain in the core:
    tooling that still requires the TypeScript 6 API/CLI, plus one typed
    runtime-defaults catalog.
 3. PostgreSQL with explicit lifecycle, readiness and a separate migrator role.
-4. One coordination Redis connection for opaque sessions and distributed login
+4. One auth Redis connection for opaque sessions and distributed login
    limits, preserving the existing key format.
 5. Argon2id, cookie sessions, CSRF/Origin checks, revocation, logout-all, RBAC
    and protected Swagger.
@@ -84,7 +84,7 @@ project-specific business modules.
 - Production or hosted-environment mutations require explicit authorization.
 - New capabilities start from a real consumer and a narrow contract. A generic
   framework is not built first.
-- Optional infrastructure must remain outside the existing coordination Redis
+- Optional infrastructure must remain outside the existing auth Redis
   manager unless it has exactly the same availability, persistence and
   lifecycle requirements.
 - Core wire contracts, Prisma schema and Redis session/rate-limit key bytes do
@@ -112,7 +112,7 @@ rolled back and recovered without changing the application core.
 - `docs/runbooks/session-secret-compromise.md` for invalidating every active
   session after secret exposure;
 - deployment-specific documentation for TLS/domain, least-privilege runtime and
-  migration credentials, and coordination Redis persistence;
+  migration credentials, and auth Redis persistence;
 - an environment-owned schedule for quarterly restore drills.
 
 **Required sequence:**
@@ -133,7 +133,7 @@ rolled back and recovered without changing the application core.
 - a healthy promotion and digest rollback are recorded;
 - the latest PostgreSQL backup restores into an isolated database and supports
   representative application queries;
-- the coordination Redis loss and session-secret compromise procedures are
+- the auth Redis loss and session-secret compromise procedures are
   executed and recorded.
 
 Dokploy may be the first deployment adapter, but the contract above is the

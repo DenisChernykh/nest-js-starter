@@ -73,11 +73,7 @@ function normalizeRedisUrl(value: string): string | undefined {
       url.hostname === '' ||
       url.hash !== '' ||
       url.search !== '' ||
-      ![
-        '',
-        '/',
-        ...Array.from({ length: 16 }, (_, index) => `/${index}`),
-      ].includes(url.pathname)
+      !['', '/'].includes(url.pathname)
     ) {
       return undefined
     }
@@ -85,6 +81,11 @@ function normalizeRedisUrl(value: string): string | undefined {
   } catch {
     return undefined
   }
+}
+
+function redisEndpointIdentity(value: string): string {
+  const url = new URL(value)
+  return `${url.protocol}//${url.hostname.toLowerCase()}:${url.port || '6379'}`
 }
 
 function normalizeOtlpHttpUrl(value: string): string | undefined {
@@ -117,11 +118,6 @@ function decodeSecret(value: string): Uint8Array | undefined {
 
 function byteArraysEqual(left: Uint8Array, right: Uint8Array): boolean {
   return Buffer.from(left).equals(Buffer.from(right))
-}
-
-function usesLogicalRedisDatabase(value: string): boolean {
-  const pathname = new URL(value).pathname
-  return pathname !== '' && pathname !== '/'
 }
 
 const runtimeMode = Joi.string()
@@ -213,7 +209,8 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
       .default([]),
     DATABASE_URL: databaseUrl,
     DATABASE_POOL_MAX: databasePoolMax,
-    REDIS_COORDINATION_URL: redisUrl.required(),
+    REDIS_AUTH_URL: redisUrl.required(),
+    REDIS_QUEUE_URL: redisUrl.empty('').optional(),
     REDIS_KEY_PREFIX: Joi.string()
       .pattern(/^[a-z0-9](?:[a-z0-9-]{0,62})$/u)
       .default('nest-js-starter'),
@@ -238,10 +235,13 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     value.NODE_ENV !== 'production' ||
     (value.PUBLIC_API_URL.startsWith('https://') &&
       value.CORS_ORIGINS.every((origin) => origin.startsWith('https://')) &&
-      value.TRUST_PROXY_CIDRS.length > 0 &&
-      !usesLogicalRedisDatabase(value.REDIS_COORDINATION_URL))
+      value.TRUST_PROXY_CIDRS.length > 0)
+  const queueEndpointIsDistinct =
+    value.REDIS_QUEUE_URL === undefined ||
+    redisEndpointIdentity(value.REDIS_AUTH_URL) !==
+      redisEndpointIdentity(value.REDIS_QUEUE_URL)
 
-  return secretsAreDistinct && productionIsSafe
+  return secretsAreDistinct && productionIsSafe && queueEndpointIsDistinct
     ? value
     : helpers.error('any.invalid')
 })

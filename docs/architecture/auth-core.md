@@ -12,7 +12,7 @@ hash). Successful login upgrades an older valid hash with optimistic credential
 versioning. Missing user, wrong password and disabled user share one generic
 response and the missing-user path verifies a constant dummy PHC.
 
-Coordination Redis stores finite opaque sessions and their owner index. The
+Auth Redis stores finite opaque sessions and their owner index. The
 256-bit raw token exists only in the HttpOnly browser cookie; Redis receives a
 session-secret HMAC. Public session IDs and CSRF seeds are independently random.
 Lua scripts create/touch/revoke keys and TTLs atomically without runtime `KEYS`.

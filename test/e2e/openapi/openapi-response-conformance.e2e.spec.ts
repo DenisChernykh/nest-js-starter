@@ -36,7 +36,7 @@ describe('committed OpenAPI response conformance', () => {
               check: () => Promise.resolve(databaseStatus),
             },
             {
-              name: 'redis-coordination',
+              name: 'redis-auth',
               required: true,
               timeoutMs: 100,
               check: () => Promise.resolve('up'),

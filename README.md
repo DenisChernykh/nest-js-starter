@@ -1,6 +1,6 @@
 # nest-js-starter
 
-Reusable NestJS production foundation with PostgreSQL, one coordination Redis
+Reusable NestJS production foundation with PostgreSQL, one auth Redis
 connection, cookie-based auth/RBAC, RFC 9457 errors, protected Swagger and
 trace-only OpenTelemetry.
 
@@ -21,7 +21,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-`pnpm dev` starts PostgreSQL, coordination Redis, the one-shot migrator, the
+`pnpm dev` starts PostgreSQL, auth Redis, the one-shot migrator, the
 watched Nest API, Alloy, Loki, Tempo and Grafana. The API waits for successful
 committed migrations and healthy Redis; observability remains fail-open.
 See the [local development runbook](docs/runbooks/local-development.md) for

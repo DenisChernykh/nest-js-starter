@@ -17,7 +17,7 @@ export class RedisCommandTimeoutError extends Error {
 
 /** Narrow command boundary exposed to module-owned Redis adapters. */
 export interface RedisCommandExecutorPort {
-  /** Executes one bounded command through the owned coordination client. */
+  /** Executes one bounded command through the owned auth client. */
   execute<T>(
     operationName: string,
     operation: (client: RedisManagedClient) => Promise<T>,
@@ -25,7 +25,7 @@ export interface RedisCommandExecutorPort {
   ): Promise<T>
 }
 
-/** Runs coordination Redis commands with tracing and absolute deadlines. */
+/** Runs auth Redis commands with tracing and absolute deadlines. */
 export class RedisCommandExecutor implements RedisCommandExecutorPort {
   public constructor(
     private readonly client: RedisManagedClient,
