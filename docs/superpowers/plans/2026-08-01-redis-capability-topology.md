@@ -495,6 +495,92 @@ Stop and report the milestone packet. Do not continue without acceptance.
 
 ---
 
+## Corrective Milestone 2.5: Restore deterministic install and formatting gates
+
+### Why this correction exists
+
+Milestone 2 introduced `msgpackr-extract@3.0.4` transitively through BullMQ,
+but did not record the required pnpm 11 build-script decision. Milestone 1
+also left three tracked test files outside the repository's Prettier format,
+while local ignored `.superpowers/sdd` reports are still discovered by the
+root Prettier scan. These are plan/baseline defects, not Milestone 3
+implementation failures and not grounds for a model switch.
+
+Preserve the complete uncommitted Milestone 3 working tree. Do not discard,
+stash, stage or rewrite any Milestone 3 path while completing this correction.
+
+### Files
+
+Modify only:
+
+- `pnpm-workspace.yaml`
+- `.prettierignore`
+- `test/unit/platform/config/runtime-config.service.spec.ts`
+- `test/unit/platform/config/runtime-environment.spec.ts`
+- `test/unit/platform/redis/redis-auth.connection.spec.ts`
+
+### Required correction
+
+1. Add `msgpackr-extract: false` to `allowBuilds`. It is an optional native
+   string-extraction accelerator; the starter does not require native
+   acceleration for BullMQ correctness. Do not use `ignore-scripts`,
+   `verify-deps-before-run=warn`, an uncommitted pnpm placeholder or
+   `msgpackr-extract: true` as a substitute for the explicit deny decision.
+2. Add `.superpowers/sdd/` to the root `.prettierignore`. Preserve every local
+   file below that directory; do not format, delete or stage those ignored
+   agent reports.
+3. Run Prettier write on exactly the three tracked Milestone 1 test files named
+   above. No semantic edit is allowed.
+4. Run the complete root formatting check with the project-pinned Node and
+   pnpm. It must pass before the correction commit.
+
+### Verification and commit
+
+Use the project Node binary by prepending its directory to the existing
+`PATH`; never replace `PATH` or remove `/usr/local/bin`.
+
+```bash
+corepack pnpm@11.15.1 exec prettier --write \
+  test/unit/platform/config/runtime-config.service.spec.ts \
+  test/unit/platform/config/runtime-environment.spec.ts \
+  test/unit/platform/redis/redis-auth.connection.spec.ts
+corepack pnpm@11.15.1 run format:check
+git diff --check
+```
+
+Before committing, the unstaged Milestone 3 paths must still match the state
+reported at the end of the failed Milestone 3 attempt. Stage only the five
+corrective files:
+
+```bash
+git add pnpm-workspace.yaml .prettierignore \
+  test/unit/platform/config/runtime-config.service.spec.ts \
+  test/unit/platform/config/runtime-environment.spec.ts \
+  test/unit/platform/redis/redis-auth.connection.spec.ts
+git diff --cached --name-only
+git commit -m "chore(toolchain): restore deterministic checks"
+```
+
+After that commit, prove the install policy from a disposable clean checkout
+at the corrective commit with Node `24.18.0` and pnpm `11.15.1`:
+
+```bash
+corepack pnpm@11.15.1 ci
+```
+
+Run this proof in a host environment with registry access. Do not run `pnpm
+ci` against the dirty implementation checkout because it recreates
+`node_modules`. Do not weaken the command with `--ignore-scripts`,
+`verify-deps-before-run=warn` or a non-frozen install. Preserve the exact
+output; a registry or sandbox failure is an environment boundary and permits
+one identical host retry, not a policy change.
+
+Once the clean install passes, return to the preserved implementation checkout
+and resume the existing Milestone 3 from its aggregate gate. Do not repeat its
+already-green focused tests unless a corrective file overlaps them.
+
+---
+
 ## Milestone 3: Worker lifecycle and real physical queue proof
 
 ### Outcome
@@ -578,11 +664,16 @@ corepack pnpm@11.15.1 exec jest \
   test/unit/ops/local-compose-runtime-contract.spec.ts
 ```
 
-After all Milestones 1-3 are green, run the implementation-batch gate once:
+After Milestones 1-2 and Corrective Milestone 2.5 are committed and the
+Milestone 3 focused checks are green, run the implementation-batch gate once:
 
 ```bash
 corepack pnpm@11.15.1 run check:quick
 ```
+
+Run the exact command without `ignore-scripts` and without
+`verify-deps-before-run=warn`. A successful command must prove both pnpm
+preflight and the complete `check:quick` pipeline.
 
 If Docker/Testcontainers is unavailable, retain the exact output and classify
 it as an environment boundary. It is not permission to weaken the integration
@@ -740,7 +831,8 @@ milestones are not escalation conditions.
 Luna returns:
 
 1. final branch and full HEAD;
-2. one-line result and commit for each milestone;
+2. one-line result and commit for each milestone, including Corrective
+   Milestone 2.5;
 3. exact focused, `check:quick`, `check` and OCI commands with fresh outcomes;
 4. any environment boundary or unverified gate;
 5. confirmation that no push, PR, merge, deployment or backend edit occurred.
