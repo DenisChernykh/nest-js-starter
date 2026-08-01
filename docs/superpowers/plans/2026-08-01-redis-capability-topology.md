@@ -583,6 +583,94 @@ tests unless a corrective file overlaps them.
 
 ---
 
+## Corrective Milestone 2.6: Close the committed M2 strict-lint baseline
+
+### Why this correction exists
+
+The first real `check:quick` after Corrective Milestone 2.5 reached ESLint and
+found four strict-lint errors in three committed Milestone 2 test files. Keep
+those baseline repairs separate from the still-uncommitted Milestone 3 test
+repairs. This is the first bounded correction for this lint blocker; Luna
+remains the executor.
+
+Preserve the complete uncommitted Milestone 3 working tree. Do not discard,
+stash, stage or rewrite any Milestone 3 path while completing this correction.
+
+### Files
+
+Modify only:
+
+- `test/unit/platform/queue/bullmq-connection.module.spec.ts`
+- `test/unit/platform/queue/queue-runtime-config.spec.ts`
+- `test/unit/toolchain/dependency-cruiser-policy.spec.ts`
+
+### Required correction
+
+1. In `bullmq-connection.module.spec.ts`, replace both unsafe
+   `providers: expect.any(Array)` matchers with one typed local assertion
+   helper. Import `DynamicModule` as a type and use this exact shape:
+
+   ```ts
+   function expectSingleBullRootModule(dynamicModule: DynamicModule): void {
+     const imports: readonly unknown[] = dynamicModule.imports ?? []
+     expect(imports).toHaveLength(1)
+     const rootImport = imports[0]
+     if (
+       typeof rootImport !== 'object' ||
+       rootImport === null ||
+       !('module' in rootImport) ||
+       !('providers' in rootImport)
+     ) {
+       throw new Error('Expected one BullMQ root dynamic module')
+     }
+     expect(rootImport.module).toBe(BullModule)
+     expect(Array.isArray(rootImport.providers)).toBe(true)
+   }
+   ```
+
+   Each producer/worker test calls the helper and retains its assertion that
+   the outer `BullmqConnectionModule` has no providers. Do not change the
+   production module.
+2. In `queue-runtime-config.spec.ts`, import `ApplicationRuntimeConfig` as a
+   type and declare `createConfig(queueUrl?: string): ApplicationRuntimeConfig`.
+3. In `dependency-cruiser-policy.spec.ts`, import
+   `SpawnSyncReturns` as a type from `node:child_process` and declare
+   `runFixture(fixtureName: string): SpawnSyncReturns<string>`.
+4. Make no expectation, fixture, runtime or production behavior change.
+
+### Focused verification and commit
+
+Run with Node `24.18.0` and the complete inherited `PATH`:
+
+```bash
+node node_modules/eslint/bin/eslint.js --max-warnings=0 \
+  test/unit/platform/queue/bullmq-connection.module.spec.ts \
+  test/unit/platform/queue/queue-runtime-config.spec.ts \
+  test/unit/toolchain/dependency-cruiser-policy.spec.ts
+node --experimental-vm-modules ./node_modules/jest/bin/jest.js \
+  --config jest.unit.config.mjs --runInBand \
+  test/unit/platform/queue/bullmq-connection.module.spec.ts \
+  test/unit/platform/queue/queue-runtime-config.spec.ts \
+  test/unit/toolchain/dependency-cruiser-policy.spec.ts
+git diff --check
+```
+
+Stage only these three files and commit:
+
+```bash
+git add test/unit/platform/queue/bullmq-connection.module.spec.ts \
+  test/unit/platform/queue/queue-runtime-config.spec.ts \
+  test/unit/toolchain/dependency-cruiser-policy.spec.ts
+git diff --cached --name-only
+git commit -m "test(queue): close strict lint baseline"
+```
+
+Confirm the preserved Milestone 3 diff is still unstaged, report the corrective
+milestone packet and stop. Do not fix M3 lint, rerun `check:quick` or start
+Milestone 4 until Corrective Milestone 2.6 is accepted.
+
+---
+
 ## Milestone 3: Worker lifecycle and real physical queue proof
 
 ### Outcome
@@ -639,8 +727,26 @@ Modify:
 11. OCI runtime probe resolves exactly `@nestjs/bullmq`, `bullmq` and `ioredis`
     inside `/app`. Keep image command `node dist/bootstrap/api/main.js`; add no
     worker entrypoint or queue environment to the default smoke.
+12. After Corrective Milestone 2.6 is accepted, close the M3 strict-lint
+    findings without changing test behavior:
+    - `TestOnlyProcessor.process` is non-`async`, pushes the delivery and returns
+      `Promise.resolve()`;
+    - import `WorkerTerminationWaiter` as a type and type the stateful
+      `waitForTermination` Jest mock as
+      `jest.MockedFunction<WorkerTerminationWaiter>`;
+    - replace every `async` callback with no `await` by `Promise.resolve()`,
+      `Promise.reject(error)` or direct `closeOnce()` return as appropriate.
+    Do not disable or suppress ESLint rules.
 
 ### Focused verification
+
+Strict lint correction:
+
+```bash
+node node_modules/eslint/bin/eslint.js --max-warnings=0 \
+  test/integration/platform/queue/bullmq-connection.integration.spec.ts \
+  test/unit/bootstrap/workers/run-worker-application.spec.ts
+```
 
 Worker lifecycle RED/GREEN:
 
@@ -666,8 +772,9 @@ corepack pnpm@11.15.1 exec jest \
   test/unit/ops/local-compose-runtime-contract.spec.ts
 ```
 
-After Milestones 1-2 and Corrective Milestone 2.5 are committed and the
-Milestone 3 focused checks are green, run the implementation-batch gate once:
+After Milestones 1-2 and Corrective Milestones 2.5-2.6 are committed and the
+Milestone 3 focused checks are green, run the repaired implementation-batch
+gate once:
 
 ```bash
 corepack pnpm@11.15.1 run check:quick
@@ -834,7 +941,7 @@ Luna returns:
 
 1. final branch and full HEAD;
 2. one-line result and commit for each milestone, including Corrective
-   Milestone 2.5;
+   Milestones 2.5 and 2.6;
 3. exact focused, `check:quick`, `check` and OCI commands with fresh outcomes;
 4. any environment boundary or unverified gate;
 5. confirmation that no push, PR, merge, deployment or backend edit occurred.
