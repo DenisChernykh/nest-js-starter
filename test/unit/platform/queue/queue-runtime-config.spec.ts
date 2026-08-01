@@ -1,4 +1,5 @@
 import { RuntimeConfigurationError } from '@/platform/config/runtime-config.types'
+import type { ApplicationRuntimeConfig } from '@/platform/config/runtime-config.types'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { requireQueueRuntimeConfig } from '@/platform/queue/queue-runtime-config'
 
@@ -8,7 +9,7 @@ const databaseUrl =
 const secret = (byte: number): string =>
   Buffer.alloc(32, byte).toString('base64url')
 
-function createConfig(queueUrl?: string) {
+function createConfig(queueUrl?: string): ApplicationRuntimeConfig {
   return buildApiRuntimeConfig({
     DATABASE_URL: databaseUrl,
     REDIS_AUTH_URL: 'redis://default:auth-secret@127.0.0.1:6379',

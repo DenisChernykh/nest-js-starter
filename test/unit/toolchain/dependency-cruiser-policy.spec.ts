@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process'
+import type { SpawnSyncReturns } from 'node:child_process'
 import { resolve } from 'node:path'
 
 describe('dependency-cruiser policy', () => {
-  function runFixture(fixtureName: string) {
+  function runFixture(fixtureName: string): SpawnSyncReturns<string> {
     const fixture = resolve(`test/fixtures/dependency-cruiser/${fixtureName}`)
     return spawnSync(
       process.execPath,
