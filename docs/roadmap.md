@@ -44,11 +44,13 @@ registry. The committed OpenAPI contract includes the three operations and the
 complete composed problem-code enum. Real HTTP tests cover its authentication,
 authorization, validation, visibility and business-error responses.
 
-Fresh local Node 24.x and pnpm 11.15.1 evidence for that feature-branch
+Fresh local Node 24.18.0 and pnpm 11.15.1 evidence for that feature-branch
 revision is `pnpm check:quick` with 68 unit suites and 346 tests, followed by
 `pnpm check` with 12 integration suites/58 tests and 28 e2e suites/85 tests.
 This is local implementation evidence only: no remote CI, merge, image
 publication, deployment or hosted verification is recorded for the slice.
+The current toolchain policy accepts every supported Node 24.x patch release;
+the version above identifies the runtime used for this historical run.
 
 The reference is optional product code rather than universal foundation. It
 does not implement listing, user provisioning, self-service auth, email,

@@ -32,7 +32,7 @@ Use the ESLint Node API and `lintText(..., { filePath })` to exercise the real f
 Run:
 
 ```bash
-corepack pnpm@11.15.1 exec jest --config jest.unit.config.ts --runInBand test/unit/toolchain/application-nest-di-boundary.spec.ts
+pnpm exec jest --config jest.unit.config.ts --runInBand test/unit/toolchain/application-nest-di-boundary.spec.ts
 ```
 
 Expected: FAIL because the current application rule rejects every Nest import.
@@ -73,9 +73,9 @@ Update `docs/architecture/module-boundaries.md` to state:
 Run the focused Jest contract, ESLint, and dependency-cruiser:
 
 ```bash
-corepack pnpm@11.15.1 exec jest --config jest.unit.config.ts --runInBand test/unit/toolchain/application-nest-di-boundary.spec.ts
-corepack pnpm@11.15.1 run lint
-corepack pnpm@11.15.1 run architecture:check
+pnpm exec jest --config jest.unit.config.ts --runInBand test/unit/toolchain/application-nest-di-boundary.spec.ts
+pnpm run lint
+pnpm run architecture:check
 ```
 
 Expected: PASS.
@@ -124,7 +124,7 @@ Resolve every runtime application class and assert representative methods can ex
 Run:
 
 ```bash
-corepack pnpm@11.15.1 exec jest --config jest.unit.config.ts --runInBand test/unit/modules/auth/application-di.spec.ts
+pnpm exec jest --config jest.unit.config.ts --runInBand test/unit/modules/auth/application-di.spec.ts
 ```
 
 Expected: FAIL because the port tokens and Nest metadata do not exist yet.
@@ -161,8 +161,8 @@ For each runtime auth use case/query:
 Run:
 
 ```bash
-corepack pnpm@11.15.1 exec jest --config jest.unit.config.ts --runInBand test/unit/modules/auth/application-di.spec.ts test/unit/modules/auth
-corepack pnpm@11.15.1 run typecheck
+pnpm exec jest --config jest.unit.config.ts --runInBand test/unit/modules/auth/application-di.spec.ts test/unit/modules/auth
+pnpm run typecheck
 ```
 
 Expected: PASS.
@@ -216,9 +216,9 @@ Do not add a generic provider helper or a global DI registry.
 Run:
 
 ```bash
-corepack pnpm@11.15.1 exec jest --config jest.unit.config.ts --runInBand test/unit/modules/auth/application-di.spec.ts test/unit/bootstrap/api.module.spec.ts
-corepack pnpm@11.15.1 run typecheck
-corepack pnpm@11.15.1 run architecture:check
+pnpm exec jest --config jest.unit.config.ts --runInBand test/unit/modules/auth/application-di.spec.ts test/unit/bootstrap/api.module.spec.ts
+pnpm run typecheck
+pnpm run architecture:check
 ```
 
 Expected: PASS.
@@ -239,15 +239,15 @@ git commit -m "refactor(auth): use standard Nest providers"
 ### Step 1: Run formatting
 
 ```bash
-corepack pnpm@11.15.1 exec prettier --write .dependency-cruiser.cjs eslint.config.mjs docs/architecture/module-boundaries.md src/modules/auth test/unit/toolchain/application-nest-di-boundary.spec.ts test/unit/modules/auth/application-di.spec.ts
+pnpm exec prettier --write .dependency-cruiser.cjs eslint.config.mjs docs/architecture/module-boundaries.md src/modules/auth test/unit/toolchain/application-nest-di-boundary.spec.ts test/unit/modules/auth/application-di.spec.ts
 ```
 
 ### Step 2: Run the required final gate
 
-Activate the repository Node version from `.node-version`, then run:
+Activate the repository Node version from `.nvmrc`, then run:
 
 ```bash
-corepack pnpm@11.15.1 check:quick
+pnpm check:quick
 ```
 
 Expected: PASS with formatting, Prisma/OpenAPI checks, lint, typecheck, unit tests, architecture check and compiled build all green.
