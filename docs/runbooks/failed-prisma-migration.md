@@ -3,7 +3,7 @@
 ## Stop condition
 
 The migration gate is a one-shot operation between digest verification and API
-deployment. A non-zero corepack pnpm@11.15.1 start:migrate result is a hard
+deployment. A non-zero `pnpm start:migrate` result is a hard
 stop: do not start, restart, replace, or roll out an API revision. Keep the
 previous API revision serving. Never run prisma migrate reset, never edit
 _prisma_migrations, and never apply a database down-migration.
@@ -40,7 +40,7 @@ curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
 # accidentally expose a connection setting. No API deployment command appears
 # in this drill.
 export DATABASE_URL="$MIGRATION_DATABASE_URL"
-if corepack pnpm@11.15.1 start:migrate >/dev/null 2>&1; then
+if pnpm start:migrate >/dev/null 2>&1; then
   printf '%s\n' 'unexpected: invalid migrator input succeeded' >&2
   exit 1
 fi
@@ -76,7 +76,7 @@ also show no new API rollout event.
    set +x
    : "$MIGRATION_DATABASE_URL"
    export DATABASE_URL="$MIGRATION_DATABASE_URL"
-   corepack pnpm@11.15.1 exec prisma migrate status --config prisma.config.ts
+   pnpm exec prisma migrate status --config prisma.config.ts
    ```
 
 5. Reproduce and diagnose against the separate restored database. Decide the

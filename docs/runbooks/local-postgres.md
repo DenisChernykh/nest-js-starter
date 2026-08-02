@@ -2,21 +2,23 @@
 
 ## Prerequisites and startup
 
-Install Node `24.18.0`, enable Corepack/pnpm `11.15.1`, and start Docker.
+Install Node `24.x`, enable pnpm `11.15.1`, and start Docker. The repository
+`.nvmrc` selects the supported Node major.
 
 ```bash
 cp .env.example .env
-corepack pnpm@11.15.1 install --frozen-lockfile
+pnpm install
 docker compose up -d --wait postgres
-corepack pnpm@11.15.1 start:migrate
-corepack pnpm@11.15.1 dev:api
+pnpm start:migrate
+pnpm dev:api
 ```
 
 `cp` creates the local runtime/Compose configuration; do not commit `.env`.
-The frozen install must leave `pnpm-lock.yaml` unchanged. Compose starts only a
-loopback PostgreSQL service and waits for its healthcheck. `start:migrate`
-deploys committed migrations as an explicit one-shot role. Start the API only
-after it succeeds.
+The ordinary install reconciles local dependencies; use
+`pnpm install --frozen-lockfile` only for an explicit clean or CI gate. Compose
+starts only a loopback PostgreSQL service and waits for its healthcheck.
+`start:migrate` deploys committed migrations as an explicit one-shot role.
+Start the API only after it succeeds.
 
 Verify in another terminal:
 

@@ -44,7 +44,7 @@ registry. The committed OpenAPI contract includes the three operations and the
 complete composed problem-code enum. Real HTTP tests cover its authentication,
 authorization, validation, visibility and business-error responses.
 
-Fresh local Node 24.18.0 and pnpm 11.15.1 evidence for that feature-branch
+Fresh local Node 24.x and pnpm 11.15.1 evidence for that feature-branch
 revision is `pnpm check:quick` with 68 unit suites and 346 tests, followed by
 `pnpm check` with 12 integration suites/58 tests and 28 e2e suites/85 tests.
 This is local implementation evidence only: no remote CI, merge, image
@@ -184,7 +184,7 @@ manifest, golden fixtures and custom certification engine have been removed.
 
 1. Copy the repository without `.git`, `node_modules`, generated output or local
    environment files.
-2. Install with the frozen lockfile on Node 24.18.0 and pnpm 11.15.1.
+2. Install with the frozen lockfile on Node 24.x and pnpm 11.15.1.
 3. Validate/generate Prisma, run `pnpm check`, start local dependencies, apply
    migrations and create the initial admin.
 4. Run `pnpm oci:check` and verify API/migrator roles.

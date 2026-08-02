@@ -366,7 +366,7 @@ export AUTH_SESSION_KEY_SECRET="$RESTORE_AUTH_SESSION_KEY_SECRET"
 export AUTH_CSRF_SECRET="$RESTORE_AUTH_CSRF_SECRET"
 export AUTH_RATE_LIMIT_KEY_SECRET="$RESTORE_AUTH_RATE_LIMIT_KEY_SECRET"
 export AUTH_NETWORK_METADATA_SECRET="$RESTORE_AUTH_NETWORK_METADATA_SECRET"
-corepack pnpm@11.15.1 start:api >"$workdir/restore-api.log" 2>&1 &
+pnpm start:api >"$workdir/restore-api.log" 2>&1 &
 restore_api_pid=$!
 
 for attempt in $(seq 1 30); do

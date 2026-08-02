@@ -6,17 +6,18 @@ RFC 9457 errors, protected Swagger and trace-only OpenTelemetry.
 
 ## Local workflow
 
-Use Node `24.18.0`, pnpm `11.15.1` and Docker Compose `2.39.4` or newer.
-Install those versions with a user-level Node or package manager and Docker
-Desktop, then use the short `pnpm` commands below. The repository pins Node and
-pnpm through `engines` and `packageManager`; CI pins the minimum compatible
-Compose release.
+Use Node `24.x`, pnpm `11.15.1` and Docker Compose `2.39.4` or newer. Select
+Node 24 with the repository `.nvmrc`, install pnpm through your user-level Node
+or package manager, and use the short `pnpm` commands below. The repository
+accepts every supported Node 24 patch through `engines`, pins pnpm through
+`engines` and `packageManager`, and CI pins the minimum compatible Compose
+release.
 
 ```sh
 node --version
 pnpm --version
 docker compose version
-pnpm install --frozen-lockfile
+pnpm install
 cp .env.example .env
 pnpm dev
 ```
