@@ -49,6 +49,8 @@ revision is `pnpm check:quick` with 68 unit suites and 346 tests, followed by
 `pnpm check` with 12 integration suites/58 tests and 28 e2e suites/85 tests.
 This is local implementation evidence only: no remote CI, merge, image
 publication, deployment or hosted verification is recorded for the slice.
+The current toolchain policy accepts every supported Node 24.x patch release;
+the version above identifies the runtime used for this historical run.
 
 The reference is optional product code rather than universal foundation. It
 does not implement listing, user provisioning, self-service auth, email,
@@ -184,7 +186,7 @@ manifest, golden fixtures and custom certification engine have been removed.
 
 1. Copy the repository without `.git`, `node_modules`, generated output or local
    environment files.
-2. Install with the frozen lockfile on Node 24.18.0 and pnpm 11.15.1.
+2. Install with the frozen lockfile on Node 24.x and pnpm 11.15.1.
 3. Validate/generate Prisma, run `pnpm check`, start local dependencies, apply
    migrations and create the initial admin.
 4. Run `pnpm oci:check` and verify API/migrator roles.

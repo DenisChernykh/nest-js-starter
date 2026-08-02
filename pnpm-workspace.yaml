@@ -68,3 +68,4 @@ peerDependencyRules:
     - react-dom
 saveExact: true
 strictPeerDependencies: true
+verifyDepsBeforeRun: error

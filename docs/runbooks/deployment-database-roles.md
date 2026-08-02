@@ -4,10 +4,10 @@
 
 The one-shot migrator and API use different PostgreSQL login roles:
 
-| Role         | Purpose                                                         | Permitted access                                                                                                                        |
-| ------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| app_migrator | Runs corepack pnpm@11.15.1 start:migrate before an API rollout. | Owns public, Prisma migration metadata, and every schema object created by migrations.                                                  |
-| app_runtime  | Runs the API revision that passed the migration gate.           | SELECT, INSERT, UPDATE, and DELETE on current and future application tables; USAGE, SELECT, and UPDATE on current and future sequences. |
+| Role         | Purpose                                               | Permitted access                                                                                                                        |
+| ------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| app_migrator | Runs `pnpm start:migrate` before an API rollout.      | Owns public, Prisma migration metadata, and every schema object created by migrations.                                                  |
+| app_runtime  | Runs the API revision that passed the migration gate. | SELECT, INSERT, UPDATE, and DELETE on current and future application tables; USAGE, SELECT, and UPDATE on current and future sequences. |
 
 app_runtime must not receive CREATE or TEMPORARY on the database or CREATE on
 public, any role or database administration attribute, ownership of application
@@ -267,7 +267,7 @@ printf '%s\n' 'runtime DDL and migration-history denial verified'
 ## Promotion boundary
 
 1. Inject only `MIGRATION_DATABASE_URL` as the process-owned `DATABASE_URL` for
-   the one-shot migrator and run `corepack pnpm@11.15.1 start:migrate`. Keep the
+   the one-shot migrator and run `pnpm start:migrate`. Keep the
    value out of argv and logs:
 
    ```bash
@@ -275,7 +275,7 @@ printf '%s\n' 'runtime DDL and migration-history denial verified'
    set +x
    : "$MIGRATION_DATABASE_URL"
    export DATABASE_URL="$MIGRATION_DATABASE_URL"
-   corepack pnpm@11.15.1 start:migrate
+   pnpm start:migrate
    ```
 
 2. If it succeeds, inject only `RUNTIME_DATABASE_URL` as the API's
@@ -286,7 +286,7 @@ printf '%s\n' 'runtime DDL and migration-history denial verified'
    set +x
    : "$RUNTIME_DATABASE_URL"
    export DATABASE_URL="$RUNTIME_DATABASE_URL"
-   corepack pnpm@11.15.1 start:api
+   pnpm start:api
    ```
 
 3. Start the API using the same verified image digest, wait with a bounded

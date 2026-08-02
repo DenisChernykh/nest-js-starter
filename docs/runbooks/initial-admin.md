@@ -5,7 +5,7 @@
 
 ## Предварительные условия
 
-1. Установлен точный Node.js из `.node-version`.
+1. Установлен Node.js `24.x`, выбранный через `.nvmrc`.
 2. Задан `DATABASE_URL`.
 3. Выполнен `pnpm start:migrate`.
 4. В `auth_security_state` существует служебная строка миграции с `id = 1`.
