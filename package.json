@@ -29,6 +29,7 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "lint": "eslint . --max-warnings=0",
+    "lint:tsdoc": "eslint . --config eslint.tsdoc.config.mjs",
     "oci:check": "docker build --check . && docker buildx build --load --target runtime --tag nest-js-starter:smoke --build-arg BUILD_REVISION=0000000000000000000000000000000000000000 --build-arg BUILD_SOURCE=https://github.com/DenisChernykh/nest-js-starter --build-arg BUILD_CREATED=2026-07-22T00:00:00Z . && corepack pnpm@11.15.1 run oci:smoke -- --image nest-js-starter:smoke --revision 0000000000000000000000000000000000000000",
     "oci:smoke": "tsx scripts/oci/run-image-smoke.ts",
     "openapi:drift": "tsx scripts/openapi/check-openapi-drift.ts",
