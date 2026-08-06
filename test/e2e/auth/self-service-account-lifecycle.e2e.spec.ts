@@ -297,6 +297,100 @@ describe('self-service account lifecycle real flow', () => {
     expect(await readUserState(pool, disabledEmail)).toEqual(before)
   })
 
+  it('rotates verification messages and accepts only the newest token', async () => {
+    const email = `resend-${Date.now()}@example.com`
+    const registration = await postJson(apiUrl, '/v1/auth/register', {
+      email,
+      password: 'resend secure password',
+    })
+    expect(registration.status).toBe(202)
+    expect(await registration.text()).toBe('')
+
+    const firstMessage = await waitForMessage(
+      runtime,
+      'Подтверждение электронной почты',
+    )
+    const firstToken = await readTokenFromMessage(
+      runtime,
+      firstMessage,
+      '/auth/verify-email',
+    )
+    const resend = await postJson(
+      apiUrl,
+      '/v1/auth/email-verification/resend',
+      { email },
+    )
+    expect(resend.status).toBe(202)
+    expect(await resend.text()).toBe('')
+
+    const newestMessage = await waitForMessage(
+      runtime,
+      'Подтверждение электронной почты',
+      new Set([firstMessage.ID]),
+    )
+    expect(newestMessage.ID).not.toBe(firstMessage.ID)
+    const newestToken = await readTokenFromMessage(
+      runtime,
+      newestMessage,
+      '/auth/verify-email',
+    )
+    const oldConfirmation = await postJson(
+      apiUrl,
+      '/v1/auth/email-verification/confirm',
+      { token: firstToken },
+    )
+    expect(oldConfirmation.status).toBe(400)
+    const newConfirmation = await postJson(
+      apiUrl,
+      '/v1/auth/email-verification/confirm',
+      { token: newestToken },
+    )
+    expect(newConfirmation.status).toBe(204)
+  })
+
+  it('gives unknown and eligible reset requests the same accepted floor', async () => {
+    const eligibleEmail = `timing-${Date.now()}@example.com`
+    await runtime.createUser(eligibleEmail)
+    const unknown = await timedPostJson(
+      apiUrl,
+      '/v1/auth/password-reset/request',
+      { email: `missing-${eligibleEmail}` },
+    )
+    const eligible = await timedPostJson(
+      apiUrl,
+      '/v1/auth/password-reset/request',
+      { email: eligibleEmail },
+    )
+
+    for (const result of [unknown, eligible]) {
+      expect(result.response.status).toBe(202)
+      expect(await result.response.text()).toBe('')
+      expect(result.durationMs).toBeGreaterThanOrEqual(1_900)
+    }
+  })
+
+  it('returns a dependency problem during Redis suspension without account mutation', async () => {
+    const email = `redis-outage-${Date.now()}@example.com`
+    await runtime.createUser(email)
+    const before = await readUserState(pool, email)
+    const resumeRedis = await runtime.suspendRedis()
+    try {
+      const response = await postJson(
+        apiUrl,
+        '/v1/auth/password-reset/request',
+        { email },
+      )
+      expect(response.status).toBe(503)
+      expect(await response.json()).toMatchObject({
+        code: 'DEPENDENCY_UNAVAILABLE',
+        status: 503,
+      })
+      expect(await readUserState(pool, email)).toEqual(before)
+    } finally {
+      await resumeRedis()
+    }
+  })
+
   it('keeps self-service disabled while existing verified login remains available', async () => {
     const disabledApiUrl = disabledRuntime.instances[0]?.baseUrl ?? ''
     const email = `existing-${Date.now()}@example.com`
@@ -343,18 +437,22 @@ async function readUserState(
   readonly emailVerifiedAt: Date | null
   readonly credentialHash: string | null
   readonly roleCount: number
+  readonly passwordResetTokenDigest: string | null
 }> {
   const result = await pool.query<{
     status: string
     email_verified_at: Date | null
     password_hash: string | null
     role_count: string
+    password_reset_token_digest: string | null
   }>(
     `SELECT u.status, u.email_verified_at, pc.password_hash,
-            COUNT(ur.role_key)::text AS role_count
+            COUNT(ur.role_key)::text AS role_count,
+            MAX(prt.token_digest)::text AS password_reset_token_digest
        FROM users u
        LEFT JOIN password_credentials pc ON pc.user_id = u.id
        LEFT JOIN user_roles ur ON ur.user_id = u.id
+       LEFT JOIN password_reset_tokens prt ON prt.user_id = u.id
       WHERE u.normalized_email = $1
       GROUP BY u.id, pc.password_hash`,
     [email.trim().toLowerCase()],
@@ -366,12 +464,24 @@ async function readUserState(
     emailVerifiedAt: row.email_verified_at,
     credentialHash: row.password_hash,
     roleCount: Number(row.role_count),
+    passwordResetTokenDigest: row.password_reset_token_digest,
   }
+}
+
+async function timedPostJson(
+  apiUrl: string,
+  path: string,
+  body: Readonly<Record<string, string>>,
+): Promise<{ readonly response: Response; readonly durationMs: number }> {
+  const startedAt = performance.now()
+  const response = await postJson(apiUrl, path, body)
+  return { response, durationMs: performance.now() - startedAt }
 }
 
 async function waitForMessage(
   runtime: AuthE2eRuntime,
   subject: string,
+  excludedMessageIds: ReadonlySet<string> = new Set(),
 ): Promise<MailpitMessageSummary> {
   const mailpit = runtime.mailpit
   if (mailpit === undefined) throw new Error('Mailpit is not running')
@@ -381,7 +491,9 @@ async function waitForMessage(
     const response = await fetch(`${apiUrl}/api/v1/messages?start=0&limit=50`)
     if (response.ok) {
       const list = (await response.json()) as MailpitMessageList
-      const message = list.messages.find((item) => item.Subject === subject)
+      const message = list.messages.find(
+        (item) => item.Subject === subject && !excludedMessageIds.has(item.ID),
+      )
       if (message !== undefined) return message
     }
     await new Promise((resolve) => setTimeout(resolve, 100))

@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
@@ -50,8 +51,15 @@ export interface AuthE2eRuntime {
     roleKeys?: readonly string[],
   ): Promise<string>
   flushRedis(): Promise<void>
+  suspendRedis(): Promise<() => Promise<void>>
   stop(): Promise<void>
 }
+
+export interface AuthTestRuntimeOptions {
+  readonly smtpFailure?: boolean
+}
+
+const smtpFailureUrl = 'smtp://127.0.0.1:1'
 
 function authEnvironment(
   databaseUrl: string,
@@ -80,6 +88,7 @@ function authEnvironment(
 export async function createAuthTestRuntime(
   instanceCount = 2,
   overrides: Record<string, string> = {},
+  options: AuthTestRuntimeOptions = {},
 ): Promise<AuthE2eRuntime> {
   const [postgres, redis] = await Promise.all([
     startPostgresContainer(),
@@ -88,7 +97,7 @@ export async function createAuthTestRuntime(
   let mailpit: StartedMailpitContainer | undefined
   try {
     mailpit =
-      overrides.AUTH_SELF_SERVICE_MODE === 'open'
+      overrides.AUTH_SELF_SERVICE_MODE === 'open' && !options.smtpFailure
         ? await startMailpitContainer()
         : undefined
   } catch (error: unknown) {
@@ -125,7 +134,15 @@ export async function createAuthTestRuntime(
           {
             ...overrides,
             ...(mailpit === undefined
-              ? {}
+              ? options.smtpFailure
+                ? {
+                    AUTH_PUBLIC_APP_URL:
+                      overrides.AUTH_PUBLIC_APP_URL ?? baseUrl,
+                    AUTH_SMTP_URL: smtpFailureUrl,
+                    AUTH_MAIL_FROM:
+                      overrides.AUTH_MAIL_FROM ?? 'no-reply@example.com',
+                  }
+                : {}
               : {
                   AUTH_PUBLIC_APP_URL: overrides.AUTH_PUBLIC_APP_URL ?? baseUrl,
                   AUTH_SMTP_URL: mailpitSmtpUrl(mailpit),
@@ -223,6 +240,30 @@ export async function createAuthTestRuntime(
         client.destroy()
       }
     },
+    suspendRedis: () => {
+      runDockerControl('pause', redis.getId())
+      let resumed = false
+      return Promise.resolve(() => {
+        if (resumed) return Promise.resolve()
+        runDockerControl('unpause', redis.getId())
+        resumed = true
+        return Promise.resolve()
+      })
+    },
     stop,
+  }
+}
+
+function runDockerControl(
+  action: 'pause' | 'unpause',
+  containerId: string,
+): void {
+  const result = spawnSync('docker', [action, containerId], {
+    encoding: 'utf8',
+  })
+  if (result.status !== 0) {
+    throw new Error(
+      `Docker ${action} failed with status ${String(result.status)}`,
+    )
   }
 }
