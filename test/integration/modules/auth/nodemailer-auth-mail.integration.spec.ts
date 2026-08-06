@@ -1,4 +1,4 @@
-import { createServer } from 'node:net'
+import { createServer, Socket } from 'node:net'
 
 import {
   mailpitApiUrl,
@@ -123,19 +123,35 @@ describe('Nodemailer auth mail delivery against Mailpit', () => {
     }
   })
 
-  it('destroys the in-flight socket at the delivery deadline', async () => {
-    let closedResolve: (() => void) | undefined
-    const closed = new Promise<void>((resolve) => {
-      closedResolve = resolve
-    })
-    let received = ''
+  it('destroys the real SMTP socket before a longer transport timeout', async () => {
+    let peerClosed = false
     const server = createServer((socket) => {
+      socket.write('220 test.smtp.local ESMTP\r\n')
       socket.on('data', (chunk: Buffer) => {
-        received += chunk.toString('ascii')
+        if (/EHLO|HELO/iu.test(chunk.toString('ascii'))) {
+          socket.write('250 test.smtp.local\r\n')
+        }
       })
-      socket.once('close', () => closedResolve?.())
+      socket.once('close', () => {
+        peerClosed = true
+      })
     })
     const port = await listen(server)
+    const originalSetTimeout: Socket['setTimeout'] = Reflect.get(
+      Socket.prototype,
+      'setTimeout',
+    )
+    const socketTimeout = jest
+      .spyOn(Socket.prototype, 'setTimeout')
+      .mockImplementation(function (
+        this: Socket,
+        _timeout: number,
+        callback?: () => void,
+      ): Socket {
+        return callback === undefined
+          ? originalSetTimeout.call(this, 5_000)
+          : originalSetTimeout.call(this, 5_000, callback)
+      })
     try {
       const adapter = new NodemailerAuthMailAdapter({
         smtpUrl: `smtp://127.0.0.1:${port}`,
@@ -150,9 +166,10 @@ describe('Nodemailer auth mail delivery against Mailpit', () => {
           resetUrl: 'https://app.example.com/auth/reset-password#token=test',
         }),
       ).rejects.toBeInstanceOf(AuthMailDeliveryError)
-      await closed
-      expect(received).toBe('')
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(peerClosed).toBe(true)
     } finally {
+      socketTimeout.mockRestore()
       await closeServer(server)
     }
   })

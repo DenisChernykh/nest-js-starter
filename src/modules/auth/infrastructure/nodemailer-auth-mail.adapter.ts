@@ -32,17 +32,39 @@ export interface NodemailerAuthMailAdapterConfig {
 
 const createDefaultTransport: NodemailerTransportFactory = (options) => {
   const sockets = new Set<Socket>()
+  const host = options.host ?? 'localhost'
+  const port = options.port ?? (options.secure ? 465 : 587)
   const getSocket = (
     _transportOptions: SMTPTransport.Options,
     callback: (
       error: Error | null,
-      socketOptions: { readonly socket: Socket },
+      socketOptions?: { readonly connection: Socket },
     ) => void,
   ): void => {
     const socket = new Socket()
+    let completed = false
     sockets.add(socket)
-    socket.once('close', () => sockets.delete(socket))
-    callback(null, { socket })
+    const onConnectionError = (error: Error): void => {
+      if (completed) return
+      completed = true
+      callback(error)
+    }
+    socket.once('error', onConnectionError)
+    socket.once('close', () => {
+      sockets.delete(socket)
+      if (completed) return
+      completed = true
+      socket.removeListener('error', onConnectionError)
+      callback(new Error('SMTP socket closed before connection'))
+    })
+    socket.once('connect', () => {
+      if (completed) return
+      completed = true
+      socket.removeListener('error', onConnectionError)
+      socket.setKeepAlive(true)
+      callback(null, { connection: socket })
+    })
+    socket.connect(port, host)
   }
   const transporterOptions: NodemailerTransportOptions = {
     ...options,
