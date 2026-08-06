@@ -8,8 +8,10 @@ Preserve module-local hexagonal boundaries from
 repository/controller/service abstraction or a global application Redis
 service.
 
-Add or update TSDoc with every hand-written exported TypeScript contract
-according to `docs/architecture/tsdoc-guidelines.md`.
+Do not add or update TSDoc by default. TSDoc is an explicitly requested,
+separate task; use `docs/architecture/tsdoc-guidelines.md` and
+`pnpm lint:tsdoc` only for that task. Its findings are warnings and are not
+part of `pnpm lint` or `pnpm check:quick`.
 
 Use exact dependencies. Run the narrowest relevant test while working and
 `pnpm check:quick` before completing the foundation slice.

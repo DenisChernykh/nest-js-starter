@@ -29,6 +29,7 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "lint": "eslint . --max-warnings=0",
+    "lint:tsdoc": "eslint . --config eslint.tsdoc.config.mjs",
     "oci:check": "docker build --check . && docker buildx build --load --target runtime --tag nest-js-starter:smoke --build-arg BUILD_REVISION=0000000000000000000000000000000000000000 --build-arg BUILD_SOURCE=https://github.com/DenisChernykh/nest-js-starter --build-arg BUILD_CREATED=2026-07-22T00:00:00Z . && corepack pnpm@11.15.1 run oci:smoke -- --image nest-js-starter:smoke --revision 0000000000000000000000000000000000000000",
     "oci:smoke": "tsx scripts/oci/run-image-smoke.ts",
     "openapi:drift": "tsx scripts/openapi/check-openapi-drift.ts",
@@ -50,7 +51,8 @@
     "typecheck": "corepack pnpm@11.15.1 run prisma:generate && corepack pnpm@11.15.1 run typecheck:compiled",
     "typecheck:compiled": "corepack pnpm@11.15.1 run typecheck:src && corepack pnpm@11.15.1 run typecheck:test",
     "typecheck:src": "tsc --noEmit -p tsconfig.json",
-    "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
+    "prepare": "node .husky/install.mjs"
   },
   "dependencies": {
     "@nestjs/bullmq": "11.0.4",
@@ -109,7 +111,9 @@
     "eslint-plugin-jsdoc": "63.2.0",
     "eslint-plugin-tsdoc": "0.5.2",
     "globals": "17.7.0",
+    "husky": "9.1.7",
     "jest": "30.4.2",
+    "lint-staged": "17.3.0",
     "openapi-response-validator": "12.1.3",
     "prettier": "3.9.5",
     "supertest": "7.2.2",
@@ -119,5 +123,8 @@
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "typescript-eslint": "8.65.0",
     "yaml": "2.9.0"
+  },
+  "lint-staged": {
+    "*.{css,html,js,jsx,json,md,mjs,ts,tsx}": "prettier --write"
   }
 }

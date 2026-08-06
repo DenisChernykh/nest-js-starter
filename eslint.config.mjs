@@ -1,7 +1,5 @@
 import js from '@eslint/js'
 import prettier from 'eslint-config-prettier'
-import jsdoc from 'eslint-plugin-jsdoc'
-import tsdoc from 'eslint-plugin-tsdoc'
 import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
@@ -40,10 +38,6 @@ export default tseslint.config(
         tsconfigRootDir: import.meta.dirname,
       },
     },
-    plugins: {
-      jsdoc,
-      tsdoc,
-    },
     rules: {
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/explicit-function-return-type': [
@@ -57,26 +51,6 @@ export default tseslint.config(
         'error',
         {
           patterns: ['@test/**'],
-        },
-      ],
-      'tsdoc/syntax': 'error',
-    },
-  },
-  {
-    files: ['src/**/*.ts', 'scripts/**/*.ts'],
-    rules: {
-      'jsdoc/require-jsdoc': [
-        'error',
-        {
-          contexts: ['TSInterfaceDeclaration', 'TSTypeAliasDeclaration'],
-          publicOnly: true,
-          require: {
-            ArrowFunctionExpression: true,
-            ClassDeclaration: true,
-            FunctionDeclaration: true,
-            FunctionExpression: true,
-            MethodDefinition: false,
-          },
         },
       ],
     },
@@ -111,7 +85,6 @@ export default tseslint.config(
   {
     files: ['test/**/*.ts'],
     rules: {
-      'jsdoc/require-jsdoc': 'off',
       'no-restricted-imports': 'off',
     },
   },

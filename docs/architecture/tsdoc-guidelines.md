@@ -1,12 +1,15 @@
 # TSDoc guidelines
 
-TSDoc is required for exported public application contracts, ports, domain
-policies/value objects with non-obvious invariants, and hand-written helpers
-whose contract is not fully obvious from types.
+TSDoc is an optional, explicitly requested task for exported public application
+contracts, ports, domain policies/value objects with non-obvious invariants,
+and hand-written helpers whose contract is not fully obvious from types. Normal
+development does not require adding or updating it.
 
-Documentation explains guarantees, invariants, failure behavior and ownership;
-it does not repeat the symbol name. Update documentation in the same change as
-the contract.
+Run `pnpm lint:tsdoc` only when that task is in scope. It reports findings as
+warnings and is not part of `pnpm lint`, `pnpm check:quick`, or `pnpm check`.
+
+When TSDoc is requested, documentation explains guarantees, invariants, failure
+behavior and ownership; it does not repeat the symbol name.
 
 Use tags by contract:
 
