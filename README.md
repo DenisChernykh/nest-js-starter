@@ -42,6 +42,22 @@ Starting that profile alone does not enable jobs in the API. Read the
 [platform boundary](src/platform/queue/README.md) and the two Redis recovery
 runbooks before wiring a product queue.
 
+## Production Compose + Caddy
+
+The production path is a standalone `docker-compose.production.yml` with one
+immutable `APP_IMAGE` for the one-shot migrator and API. PostgreSQL and auth
+Redis use persistent named volumes; the API joins external Caddy and
+observability networks without publishing a host port. Host Caddy remains
+outside the repository and proxies its unique upstream alias to port 3000.
+
+Prepare a server `.env` from
+[`docs/runbooks/production.env.example`](docs/runbooks/production.env.example),
+set mode `0600`, inspect the external networks and verify the GHCR digest and
+OCI revision before starting the migration-first sequence. The complete
+Compose, manual PostgreSQL role preparation, rollback and hosted-evidence
+boundaries are in the [production deployment runbook](docs/runbooks/deployment.md)
+and [preparation runbook](docs/runbooks/deployment-preparation.md).
+
 ## Initial administrator bootstrap
 
 After applying migrations, create the first administrator through the
@@ -111,8 +127,9 @@ one-shot migrator and gates API startup on its successful exit.
 - `docs/architecture/openapi-contracts.md` — committed wire contract;
 - `src/platform/queue/README.md` — platform-only queue connection boundary;
 - `docs/runbooks/auth-redis-loss.md` and `docs/runbooks/queue-redis-loss.md` — separate Redis recovery contracts;
-- `docs/runbooks/deployment-preparation.md` — repository, GHCR and environment-input readiness before any hosted deployment;
-- `docs/runbooks/` — local PostgreSQL, Redis loss, telemetry and image publication.
+- `docs/runbooks/deployment-preparation.md` — Compose, Caddy, GHCR and environment-input readiness before any hosted deployment;
+- `docs/runbooks/production.env.example` — symbolic production input names;
+- `docs/runbooks/` — local PostgreSQL, Redis loss, telemetry, Compose deployment and image publication.
 
 The core grows only from a concrete consumer and failure model. The BullMQ
 platform boundary is available for a product adoption, but it does not supply a

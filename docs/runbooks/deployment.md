@@ -1,119 +1,148 @@
-# Stage promotion by immutable digest
+# Production deployment with Compose and Caddy
 
-This runbook promotes one already-published Stage image through the
-repository-owned deployment operator. It is policy and procedure, not evidence
-that Dokploy or any hosted environment has been called.
+This runbook is the single operator path for the production image in
+docker-compose.production.yml. It changes only the named production Compose
+project on a normal VPS. It does not install a proxy, collector, database or
+Redis outside that project and it does not claim that a hosted drill happened.
 
-Keep an exclusive change window. A concurrent deployment makes the before/after
-record comparison ambiguous, so the operator fails closed.
+Use one exclusive change window. The candidate APP_IMAGE and its exact
+SERVICE_REVISION come from one successful Stage publication. The previous
+image and revision are kept as non-secret release metadata for a human rollback
+decision; never copy the complete server .env into release metadata.
 
-## Human approval gate
+## Install the tracked runtime contract
 
-Before creating a release manifest, confirm all of the following:
+On the operator machine, copy these tracked paths to /opt/nest-js-starter on
+the VPS using the normal approved SSH or file-transfer method:
 
-1. The target repository's successful Stage workflow URL identifies the exact
-   approved source revision.
-2. The workflow published the candidate `image@sha256` and passed its full
-   repository gate, Trivy gate and pull-the-same-digest OCI smoke.
-3. The OCI `org.opencontainers.image.revision` is expected to equal the
-   candidate revision byte-for-byte.
-4. The one-shot migrator owns `MIGRATION_DATABASE_URL`; the long-running API
-   owns the separate `RUNTIME_DATABASE_URL` and cannot apply schema migrations.
-5. The candidate is compatible with the current database schema.
-6. The distinct rollback image remains compatible with the schema after the
-   candidate migration. Record the human review reference; never plan a
-   database down-migration.
-7. The complete previous Dokploy environment has been captured in the protected
-   operator input described by
-   [dokploy-deployment.md](dokploy-deployment.md).
+- docker-compose.production.yml
+- config/deployment/postgres/prepare-roles.sql
+- config/deployment/postgres/finalize-roles.sql
+- docs/runbooks/production.env.example
 
-If any item is missing, stop before an apply command. A manifest records an
-approval decision; it does not create that approval.
+Keep the files outside docker-entrypoint-initdb.d. The SQL files are mounted
+read-only by Compose and are run manually only after the operator confirms the
+database state.
 
-## Release manifest
+Create the server environment file before entering any real value:
 
-Start from
-[`release-manifest.example.json`](release-manifest.example.json), replace every
-symbolic value with evidence from the target repository, and keep the resulting
-JSON outside the repository when it represents a real release.
+    install -d -m 0750 /opt/nest-js-starter
+    cp /opt/nest-js-starter/docs/runbooks/production.env.example /opt/nest-js-starter/.env
+    chmod 600 /opt/nest-js-starter/.env
+    stat -c '%a %n' /opt/nest-js-starter/.env
 
-The manifest is deliberately non-secret. It contains:
+Continue only when stat prints mode 600. Enter values through the server's
+protected editor or secret provider. Do not put credentials in shell history,
+command arguments, logs or this repository.
 
-- environment and repository identity;
-- distinct candidate and rollback immutable GHCR references and revisions;
-- the successful candidate workflow URL;
-- a schema-compatibility review reference for rollback;
-- the credential-free public HTTPS API origin.
+## Verify image and external networks
 
-It must not contain API keys, registry credentials, database or Redis URLs,
-cookies, complete runtime environment text or secret values.
+Load the server .env without printing it and check that APP_IMAGE is an
+immutable digest, SERVICE_REVISION is exactly 40 lowercase hexadecimal
+characters, and CADDY_UPSTREAM_ALIAS is unique for this API instance.
 
-## Commands
+Create or inspect the two host-owned external networks:
 
-Run the local validation first:
+    docker network inspect "$CADDY_NETWORK" >/dev/null 2>&1 || docker network create "$CADDY_NETWORK"
+    docker network inspect "$OBSERVABILITY_NETWORK" >/dev/null 2>&1 || docker network create "$OBSERVABILITY_NETWORK"
 
-```sh
-pnpm deployment:preflight -- --manifest /protected/path/release.json
-```
+Log in to private GHCR with a read-only credential. Keep the token in stdin and
+remove the temporary shell variable after the pull:
 
-Review the ordered promotion plan:
+    printf '%s' "$GHCR_READ_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+    docker pull "$APP_IMAGE"
+    OCI_REVISION="$(docker image inspect "$APP_IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+    test "$OCI_REVISION" = "$SERVICE_REVISION"
+    unset GHCR_READ_TOKEN
 
-```sh
-pnpm deployment:promote -- --manifest /protected/path/release.json
-```
+The last comparison is byte-for-byte. A tag, a missing label or a different
+revision stops the operation.
 
-This second command is an **offline dry-run**. It reads the non-secret manifest
-and does not construct Docker, Dokploy, smoke or evidence adapters.
+## Migration-first startup
 
-After the human gate and all protected live inputs are ready, the following is
-the **only live promotion** command:
+Run Compose configuration validation first. The project uses the same immutable
+image for the one-shot migrator and API; it has no build, development profile or
+published host API port.
 
-```sh
-pnpm deployment:promote -- --manifest /protected/path/release.json \
-  --apply \
-  --evidence /protected/path/promotion-evidence.json
-```
+    cd /opt/nest-js-starter
+    docker compose --env-file /opt/nest-js-starter/.env --file docker-compose.production.yml config --quiet
+    docker compose up --detach --wait postgres redis-auth
 
-The CLI refuses apply without an explicit evidence destination and all live
-environment inputs. It refuses to overwrite an existing evidence file.
+Prepare the two PostgreSQL roles manually. The command reads passwords already
+present in the PostgreSQL container environment and passes no secret as an
+argument:
 
-## Enforced order
+    docker compose exec -T postgres sh -ceu '
+      export PGPASSWORD="$POSTGRES_PASSWORD"
+      psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+        --username "$POSTGRES_USER" \
+        --dbname "$POSTGRES_DB" \
+        --file /opt/nest-js-starter/deployment/postgres/prepare-roles.sql
+    '
 
-The apply command performs this fixed sequence:
+Start the migrator, wait for its one-shot completion and inspect exit 0:
 
-1. validate the manifest and protected live inputs;
-2. authenticate to private GHCR in an isolated temporary Docker config;
-3. pull the exact candidate digest and verify its OCI revision;
-4. run the one-shot Prisma migrator from that same image;
-5. stop before Dokploy mutation if migration exits non-zero;
-6. snapshot existing Dokploy deployments;
-7. save the complete candidate runtime environment;
-8. save the exact candidate digest as the Docker provider;
-9. deploy with a revision-bound title and identify exactly one new record;
-10. poll only that record every five seconds, for at most ten minutes;
-11. accept only `done`;
-12. check `/health/live`, `/health/startup`, `/health/ready` and the
-    unauthenticated `/v1/auth/me` RFC 9457 problem;
-13. atomically publish redacted evidence with mode `0600`.
+    docker compose up --detach migrator
+    docker compose wait migrator
+    docker compose ps --all migrator
+    MIGRATOR_ID="$(docker compose ps --all --quiet migrator)"
+    MIGRATOR_EXIT="$(docker inspect "$MIGRATOR_ID" --format '{{.State.ExitCode}}')"
+    test "$MIGRATOR_EXIT" = 0
 
-The operator host needs network access to GHCR, Dokploy HTTPS, the migration
-PostgreSQL endpoint and the public API. Routine deployment does not require SSH
-access to the VPS.
+Only after a successful migration, finalize and verify grants. This is a manual
+step, never an init-container hook:
 
-## Failed promotion boundary
+    docker compose exec -T postgres sh -ceu '
+      export PGPASSWORD="$POSTGRES_PASSWORD"
+      psql --no-psqlrc --set=ON_ERROR_STOP=1 \
+        --username "$POSTGRES_USER" \
+        --dbname "$POSTGRES_DB" \
+        --file /opt/nest-js-starter/deployment/postgres/finalize-roles.sql
+    '
+    docker compose up --detach --wait api
+    docker compose ps
 
-Image verification or migration failure causes no Dokploy mutation. Once the
-environment mutation begins, provider, deploy, identification, polling or
-external smoke failure triggers one bounded attempt to restore the protected
-previous complete environment. The CLI records whether that restoration was
-attempted and succeeded.
+The API receives only RUNTIME_DATABASE_URL rendered as its DATABASE_URL,
+auth secrets, auth Redis URL and application inputs. The migrator receives only
+MIGRATION_DATABASE_URL rendered as its DATABASE_URL plus process identity.
+Neither process receives GHCR, PostgreSQL admin or the other application role's
+credential.
 
-The promotion command never invokes a rollback image, never runs a second
-migration and never performs an automatic rollback. Preserve the evidence and
-make the human rollback-or-roll-forward decision in
-[rollback.md](rollback.md). A failed evidence publication is not permission to
-repeat a mutation blindly.
+## Caddy handoff and status
 
-Local tests and dry-run output are repository evidence only. A successful
-hosted promotion requires the generated evidence file plus independently
-reviewed Dokploy and public-runtime observations from that exact execution.
+Caddy remains host-owned and joins the external CADDY_NETWORK. Its minimal
+site block keeps automatic HTTPS outside this repository's Compose project:
+
+    api.example.com {
+        reverse_proxy ${CADDY_UPSTREAM_ALIAS}:3000
+    }
+
+The DNS record, certificates, Caddy configuration and proxy service remain
+outside the repository. Verify the Compose project with bounded output:
+
+    docker compose ps
+    docker compose logs --tail=200 postgres redis-auth migrator api
+
+The API healthcheck is Node-based and calls
+http://127.0.0.1:3000/health/ready. The public operator check must also cover
+/health/live, /health/startup, /health/ready and the unauthenticated
+/v1/auth/me problem response.
+
+## Restart recovery and workers
+
+PostgreSQL, auth Redis and API use the restart unless-stopped policy. After a Docker or
+VPS restart, inspect docker compose ps and bounded logs, then wait for healthy
+dependencies and API readiness. The migrator remains one-shot and is not a
+worker or a permanent restart loop.
+
+If a real durable worker is later required, the feature owning that queue must
+add a separate Compose service using the same immutable image and its own
+payload, processor, retry, idempotency and durable-state contract. Do not add a
+demo worker or a global Redis abstraction here.
+
+## Hosted telemetry drill boundary
+
+A hosted drill would send one unique request ID through the public HTTPS origin,
+look up that request ID in Loki, then use the returned trace ID to find the
+corresponding Tempo trace. Those observations are environment evidence, not
+repository evidence; this runbook does not perform that drill.

@@ -1,71 +1,73 @@
-# Безопасность deployment
+# Production Compose security baseline
 
-Этот runbook задаёт минимальный security baseline для каждого deployment
-starter. Он не выполняет deployment, не содержит значений secrets и не меняет
-runtime-конфигурацию приложения.
+This baseline describes the production inputs and handling rules. It does not
+enter secrets, mutate a VPS or configure the public perimeter.
 
-## Публичный периметр
+## Secret file and process exposure
 
-1. Привяжите один контролируемый domain к точному `PUBLIC_API_URL` и разрешите
-   только ожидаемые origins в `CORS_ORIGINS`. Для production оба значения должны
-   использовать HTTPS.
-2. TLS завершается на доверенном reverse proxy/load balancer; сертификат,
-   hostname и цепочка должны быть действительны. HTTP перенаправляйте на HTTPS,
-   не завершая TLS в API process.
-3. Передавайте client IP только от явно разрешённых proxy CIDR в
-   `TRUST_PROXY_CIDRS`; прямой доступ к API не должен позволять подменить
-   forwarded headers.
-4. В production установите `API_DOCS_MODE=protected` либо `off`. Для
-   `protected` приложение само применяет `DocsAccessPolicyAdapter`: проверяйте
-   отказ анонимного запроса и успешный доступ через session пользователя
-   `system.admin` с permission `system.docs.read`. Внешняя proxy-auth policy
-   сама по себе не заменяет application session и authorization. Не оставляйте
-   docs public.
+The filled server-side .env is the single deployment/runtime secret file. It
+must be mode 0600 before and after secret entry:
 
-## Учётные данные и роли
+    chmod 600 /opt/nest-js-starter/.env
+    stat -c '%a %n' /opt/nest-js-starter/.env
 
-- API запускается от отдельной non-root service identity с минимальными
-  правами: только чтение своего image/configuration и сетевой доступ к нужным
-  PostgreSQL, Redis и telemetry endpoints.
-- Миграции выполняются отдельным одноразовым identity с правами на schema;
-  runtime-identity не получает права на migration/DDL.
-- Выдавайте отдельные least-privilege credentials для PostgreSQL, Redis и
-  deployment control plane. Ограничьте Redis ACL только командами и keyspace,
-  нужными auth-сессиям и login limits.
-- Храните credentials и четыре auth secrets только в secret provider. Не
-  помещайте их в image, Git, shell history, логи, evidence или support tickets.
-  Отзывайте доступ уходящих людей и старые credentials по процедуре владельца.
+Never place credentials or the four auth secrets in image, Git, shell history,
+logs, command arguments, release metadata or tickets. Use the GHCR read token
+only with docker login --password-stdin, then remove it from the shell.
+The explicit PostgreSQL inputs are POSTGRES_ADMIN_PASSWORD,
+POSTGRES_MIGRATOR_PASSWORD and POSTGRES_RUNTIME_PASSWORD.
+never place them in image, Git, shell history, logs, command arguments or
+release metadata.
 
-## Auth Redis: durability contract
+Compose maps values explicitly. PostgreSQL receives its admin and role
+preparation inputs, auth Redis receives its password, the migrator receives
+only its migration DATABASE_URL plus process identity, and API receives only
+its runtime DATABASE_URL, Redis URL, auth secrets and application inputs.
+Admin, migrator and GHCR credentials never enter API environment; runtime,
+auth, Redis, admin and GHCR credentials never enter migrator environment.
 
-Auth Redis содержит активные opaque sessions и login-limit state, это
-не disposable cache. Его data directory должен находиться на persistent storage,
-который переживает replacement container/VM и имеет проверяемое резервное
-копирование.
+## Public perimeter
 
-Перед promotion проверьте у владельца Redis configuration:
+1. PUBLIC_API_URL and every CORS_ORIGINS member use HTTPS.
+2. TLS terminates in host-owned Caddy; the API listens only on its Compose
+   network and Caddy reaches the unique CADDY_UPSTREAM_ALIAS:3000 alias.
+3. TRUST_PROXY_CIDRS contains only environment-owned proxy ranges.
+4. API_DOCS_MODE is protected or off; it is never public in production.
+5. The Caddy network and observability network are external, pre-existing
+   infrastructure inputs. Their creation and configuration are outside this
+   repository.
+   The external network inputs are CADDY_NETWORK and OBSERVABILITY_NETWORK.
 
-```text
-appendonly yes
-appendfsync everysec
-maxmemory-policy noeviction
-```
+Minimal Caddy configuration uses automatic HTTPS for a hostname:
 
-`appendfsync everysec` означает ограниченный, но не нулевой риск потери до
-последней секунды записей при аварии; более строгий `always` оценивают отдельно
-по latency. Контролируйте доступное место, AOF rewrite и успешное восстановление
-из backup. Не меняйте `REDIS_KEY_PREFIX`, Redis key bytes и не выполняйте
-automatic `FLUSHDB`/`FLUSHALL` как часть deployment или recovery.
+    api.example.com {
+        reverse_proxy ${CADDY_UPSTREAM_ALIAS}:3000
+    }
 
-## Перед запуском и после него
+## PostgreSQL roles
 
-1. Проверьте, что domain/TLS, protected Swagger, proxy allowlist и секреты
-   настроены, но не выводите их значения.
-2. Убедитесь, что все API replicas получают один согласованный configuration
-   revision и что Redis использует authoritative persistent storage.
-3. После запуска проверьте `/health/live`, `/health/startup` и `/health/ready`;
-   readiness допускает traffic только при доступных PostgreSQL и auth
-   Redis.
-4. Если security input или Redis durability contract не подтверждён, остановите
-   promotion и эскалируйте владельцу infrastructure. Не исправляйте это
-   изменением application code или ослаблением readiness.
+app_migrator and app_runtime are separate login roles with NOINHERIT,
+NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION and NOBYPASSRLS. The
+migration role owns the public schema, migration history and objects created by
+migrations. The runtime role has DML and sequence privileges but cannot create
+schema objects, create temporary tables, own public objects or read/write
+_prisma_migrations.
+
+Run prepare-roles.sql before migration and finalize-roles.sql after a
+successful migration. These files are read-only mounts and never automatic
+database initialization hooks. A failed role verification stops API startup.
+
+## Auth Redis durability
+
+Auth Redis contains sessions and login-limit state, not a disposable cache. Use
+persistent named storage, AOF, noeviction, least-privilege access and an
+owned backup/restore procedure. Do not change the stable REDIS_KEY_PREFIX and
+do not run FLUSHDB or FLUSHALL during deployment or recovery.
+
+## Evidence boundary
+
+Local Compose config, role integration tests and image checks prove repository
+contracts only. A hosted check must separately verify HTTPS, Caddy routing,
+PostgreSQL/Redis durability, logs and traces. The unique-request Loki lookup
+and Tempo trace lookup remain unperformed repository evidence until an
+authorized hosted drill records them.

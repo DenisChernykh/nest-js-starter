@@ -1,37 +1,24 @@
 # Stage image publication
 
-Complete Steps 1–4 of
-[deployment-preparation.md](deployment-preparation.md) before treating this
-workflow as a target-owned publication contract. Then run the target Stage
-workflow and return to Steps 5–9 to close publication, package and environment
-evidence. A fresh backend must replace starter identity before this run; an
-existing backend must produce its own target evidence.
+The Stage workflow in .github/workflows/stage-image.yml remains the repository's
+immutable image publication path.
+Its documented order is:
 
-If the target GHCR package already exists, verify before the run that it is
-linked to the target repository and grants that repository Actions write
-access; job-scoped `packages: write` cannot repair missing package-level access.
-For a package that does not yet exist, the first successful image push creates
-it even if a later Trivy or OCI smoke gate fails. Recheck linkage, Actions
-access, visibility, and organization policy after the run in both cases.
+1. full stage gate;
+2. build and publish the non-root image under the commit SHA;
+3. capture the immutable GHCR digest;
+4. scan that digest with Trivy for High/Critical findings;
+5. pull the same digest;
+6. run OCI smoke against that exact digest and revision.
 
-The pull-request workflow runs `pnpm check` only; it does not build or publish
-an image. A push to `stage` runs the read-only gate first, then the publisher
-job with GHCR package write permission.
+The workflow file is byte-identical to the baseline contract. A pull request
+does not publish an image; a Stage push runs the read-only gate before the
+publisher job. Only a digest from the successful full stage gate, Trivy check,
+same-digest pull and OCI smoke is eligible for the production APP_IMAGE.
 
-The publisher builds the non-root runtime image for `linux/amd64` with public
-`BUILD_REVISION`, `BUILD_SOURCE` and `BUILD_CREATED` metadata, pushes the
-lowercase GHCR repository under the commit SHA, and exposes the immutable
-BuildKit digest. It scans that digest with Trivy at High/Critical severity and
-then pulls the same published digest from GHCR before running the one compact
-OCI smoke helper against that digest reference. The binding order is
-`Trivy -> pull same published digest -> OCI smoke`.
+The image carries the exact org.opencontainers.image.revision label. The
+operator compares that value byte-for-byte with SERVICE_REVISION before
+starting Compose. Tags are locators, not production identity.
 
-The push creates or updates the GHCR package before those gates finish. A digest
-from a failed Trivy or OCI smoke step exists in the registry but is not approved
-for deployment.
-
-The smoke covers failed migration isolation, successful migration/readiness,
-auth problem output, runtime non-root/filesystem invariants and clean SIGTERM.
-There is no custom registry-attestation reader, evidence bundle or digest
-resolver. Deployment consumers must use the captured digest, never a mutable
-tag.
+Local pnpm oci:check proves a local image only. It does not prove GHCR access,
+VPS readiness, Caddy routing, PostgreSQL/Redis durability or hosted telemetry.
