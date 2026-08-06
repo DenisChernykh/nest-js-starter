@@ -62,6 +62,14 @@ export class AuthenticationFailedError extends AuthError {
   }
 }
 
+/** Correct credentials for an active account whose email is not verified. */
+export class EmailVerificationRequiredError extends AuthError {
+  public constructor() {
+    super('AUTHENTICATION_FAILED', 'Email verification required')
+    this.name = 'EmailVerificationRequiredError'
+  }
+}
+
 /** Missing, expired or durably stale browser authentication state. */
 export class AuthenticationRequiredError extends AuthError {
   public constructor() {

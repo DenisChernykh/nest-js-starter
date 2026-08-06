@@ -5,6 +5,7 @@ import {
   AuthError,
   AuthenticationFailedError,
   AuthRateLimitedError,
+  EmailVerificationRequiredError,
 } from './auth-errors'
 import {
   AUTH_AUDIT,
@@ -81,6 +82,9 @@ export class LoginUseCase {
       ) {
         throw new AuthenticationFailedError()
       }
+      if (snapshot.emailVerifiedAt === undefined) {
+        throw new EmailVerificationRequiredError()
+      }
       if (verification.needsRehash) {
         const upgraded = await this.passwords.hash(input.password)
         await this.persistence.replacePasswordIfVersion(
@@ -116,9 +120,11 @@ export class LoginUseCase {
           reasonCode:
             error.code === 'AUTH_RATE_LIMITED'
               ? 'RATE_LIMITED'
-              : error.code === 'AUTHENTICATION_FAILED'
-                ? 'INVALID_CREDENTIALS'
-                : 'DEPENDENCY_UNAVAILABLE',
+              : error instanceof EmailVerificationRequiredError
+                ? 'EMAIL_VERIFICATION_REQUIRED'
+                : error.code === 'AUTHENTICATION_FAILED'
+                  ? 'INVALID_CREDENTIALS'
+                  : 'DEPENDENCY_UNAVAILABLE',
         })
         throw error
       }

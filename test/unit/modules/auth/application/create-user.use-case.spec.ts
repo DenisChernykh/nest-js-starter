@@ -68,6 +68,7 @@ describe('CreateUserUseCase', () => {
       email: 'Admin@Example.com',
       normalizedEmail: 'admin@example.com',
       passwordHash: '$argon2id$reviewed-hash',
+      emailVerifiedAt: expect.any(Date),
       roleKeys: ['approval.reviewer', 'system.admin'],
     })
   })

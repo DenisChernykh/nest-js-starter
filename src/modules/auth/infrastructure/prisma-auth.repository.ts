@@ -11,6 +11,11 @@ import type {
   InitialAdminInput,
   InitialAdminResult,
   UserProvisioningInput,
+  ConfirmPasswordResetInput,
+  SelfServiceDeliveryTarget,
+  SelfServiceRegistrationInput,
+  SelfServiceRegistrationResult,
+  SelfServiceTokenInput,
 } from '../application/auth.types'
 import { mapAuthProjection, mapCredentialSnapshot } from './prisma-auth.mapper'
 import { Prisma } from '@/generated/prisma/client'
@@ -118,6 +123,7 @@ export class PrismaAuthRepository implements AuthPersistencePort {
           data: {
             email: input.email,
             normalizedEmail: input.normalizedEmail,
+            emailVerifiedAt: input.emailVerifiedAt,
             credential: { create: { passwordHash: input.passwordHash } },
             roles: { create: { roleKey: 'system.admin' } },
           },
@@ -143,6 +149,7 @@ export class PrismaAuthRepository implements AuthPersistencePort {
             data: {
               email: input.email,
               normalizedEmail: input.normalizedEmail,
+              emailVerifiedAt: input.emailVerifiedAt,
               credential: { create: { passwordHash: input.passwordHash } },
               roles: {
                 create: input.roleKeys.map((roleKey) => ({ roleKey })),
@@ -162,5 +169,203 @@ export class PrismaAuthRepository implements AuthPersistencePort {
       }
       throw error
     }
+  }
+
+  public async registerSelfServiceUser(
+    input: SelfServiceRegistrationInput,
+  ): Promise<SelfServiceRegistrationResult> {
+    try {
+      return await this.transaction.run(() =>
+        this.provider.withClient(async (client) => {
+          const user = await client.user.create({
+            data: {
+              email: input.email,
+              normalizedEmail: input.normalizedEmail,
+              emailVerifiedAt: null,
+              credential: { create: { passwordHash: input.passwordHash } },
+              emailVerificationToken: {
+                create: {
+                  tokenDigest: input.tokenDigest,
+                  expiresAt: input.expiresAt,
+                  createdAt: input.createdAt,
+                },
+              },
+            },
+            select: { id: true, email: true },
+          })
+          return { created: true, userId: user.id, email: user.email }
+        }),
+      )
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return { created: false }
+      }
+      throw error
+    }
+  }
+
+  public async rotateEmailVerificationToken(
+    normalizedEmail: string,
+    token: SelfServiceTokenInput,
+    _now: Date,
+  ): Promise<SelfServiceDeliveryTarget | undefined> {
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        const user = await client.user.findUnique({
+          where: { normalizedEmail },
+          select: {
+            id: true,
+            email: true,
+            status: true,
+            emailVerifiedAt: true,
+          },
+        })
+        if (
+          user === null ||
+          user.status !== 'ACTIVE' ||
+          user.emailVerifiedAt !== null
+        ) {
+          return undefined
+        }
+        await client.emailVerificationToken.upsert({
+          where: { userId: user.id },
+          create: { userId: user.id, ...token },
+          update: token,
+        })
+        return { userId: user.id, email: user.email }
+      }),
+    )
+  }
+
+  public async confirmEmailVerification(
+    tokenDigest: string,
+    now: Date,
+  ): Promise<SelfServiceDeliveryTarget | undefined> {
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        const token = await client.emailVerificationToken.findUnique({
+          where: { tokenDigest },
+          select: {
+            userId: true,
+            expiresAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                status: true,
+                emailVerifiedAt: true,
+              },
+            },
+          },
+        })
+        if (
+          token === null ||
+          token.expiresAt <= now ||
+          token.user.status !== 'ACTIVE' ||
+          token.user.emailVerifiedAt !== null
+        ) {
+          return undefined
+        }
+        const claimed = await client.emailVerificationToken.deleteMany({
+          where: { userId: token.userId, tokenDigest },
+        })
+        if (claimed.count !== 1) return undefined
+        const updated = await client.user.updateMany({
+          where: { id: token.userId, status: 'ACTIVE', emailVerifiedAt: null },
+          data: { emailVerifiedAt: now },
+        })
+        if (updated.count !== 1) return undefined
+        return { userId: token.user.id, email: token.user.email }
+      }),
+    )
+  }
+
+  public async rotatePasswordResetToken(
+    normalizedEmail: string,
+    token: SelfServiceTokenInput,
+    _now: Date,
+  ): Promise<SelfServiceDeliveryTarget | undefined> {
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        const user = await client.user.findUnique({
+          where: { normalizedEmail },
+          select: {
+            id: true,
+            email: true,
+            status: true,
+            emailVerifiedAt: true,
+            credential: { select: { userId: true } },
+          },
+        })
+        if (
+          user === null ||
+          user.status !== 'ACTIVE' ||
+          user.emailVerifiedAt === null ||
+          user.credential === null
+        ) {
+          return undefined
+        }
+        await client.passwordResetToken.upsert({
+          where: { userId: user.id },
+          create: { userId: user.id, ...token },
+          update: token,
+        })
+        return { userId: user.id, email: user.email }
+      }),
+    )
+  }
+
+  public async confirmPasswordReset(
+    input: ConfirmPasswordResetInput,
+  ): Promise<SelfServiceDeliveryTarget | undefined> {
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        const token = await client.passwordResetToken.findUnique({
+          where: { tokenDigest: input.tokenDigest },
+          select: {
+            userId: true,
+            expiresAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                status: true,
+                emailVerifiedAt: true,
+                credential: { select: { userId: true } },
+              },
+            },
+          },
+        })
+        if (
+          token === null ||
+          token.expiresAt <= input.now ||
+          token.user.status !== 'ACTIVE' ||
+          token.user.emailVerifiedAt === null ||
+          token.user.credential === null
+        ) {
+          return undefined
+        }
+        const claimed = await client.passwordResetToken.deleteMany({
+          where: {
+            userId: token.userId,
+            tokenDigest: input.tokenDigest,
+            expiresAt: { gt: input.now },
+          },
+        })
+        if (claimed.count !== 1) return undefined
+        await client.passwordCredential.update({
+          where: { userId: token.userId },
+          data: { passwordHash: input.passwordHash, version: { increment: 1 } },
+        })
+        await client.user.update({
+          where: { id: token.userId },
+          data: { sessionGeneration: { increment: 1 } },
+        })
+        return { userId: token.user.id, email: token.user.email }
+      }),
+    )
   }
 }

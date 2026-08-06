@@ -9,6 +9,7 @@ describe('Prisma auth mapper', () => {
     email: 'Admin@Example.com',
     normalizedEmail: 'admin@example.com',
     status: 'ACTIVE' as const,
+    emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
     sessionGeneration: 7n,
     roles: [{ roleKey: 'unknown.future' }, { roleKey: 'system.admin' }],
   }
@@ -24,6 +25,7 @@ describe('Prisma auth mapper', () => {
       email: 'Admin@Example.com',
       normalizedEmail: 'admin@example.com',
       status: 'active',
+      emailVerifiedAt: row.emailVerifiedAt,
       sessionGeneration: 7n,
       passwordHash: '$argon2id$fixture',
       passwordVersion: 3,

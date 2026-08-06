@@ -150,8 +150,9 @@ export async function createAuthTestRuntime(
         passwordHash ??
         (await new Argon2PasswordHasher().hash('valid password'))
       const user = await pool.query<{ id: string }>(
-        `INSERT INTO users (email, normalized_email, updated_at)
-         VALUES ($1, $2, CURRENT_TIMESTAMP) RETURNING id`,
+        `INSERT INTO users (
+           email, normalized_email, email_verified_at, updated_at
+         ) VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id`,
         [email, email.trim().toLowerCase()],
       )
       const userId = user.rows[0]?.id

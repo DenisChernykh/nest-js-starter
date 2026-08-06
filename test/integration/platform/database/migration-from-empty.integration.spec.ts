@@ -32,6 +32,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
       { migration_name: '20260720000000_baseline' },
       { migration_name: '20260721090000_auth_core' },
       { migration_name: '20260728210000_approval_requests' },
+      { migration_name: '20260806090000_self_service_account_lifecycle' },
     ])
     const tables = await pool.query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables
@@ -41,7 +42,9 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     expect(tables.rows).toEqual([
       { table_name: 'approval_requests' },
       { table_name: 'auth_security_state' },
+      { table_name: 'email_verification_tokens' },
       { table_name: 'password_credentials' },
+      { table_name: 'password_reset_tokens' },
       { table_name: 'user_roles' },
       { table_name: 'users' },
     ])
@@ -87,6 +90,6 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     const migrations = await pool.query<{ count: string }>(
       'SELECT count(*) FROM _prisma_migrations',
     )
-    expect(migrations.rows[0]?.count).toBe('3')
+    expect(migrations.rows[0]?.count).toBe('4')
   })
 })

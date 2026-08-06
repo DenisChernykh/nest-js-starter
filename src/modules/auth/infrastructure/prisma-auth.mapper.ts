@@ -10,6 +10,7 @@ export interface AuthProjectionRow {
   readonly email: string
   readonly normalizedEmail: string
   readonly status: 'ACTIVE' | 'DISABLED'
+  readonly emailVerifiedAt: Date | null
   readonly sessionGeneration: bigint
   readonly roles: readonly { readonly roleKey: string }[]
 }
@@ -49,6 +50,7 @@ export function mapCredentialSnapshot(
   if (row.credential === null) return undefined
   return Object.freeze({
     ...mapAuthProjection(row),
+    emailVerifiedAt: row.emailVerifiedAt ?? undefined,
     passwordHash: row.credential.passwordHash,
     passwordVersion: row.credential.version,
   })

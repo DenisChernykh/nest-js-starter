@@ -44,6 +44,7 @@ export class CreateInitialAdminUseCase {
         email: input.email.trim(),
         normalizedEmail,
         passwordHash,
+        emailVerifiedAt: new Date(),
       })
       this.audit.emit({
         action: 'initial_admin_create',

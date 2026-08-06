@@ -7,6 +7,7 @@ export interface CredentialSnapshot {
   readonly email: string
   readonly normalizedEmail: string
   readonly status: UserStatus
+  readonly emailVerifiedAt: Date | undefined
   readonly sessionGeneration: bigint
   readonly passwordHash: string
   readonly passwordVersion: number
@@ -28,6 +29,7 @@ export interface InitialAdminInput {
   readonly email: string
   readonly normalizedEmail: string
   readonly passwordHash: string
+  readonly emailVerifiedAt: Date
 }
 
 /** Result that reveals no credential material from initial admin creation. */
@@ -40,6 +42,7 @@ export interface UserProvisioningInput {
   readonly email: string
   readonly normalizedEmail: string
   readonly passwordHash: string
+  readonly emailVerifiedAt: Date
   readonly roleKeys: readonly string[]
 }
 
@@ -86,3 +89,30 @@ export const NOOP_AUTH_SESSION_CLEANUP_OBSERVER: AuthSessionCleanupObserver =
 export const AUTH_DUMMY_PASSWORD_HASH: unique symbol = Symbol(
   'AUTH_DUMMY_PASSWORD_HASH',
 )
+
+export interface SelfServiceTokenInput {
+  readonly tokenDigest: string
+  readonly expiresAt: Date
+  readonly createdAt: Date
+}
+
+export interface SelfServiceRegistrationInput extends SelfServiceTokenInput {
+  readonly email: string
+  readonly normalizedEmail: string
+  readonly passwordHash: string
+}
+
+export type SelfServiceRegistrationResult =
+  | { readonly created: true; readonly userId: string; readonly email: string }
+  | { readonly created: false }
+
+export interface SelfServiceDeliveryTarget {
+  readonly userId: string
+  readonly email: string
+}
+
+export interface ConfirmPasswordResetInput {
+  readonly tokenDigest: string
+  readonly now: Date
+  readonly passwordHash: string
+}
