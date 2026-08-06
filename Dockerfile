@@ -4,8 +4,10 @@
 ARG NODE_IMAGE=node:24.18.0-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573
 
 FROM ${NODE_IMAGE} AS dependencies
+ENV HUSKY=0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY .husky/install.mjs ./.husky/install.mjs
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
     corepack pnpm@11.15.1 install --frozen-lockfile --store-dir=/pnpm/store
 

@@ -52,7 +52,7 @@
     "typecheck:compiled": "corepack pnpm@11.15.1 run typecheck:src && corepack pnpm@11.15.1 run typecheck:test",
     "typecheck:src": "tsc --noEmit -p tsconfig.json",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
-    "prepare": "husky"
+    "prepare": "node .husky/install.mjs"
   },
   "dependencies": {
     "@nestjs/bullmq": "11.0.4",
