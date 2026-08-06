@@ -25,6 +25,7 @@ interface ResolvedComposeLogging {
 
 interface ResolvedComposeService {
   readonly build?: unknown
+  readonly command?: readonly string[]
   readonly depends_on?: Readonly<Record<string, ResolvedComposeDependency>>
   readonly develop?: unknown
   readonly env_file?: unknown
@@ -39,6 +40,7 @@ interface ResolvedComposeService {
   readonly profiles?: readonly string[]
   readonly restart?: string
   readonly stop_grace_period?: string
+  readonly tmpfs?: readonly string[]
   readonly volumes?: readonly {
     readonly source?: string
     readonly target?: string
@@ -60,20 +62,23 @@ interface ResolvedComposeConfiguration {
 
 const appImage =
   'ghcr.io/example/nest-js-starter@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+const rollbackAppImage =
+  'ghcr.io/example/nest-js-starter@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 const postgresImage =
   'postgres:18.4-trixie@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a'
 const redisImage =
   'redis:8.8.0-trixie@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b'
 const serviceRevision = '0123456789abcdef0123456789abcdef01234567'
+const rollbackServiceRevision = 'fedcba9876543210fedcba9876543210fedcba98'
 const secrets = Object.freeze({
-  adminPassword: 'admin-secret-for-contract-only',
-  authCsrf: 'csrf-secret-for-contract-only',
-  authNetwork: 'network-secret-for-contract-only',
-  authRateLimit: 'rate-limit-secret-for-contract-only',
-  authSession: 'session-secret-for-contract-only',
-  migratorPassword: 'migrator-secret-for-contract-only',
-  redisPassword: 'redis-secret-for-contract-only',
-  runtimePassword: 'runtime-secret-for-contract-only',
+  adminPassword: 'YWRtaW4tcGFzc3dvcmQxMjM0NTY',
+  authCsrf: Buffer.alloc(32, 2).toString('base64url'),
+  authNetwork: Buffer.alloc(32, 4).toString('base64url'),
+  authRateLimit: Buffer.alloc(32, 3).toString('base64url'),
+  authSession: Buffer.alloc(32, 1).toString('base64url'),
+  migratorPassword: 'bWlncmF0b3ItcGFzc3dvcmQxMjM0',
+  redisPassword: 'cmVkaXMtcGFzc3dvcmQxMjM0NTY',
+  runtimePassword: 'cnVudGltZS1wYXNzd29yZDEyMzQ',
 })
 
 function productionEnvironmentFile(): string {
@@ -104,6 +109,8 @@ function productionEnvironmentFile(): string {
     'PUBLIC_API_URL=https://api.example.invalid',
     'REDIS_KEY_PREFIX=nest-js-starter',
     'REDIS_PASSWORD=' + secrets.redisPassword,
+    `ROLLBACK_APP_IMAGE=${rollbackAppImage}`,
+    'ROLLBACK_SERVICE_REVISION=' + rollbackServiceRevision,
     'SERVICE_REVISION=' + serviceRevision,
     'SERVICE_VERSION=0.1.0-alpha.0',
     'TRUST_PROXY_CIDRS=10.0.0.0/8',
@@ -111,7 +118,9 @@ function productionEnvironmentFile(): string {
   ].join('\n')
 }
 
-function resolveProductionCompose(): {
+function resolveProductionCompose(
+  composeFiles: readonly string[] = ['docker-compose.production.yml'],
+): {
   readonly configuration: ResolvedComposeConfiguration
   readonly envFilePath: string
   readonly composeSource: string
@@ -134,8 +143,7 @@ function resolveProductionCompose(): {
       'nest-js-starter-production-contract',
       '--env-file',
       envFilePath,
-      '--file',
-      'docker-compose.production.yml',
+      ...composeFiles.flatMap((composeFile) => ['--file', composeFile]),
     ]
     const configArguments = [...commonArguments, 'config', '--format', 'json']
     const result = spawnSync('docker', configArguments, {
@@ -283,14 +291,21 @@ describe('production Compose runtime contract', () => {
       'CMD-SHELL',
       'REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep PONG',
     ])
+    expect(redis.command).toEqual([
+      'sh',
+      '-ceu',
+      expect.stringContaining('REDIS_PASSWORD'),
+    ])
+    expect(redis.command?.[2]).toContain('/run/redis/redis.conf')
+    expect(redis.command?.join(' ')).not.toContain(secrets.redisPassword)
+    expect(redis.tmpfs).toContain('/run/redis:rw,noexec,nosuid,nodev,mode=0700')
 
     expect(migrator.depends_on).toEqual({
       postgres: { condition: 'service_healthy', required: true },
     })
     expect(migrator.restart).toBe('no')
     expect(migrator.environment).toEqual({
-      DATABASE_URL:
-        'postgresql://app_migrator:migrator-secret-for-contract-only@postgres:5432/nest_js_starter?schema=public',
+      DATABASE_URL: `postgresql://app_migrator:${secrets.migratorPassword}@postgres:5432/nest_js_starter?schema=public`,
       NODE_ENV: 'production',
       SERVICE_REVISION: serviceRevision,
       SERVICE_VERSION: '0.1.0-alpha.0',
@@ -322,11 +337,9 @@ describe('production Compose runtime contract', () => {
       expect.objectContaining({
         API_HOST: '0.0.0.0',
         API_PORT: '3000',
-        DATABASE_URL:
-          'postgresql://app_runtime:runtime-secret-for-contract-only@postgres:5432/nest_js_starter?schema=public',
+        DATABASE_URL: `postgresql://app_runtime:${secrets.runtimePassword}@postgres:5432/nest_js_starter?schema=public`,
         OTEL_EXPORTER_OTLP_ENDPOINT: 'http://alloy:4318',
-        REDIS_AUTH_URL:
-          'redis://default:redis-secret-for-contract-only@redis-auth:6379',
+        REDIS_AUTH_URL: `redis://default:${secrets.redisPassword}@redis-auth:6379`,
         SERVICE_REVISION: serviceRevision,
       }),
     )
@@ -363,5 +376,51 @@ describe('production Compose runtime contract', () => {
       'GHCR_READ_TOKEN=<secret-manager-value>',
     )
     expect(composeSource).not.toContain('env_file:')
+
+    const databaseUrl = new URL(api.environment!.DATABASE_URL!)
+    expect(databaseUrl.username).toBe('app_runtime')
+    expect(databaseUrl.password).toBe(secrets.runtimePassword)
+    expect(databaseUrl.hostname).toBe('postgres')
+    expect(databaseUrl.hash).toBe('')
+    const redisUrl = new URL(api.environment!.REDIS_AUTH_URL!)
+    expect(redisUrl.username).toBe('default')
+    expect(redisUrl.password).toBe(secrets.redisPassword)
+    expect(redisUrl.hostname).toBe('redis-auth')
+    expect(redisUrl.hash).toBe('')
+  })
+
+  it('changes only API image and revision in the rollback override', () => {
+    const normal = resolveProductionCompose().configuration
+    const rollback = resolveProductionCompose([
+      'docker-compose.production.yml',
+      'docker-compose.production.rollback.yml',
+    ]).configuration
+
+    expect(rollback.services.migrator).toEqual(normal.services.migrator)
+    expect(rollback.services.api?.image).toBe(rollbackAppImage)
+    expect(rollback.services.api?.environment?.SERVICE_REVISION).toBe(
+      rollbackServiceRevision,
+    )
+
+    type MutableComposeService = {
+      image?: string
+      environment?: Record<string, string>
+      [key: string]: unknown
+    }
+    type MutableComposeConfiguration = {
+      services: Record<string, MutableComposeService>
+      [key: string]: unknown
+    }
+    const normalWithoutApiChange = structuredClone(
+      normal,
+    ) as unknown as MutableComposeConfiguration
+    const rollbackWithoutApiChange = structuredClone(
+      rollback,
+    ) as unknown as MutableComposeConfiguration
+    delete normalWithoutApiChange.services.api!.image
+    delete rollbackWithoutApiChange.services.api!.image
+    delete normalWithoutApiChange.services.api!.environment!.SERVICE_REVISION
+    delete rollbackWithoutApiChange.services.api!.environment!.SERVICE_REVISION
+    expect(rollbackWithoutApiChange).toEqual(normalWithoutApiChange)
   })
 })

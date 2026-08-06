@@ -6,7 +6,13 @@ REVOKE CREATE ON SCHEMA public FROM app_runtime;
 SELECT format('REVOKE CREATE, TEMPORARY ON DATABASE %I FROM app_runtime', current_database()) \gexec
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_runtime;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO app_runtime;
-REVOKE ALL ON TABLE public._prisma_migrations FROM app_runtime;
+DO $$
+BEGIN
+  IF to_regclass('public._prisma_migrations') IS NOT NULL THEN
+    EXECUTE 'REVOKE ALL ON TABLE public._prisma_migrations FROM app_runtime';
+  END IF;
+END
+$$;
 
 ALTER DEFAULT PRIVILEGES FOR ROLE app_migrator IN SCHEMA public
   REVOKE ALL ON TABLES FROM PUBLIC;
@@ -45,6 +51,10 @@ SELECT (
   AND NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'INSERT')
   AND NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'UPDATE')
   AND NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'DELETE')
+  AND NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'TRUNCATE')
+  AND NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'REFERENCES')
+  AND NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'TRIGGER')
+  AND NOT has_table_privilege('app_runtime', 'public._prisma_migrations', 'MAINTAIN')
   AND NOT has_database_privilege('app_runtime', current_database(), 'CREATE')
   AND NOT has_database_privilege('app_runtime', current_database(), 'TEMPORARY')
   AND NOT EXISTS (
@@ -52,6 +62,19 @@ SELECT (
     FROM pg_class AS c
     WHERE c.relnamespace = 'public'::regnamespace
       AND c.relowner = (SELECT oid FROM pg_roles WHERE rolname = 'app_runtime')
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM pg_auth_members AS membership
+    JOIN pg_roles AS member ON member.oid = membership.member
+    WHERE member.rolname IN ('app_migrator', 'app_runtime')
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM pg_roles AS member
+    JOIN pg_roles AS target ON target.rolname <> member.rolname
+    WHERE member.rolname IN ('app_migrator', 'app_runtime')
+      AND pg_has_role(member.rolname, target.rolname, 'SET')
   )
   AND (
     SELECT count(*) = 2 AND bool_and(

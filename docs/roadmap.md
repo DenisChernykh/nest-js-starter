@@ -134,7 +134,8 @@ application core.
 - `docs/runbooks/deployment-preparation.md` and
   `docs/runbooks/deployment-security.md` for the input and secret boundaries;
 - `docs/runbooks/rollback.md` for schema-compatible API-only recreation with
-  `docker compose up --detach --no-deps --wait api`;
+  the canonical production Compose prefix plus
+  `docker-compose.production.rollback.yml` and `up --detach --no-deps --wait api`;
 - `docs/runbooks/stage-image-publication.md` preserving the full Stage gate,
   immutable digest, Trivy, same-digest pull and OCI smoke order.
 

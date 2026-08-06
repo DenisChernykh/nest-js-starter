@@ -2,6 +2,16 @@ import { readFileSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 
 const baseline = '608410abc2885010a266075eb4b0107d1fc69417'
+const canonicalComposePrefix =
+  'production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --file /opt/nest-js-starter/docker-compose.production.yml)'
+const productionRunbooks = [
+  'docs/runbooks/deployment.md',
+  'docs/runbooks/deployment-preparation.md',
+  'docs/runbooks/deployment-security.md',
+  'docs/runbooks/rollback.md',
+  'docs/runbooks/deployment-database-roles.md',
+  'docs/runbooks/failed-prisma-migration.md',
+]
 
 function read(path: string): string {
   return readFileSync(path, 'utf8')
@@ -77,23 +87,49 @@ describe('Compose VPS deployment documentation contract', () => {
     const rollback = read('docs/runbooks/rollback.md')
     const publication = read('docs/runbooks/stage-image-publication.md')
 
+    for (const runbook of productionRunbooks) {
+      const content = read(runbook)
+      expect(content).toContain(canonicalComposePrefix)
+      const bareComposeLines = content
+        .split('\n')
+        .filter((line) => /\bdocker compose\b/.test(line))
+        .filter((line) => !line.includes(canonicalComposePrefix))
+      expect(bareComposeLines).toEqual([])
+    }
+
     for (const command of [
-      'docker compose --env-file /opt/nest-js-starter/.env --file docker-compose.production.yml',
-      'docker compose up --detach --wait postgres redis-auth',
-      'docker compose exec -T postgres',
+      '"${production_compose[@]}" config --quiet',
+      '"${production_compose[@]}" up --detach --wait postgres redis-auth',
+      '"${production_compose[@]}" exec -T postgres',
       'prepare-roles.sql',
-      'docker compose up --detach migrator',
-      'docker compose wait migrator',
-      'docker compose ps --all migrator',
+      '"${production_compose[@]}" up --detach migrator',
+      '"${production_compose[@]}" wait migrator',
+      '"${production_compose[@]}" ps --all migrator',
       'finalize-roles.sql',
-      'docker compose up --detach --wait api',
-      'docker compose logs --tail=200',
+      '"${production_compose[@]}" up --detach --wait api',
+      '"${production_compose[@]}" logs --tail=200',
     ]) {
       expect(deployment).toContain(command)
     }
-    expect(deployment).toContain('reverse_proxy ${CADDY_UPSTREAM_ALIAS}:3000')
+    expect(deployment).toContain('reverse_proxy {$CADDY_UPSTREAM_ALIAS}:3000')
+    expect(deployment).not.toContain(
+      'reverse_proxy ${CADDY_UPSTREAM_ALIAS}:3000',
+    )
     expect(deployment).toContain('automatic HTTPS')
     expect(deployment).toContain('restart unless-stopped')
+    for (const phrase of [
+      'CADDY_UPSTREAM_ALIAS is copied into the host Caddy process environment',
+      'Caddy does not automatically load /opt/nest-js-starter/.env',
+      'caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile',
+      'systemctl reload caddy',
+      'docker network inspect "$CADDY_NETWORK"',
+      'docker inspect "$CADDY_CONTAINER"',
+      'curl --fail-with-body --silent --show-error --max-time 10',
+      'HTTP 200 and a JSON health body',
+      'HTTP 401 or 403 and a problem body containing requestId',
+    ]) {
+      expect(deployment).toContain(phrase)
+    }
 
     for (const phrase of [
       'production.env.example',
@@ -103,9 +139,13 @@ describe('Compose VPS deployment documentation contract', () => {
       'OBSERVABILITY_NETWORK',
       'docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin',
       'docker pull "$APP_IMAGE"',
+      'config/deployment/production-preflight.sh',
       'org.opencontainers.image.revision',
+      'RepoDigests',
+      'DOCKER_CONFIG',
       'SERVICE_REVISION',
       'byte-for-byte',
+      'trusted same-repository pull request',
     ]) {
       expect(preparation).toContain(phrase)
     }
@@ -119,6 +159,10 @@ describe('Compose VPS deployment documentation contract', () => {
       'CADDY_NETWORK',
       'OBSERVABILITY_NETWORK',
       'noeviction',
+      'unpadded base64url',
+      'exactly 32 random bytes',
+      'atomic',
+      'per-secret recreation',
       'never place them in image, Git, shell history, logs',
     ]) {
       expect(security).toContain(phrase)
@@ -128,12 +172,51 @@ describe('Compose VPS deployment documentation contract', () => {
       'schema compatibility',
       'no down-migration',
       'previous non-secret image/revision',
-      'docker compose up --detach --no-deps --wait api',
+      'docker-compose.production.rollback.yml',
+      'ROLLBACK_APP_IMAGE',
+      'ROLLBACK_SERVICE_REVISION',
+      'does not edit /opt/nest-js-starter/.env',
+      '"${production_compose[@]}" --file /opt/nest-js-starter/docker-compose.production.rollback.yml up --detach --no-deps --wait api',
       'does not invoke the migrator',
       'SERVICE_REVISION',
     ]) {
       expect(rollback).toContain(phrase)
     }
+
+    for (const phrase of [
+      'requestId',
+      'traceId',
+      '{compose_service="api"} | json | requestId =',
+      'curl -fsS --max-time 10 "$TEMPO_URL/api/v2/traces/$trace_id"',
+      '"${production_compose[@]}" restart',
+      'volume/network/readiness verification',
+      'unperformed repository procedure',
+    ]) {
+      expect(deployment).toContain(phrase)
+    }
+
+    for (const phrase of [
+      'production-preflight.sh',
+      'MIGRATION_DATABASE_URL',
+      'RUNTIME_DATABASE_URL',
+      'forward-only',
+      '"${production_compose[@]}" exec -T postgres',
+    ]) {
+      expect(read('docs/runbooks/deployment-database-roles.md')).toContain(
+        phrase,
+      )
+      expect(read('docs/runbooks/failed-prisma-migration.md')).toContain(phrase)
+    }
+    expect(read('docs/runbooks/deployment-database-roles.md')).not.toContain(
+      'pnpm exec prisma migrate deploy',
+    )
+    expect(read('docs/runbooks/failed-prisma-migration.md')).not.toContain(
+      'pnpm exec prisma migrate deploy',
+    )
+    const backupRestore = read('docs/runbooks/postgres-backup-restore.md')
+    expect(backupRestore).toContain('isolated restore validation')
+    expect(backupRestore).not.toContain('production promotion path')
+    expect(backupRestore).toContain('POSTGRES_ADMIN_USER')
 
     for (const phrase of [
       'full stage gate',

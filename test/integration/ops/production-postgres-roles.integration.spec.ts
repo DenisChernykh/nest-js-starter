@@ -73,10 +73,6 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$PO
       .start()
 
     adminPool = new Pool({ connectionString: container.getConnectionUri() })
-    await runRoleScript(
-      '/tmp/prepare-roles.sql',
-      'config/deployment/postgres/prepare-roles.sql',
-    )
   })
 
   afterAll(async () => {
@@ -84,6 +80,32 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$PO
     await migratorPool?.end()
     await adminPool?.end()
     await container?.stop()
+  })
+
+  it('fails closed for unsafe membership and then prepares idempotently', async () => {
+    await adminPool.query(`
+      CREATE ROLE privileged_parent NOLOGIN;
+      CREATE ROLE app_runtime LOGIN NOINHERIT NOSUPERUSER NOCREATEDB
+        NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+      GRANT privileged_parent TO app_runtime;
+    `)
+
+    await expect(
+      runRoleScript(
+        '/tmp/prepare-roles.sql',
+        'config/deployment/postgres/prepare-roles.sql',
+      ),
+    ).rejects.toThrow()
+
+    await adminPool.query('REVOKE privileged_parent FROM app_runtime')
+    await runRoleScript(
+      '/tmp/prepare-roles.sql',
+      'config/deployment/postgres/prepare-roles.sql',
+    )
+    await runRoleScript(
+      '/tmp/prepare-roles.sql',
+      'config/deployment/postgres/prepare-roles.sql',
+    )
   })
 
   it('proves migration ownership, runtime DML and runtime denial boundaries', async () => {
@@ -112,6 +134,10 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$PO
         OWNED BY public.role_contract_probe.id;
     `)
 
+    await runRoleScript(
+      '/tmp/finalize-roles.sql',
+      'config/deployment/postgres/finalize-roles.sql',
+    )
     await runRoleScript(
       '/tmp/finalize-roles.sql',
       'config/deployment/postgres/finalize-roles.sql',
@@ -234,6 +260,9 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$PO
     ]) {
       await expect(runtimePool.query(statement)).rejects.toThrow()
     }
+    await expect(
+      runtimePool.query('SET ROLE privileged_parent'),
+    ).rejects.toThrow()
 
     const deniedPrivileges = await adminPool.query<{
       can_create_database: boolean
@@ -242,8 +271,14 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$PO
       owns_public_relation: boolean
       migration_history_delete: boolean
       migration_history_insert: boolean
+      migration_history_maintain: boolean
+      migration_history_references: boolean
       migration_history_select: boolean
+      migration_history_truncate: boolean
+      migration_history_trigger: boolean
       migration_history_update: boolean
+      runtime_can_set_privileged_parent: boolean
+      unexpected_membership: boolean
     }>(`
       SELECT
         has_database_privilege('app_runtime', current_database(), 'CREATE') AS can_create_database,
@@ -256,8 +291,18 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$PO
         ) AS owns_public_relation,
         has_table_privilege('app_runtime', 'public._prisma_migrations', 'DELETE') AS migration_history_delete,
         has_table_privilege('app_runtime', 'public._prisma_migrations', 'INSERT') AS migration_history_insert,
+        has_table_privilege('app_runtime', 'public._prisma_migrations', 'MAINTAIN') AS migration_history_maintain,
+        has_table_privilege('app_runtime', 'public._prisma_migrations', 'REFERENCES') AS migration_history_references,
         has_table_privilege('app_runtime', 'public._prisma_migrations', 'SELECT') AS migration_history_select,
-        has_table_privilege('app_runtime', 'public._prisma_migrations', 'UPDATE') AS migration_history_update
+        has_table_privilege('app_runtime', 'public._prisma_migrations', 'TRUNCATE') AS migration_history_truncate,
+        has_table_privilege('app_runtime', 'public._prisma_migrations', 'TRIGGER') AS migration_history_trigger,
+        has_table_privilege('app_runtime', 'public._prisma_migrations', 'UPDATE') AS migration_history_update,
+        pg_has_role('app_runtime', 'privileged_parent', 'SET') AS runtime_can_set_privileged_parent,
+        EXISTS (
+          SELECT 1 FROM pg_auth_members AS membership
+          JOIN pg_roles AS member ON member.oid = membership.member
+          WHERE member.rolname = 'app_runtime'
+        ) AS unexpected_membership
     `)
     expect(deniedPrivileges.rows[0]).toEqual({
       can_create_database: false,
@@ -265,9 +310,15 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$PO
       can_create_temporary: false,
       migration_history_delete: false,
       migration_history_insert: false,
+      migration_history_maintain: false,
+      migration_history_references: false,
       migration_history_select: false,
+      migration_history_truncate: false,
+      migration_history_trigger: false,
       migration_history_update: false,
       owns_public_relation: false,
+      runtime_can_set_privileged_parent: false,
+      unexpected_membership: false,
     })
   })
 })

@@ -31,19 +31,18 @@ services:
   redis-auth:
     image: redis:8.8.0-trixie@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
     command:
-      - redis-server
-      - --appendonly
-      - 'yes'
-      - --appendfsync
-      - always
-      - --maxmemory-policy
-      - noeviction
-      - --requirepass
-      - ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      - sh
+      - -ceu
+      - >-
+        umask 077; printf 'requirepass %s\n' "$$REDIS_PASSWORD" >
+        /run/redis/redis.conf; exec redis-server /run/redis/redis.conf
+        --appendonly yes --appendfsync always --maxmemory-policy noeviction
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis-auth-production-data:/data
+    tmpfs:
+      - /run/redis:rw,noexec,nosuid,nodev,mode=0700
     healthcheck:
       test:
         - CMD-SHELL

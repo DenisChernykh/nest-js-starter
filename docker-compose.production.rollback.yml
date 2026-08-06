@@ -1,0 +1,5 @@
+services:
+  api:
+    image: ${ROLLBACK_APP_IMAGE:?ROLLBACK_APP_IMAGE is required}
+    environment:
+      SERVICE_REVISION: ${ROLLBACK_SERVICE_REVISION:?ROLLBACK_SERVICE_REVISION is required}

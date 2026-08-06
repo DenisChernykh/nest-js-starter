@@ -1,45 +1,57 @@
 # Explicit API rollback
 
-Rollback is a human decision after schema compatibility is approved. Keep only
-the previous immutable image and exact revision as non-secret release metadata;
-the previous non-secret image/revision is the only rollback record.
-never copy the complete .env or credentials into rollback metadata.
+Rollback is a human decision after explicit schema compatibility approval. Keep
+only the previous immutable image and exact revision as non-secret release
+metadata. The previous non-secret image/revision is the only rollback record.
+Never copy the complete .env or credentials into rollback metadata.
 
-## Compatibility gate
+The canonical production prefix is:
 
-Before changing the API image, prove that the previous image can read the
-schema left by the candidate migration. If that review is absent or negative,
-do not roll back the image; choose a reviewed roll-forward instead. The rule is
-no down-migration.
+    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --file /opt/nest-js-starter/docker-compose.production.yml)
 
-Validate the previous APP_IMAGE digest and its
-org.opencontainers.image.revision label against the recorded SERVICE_REVISION.
-Pull it by digest with the read-only GHCR credential and keep the credential out
-of command arguments and logs.
+## Compatibility and image gates
 
-## API-only recreation
+Prove that the previous API image can read the candidate schema. If that review
+is absent or negative, choose a forward-only fix; there is no down-migration.
+Validate the previous image and revision with the tracked helper without changing
+the global APP_IMAGE or SERVICE_REVISION values in .env:
 
-After explicit approval and validation, change only APP_IMAGE and
-SERVICE_REVISION in the server .env, preserving the existing database and Redis
-state. Recheck .env mode 0600, then run:
+    set -eu
+    set +x
+    . /opt/nest-js-starter/.env
+    APP_IMAGE="$previous_image" SERVICE_REVISION="$previous_revision" \
+      /opt/nest-js-starter/config/deployment/production-preflight.sh
 
-    docker compose --env-file /opt/nest-js-starter/.env --file docker-compose.production.yml config --quiet
-    docker compose up --detach --no-deps --wait api
-    docker compose ps api
-    docker compose logs --tail=200 api
+The helper requires a lowercase GHCR digest, exact 40-hex revision, matching
+org.opencontainers.image.revision label and an exact pulled RepoDigest. Use the
+transient mode-0700 DOCKER_CONFIG/login/logout procedure from deployment.md.
 
-This command does not invoke the migrator, does not run a down-migration and
-does not recreate PostgreSQL or auth Redis. The API must use the already
-finalized runtime role and the same external Caddy/observability networks.
+## API-only desired configuration
+
+The rollback override is tracked at
+docker-compose.production.rollback.yml. It supplies separately recorded,
+non-secret ROLLBACK_APP_IMAGE and ROLLBACK_SERVICE_REVISION only to api. It
+does not edit /opt/nest-js-starter/.env, global APP_IMAGE or global
+SERVICE_REVISION. The normal candidate keeps API and migrator on the same
+immutable image/revision; the resolved rollback diff changes only api.image and
+api.environment.SERVICE_REVISION. Migrator desired image/environment stays
+byte-equivalent.
+
+After approval and validation, recreate only API:
+
+    ROLLBACK_APP_IMAGE="$previous_image" ROLLBACK_SERVICE_REVISION="$previous_revision" "${production_compose[@]}" --file /opt/nest-js-starter/docker-compose.production.rollback.yml up --detach --no-deps --wait api
+    "${production_compose[@]}" ps api
+    "${production_compose[@]}" logs --tail=200 api
+
+This does not invoke the migrator, does not run a down-migration and does not
+recreate PostgreSQL or auth Redis. The API uses the existing finalized runtime
+role and external Caddy/observability networks.
 
 ## Verify and record
 
-Check /health/live, /health/startup, /health/ready and the unauthenticated
-/v1/auth/me problem response through host Caddy. Store only the previous and
-current image/revision identifiers, timestamps, approval reference and bounded
-status/log outcomes. Do not store credentials, URLs containing secrets, cookies,
-full environment text or user data.
-
-If readiness or public smoke fails, preserve the failure and stop. Do not loop
-automatic retries or select an arbitrary newest image. Hosted Caddy, Loki and
-Tempo results remain unverified until a separate authorized drill.
+Run bounded public live/startup/ready and unauthenticated auth smoke through
+host-owned Caddy. Record only previous/current non-secret image and revision,
+timestamps, approval reference and bounded status/log outcomes. If readiness or
+public smoke fails, preserve the failure and stop; do not select an arbitrary
+newest image or loop automatic retries. Hosted Caddy, Loki and Tempo results
+remain unverified until an authorized drill.

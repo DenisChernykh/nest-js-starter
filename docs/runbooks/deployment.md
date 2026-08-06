@@ -1,148 +1,189 @@
 # Production deployment with Compose and Caddy
 
-This runbook is the single operator path for the production image in
-docker-compose.production.yml. It changes only the named production Compose
-project on a normal VPS. It does not install a proxy, collector, database or
-Redis outside that project and it does not claim that a hosted drill happened.
+This is the single production operator procedure. It uses the tracked Compose
+file and host-owned Caddy; it does not install or mutate Caddy, Alloy, Loki,
+Tempo or Grafana. Hosted checks below are executable procedures, not repository
+evidence.
 
-Use one exclusive change window. The candidate APP_IMAGE and its exact
-SERVICE_REVISION come from one successful Stage publication. The previous
-image and revision are kept as non-secret release metadata for a human rollback
-decision; never copy the complete server .env into release metadata.
+The candidate APP_IMAGE and SERVICE_REVISION come from one successful Stage
+publication. Keep only the previous image and revision as non-secret release
+metadata. Never copy the filled .env into that record.
 
-## Install the tracked runtime contract
+## Install and protect the runtime files
 
-On the operator machine, copy these tracked paths to /opt/nest-js-starter on
-the VPS using the normal approved SSH or file-transfer method:
+Install these tracked files at /opt/nest-js-starter on a normal VPS:
 
 - docker-compose.production.yml
+- docker-compose.production.rollback.yml
+- config/deployment/production-preflight.sh
 - config/deployment/postgres/prepare-roles.sql
 - config/deployment/postgres/finalize-roles.sql
 - docs/runbooks/production.env.example
 
-Keep the files outside docker-entrypoint-initdb.d. The SQL files are mounted
-read-only by Compose and are run manually only after the operator confirms the
-database state.
-
-Create the server environment file before entering any real value:
+The SQL files stay outside docker-entrypoint-initdb.d, are mounted read-only,
+and are invoked manually. Create the server secret file and verify its mode
+before entering a real value:
 
     install -d -m 0750 /opt/nest-js-starter
     cp /opt/nest-js-starter/docs/runbooks/production.env.example /opt/nest-js-starter/.env
     chmod 600 /opt/nest-js-starter/.env
     stat -c '%a %n' /opt/nest-js-starter/.env
 
-Continue only when stat prints mode 600. Enter values through the server's
-protected editor or secret provider. Do not put credentials in shell history,
-command arguments, logs or this repository.
+Continue only when stat prints 600. The filled server-side .env is the only
+persistent deployment/runtime secret file.
 
-## Verify image and external networks
+Every production Compose command in this runbook uses this exact Bash array;
+the array prevents the development docker-compose.yml from being selected:
 
-Load the server .env without printing it and check that APP_IMAGE is an
-immutable digest, SERVICE_REVISION is exactly 40 lowercase hexadecimal
-characters, and CADDY_UPSTREAM_ALIAS is unique for this API instance.
+    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --file /opt/nest-js-starter/docker-compose.production.yml)
 
-Create or inspect the two host-owned external networks:
+## Networks, GHCR and immutable identity
 
+Create or inspect the existing host-owned networks. Network creation is an
+infrastructure action outside this repository:
+
+    set -eu
+    set +x
+    . /opt/nest-js-starter/.env
     docker network inspect "$CADDY_NETWORK" >/dev/null 2>&1 || docker network create "$CADDY_NETWORK"
     docker network inspect "$OBSERVABILITY_NETWORK" >/dev/null 2>&1 || docker network create "$OBSERVABILITY_NETWORK"
 
-Log in to private GHCR with a read-only credential. Keep the token in stdin and
-remove the temporary shell variable after the pull:
+Use isolated transient registry state. DOCKER_CONFIG is mode 0700, is removed
+by its own trap, and is never the server .env:
 
-    printf '%s' "$GHCR_READ_TOKEN" | docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
-    docker pull "$APP_IMAGE"
-    OCI_REVISION="$(docker image inspect "$APP_IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
-    test "$OCI_REVISION" = "$SERVICE_REVISION"
-    unset GHCR_READ_TOKEN
+    registry_config="$(mktemp -d /run/user/$(id -u)/nest-js-starter-ghcr.XXXXXX)"
+    chmod 700 "$registry_config"
+    cleanup_registry_config() {
+      status=$?
+      DOCKER_CONFIG="$registry_config" docker logout ghcr.io >/dev/null 2>&1 || true
+      rm -rf "$registry_config"
+      exit "$status"
+    }
+    trap cleanup_registry_config EXIT HUP INT TERM
 
-The last comparison is byte-for-byte. A tag, a missing label or a different
-revision stops the operation.
+    printf '%s' "$GHCR_READ_TOKEN" | DOCKER_CONFIG="$registry_config" docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+    DOCKER_CONFIG="$registry_config" docker pull "$APP_IMAGE"
+    DOCKER_CONFIG="$registry_config" /opt/nest-js-starter/config/deployment/production-preflight.sh
+
+The helper rejects non-GHCR references, tags, malformed digests, an uppercase
+or non-40-hex revision, a missing/mismatched
+org.opencontainers.image.revision label, and a pulled RepoDigest that is not
+exactly APP_IMAGE. It does not print secret values. The comparison is
+byte-for-byte; a commit tag is not production identity.
 
 ## Migration-first startup
 
-Run Compose configuration validation first. The project uses the same immutable
-image for the one-shot migrator and API; it has no build, development profile or
-published host API port.
+Run configuration validation, healthy infrastructure, role preparation, the
+one-shot migrator, grant finalization, and API readiness in this order:
 
-    cd /opt/nest-js-starter
-    docker compose --env-file /opt/nest-js-starter/.env --file docker-compose.production.yml config --quiet
-    docker compose up --detach --wait postgres redis-auth
-
-Prepare the two PostgreSQL roles manually. The command reads passwords already
-present in the PostgreSQL container environment and passes no secret as an
-argument:
-
-    docker compose exec -T postgres sh -ceu '
+    "${production_compose[@]}" config --quiet
+    "${production_compose[@]}" up --detach --wait postgres redis-auth
+    "${production_compose[@]}" exec -T postgres sh -ceu '
       export PGPASSWORD="$POSTGRES_PASSWORD"
       psql --no-psqlrc --set=ON_ERROR_STOP=1 \
         --username "$POSTGRES_USER" \
         --dbname "$POSTGRES_DB" \
         --file /opt/nest-js-starter/deployment/postgres/prepare-roles.sql
     '
-
-Start the migrator, wait for its one-shot completion and inspect exit 0:
-
-    docker compose up --detach migrator
-    docker compose wait migrator
-    docker compose ps --all migrator
-    MIGRATOR_ID="$(docker compose ps --all --quiet migrator)"
-    MIGRATOR_EXIT="$(docker inspect "$MIGRATOR_ID" --format '{{.State.ExitCode}}')"
-    test "$MIGRATOR_EXIT" = 0
-
-Only after a successful migration, finalize and verify grants. This is a manual
-step, never an init-container hook:
-
-    docker compose exec -T postgres sh -ceu '
+    "${production_compose[@]}" up --detach migrator
+    "${production_compose[@]}" wait migrator
+    "${production_compose[@]}" ps --all migrator
+    migrator_id="$("${production_compose[@]}" ps --all --quiet migrator)"
+    migrator_exit="$(docker inspect "$migrator_id" --format '{{.State.ExitCode}}')"
+    test "$migrator_exit" = 0
+    "${production_compose[@]}" exec -T postgres sh -ceu '
       export PGPASSWORD="$POSTGRES_PASSWORD"
       psql --no-psqlrc --set=ON_ERROR_STOP=1 \
         --username "$POSTGRES_USER" \
         --dbname "$POSTGRES_DB" \
         --file /opt/nest-js-starter/deployment/postgres/finalize-roles.sql
     '
-    docker compose up --detach --wait api
-    docker compose ps
+    "${production_compose[@]}" up --detach --wait api
+    "${production_compose[@]}" ps
 
-The API receives only RUNTIME_DATABASE_URL rendered as its DATABASE_URL,
-auth secrets, auth Redis URL and application inputs. The migrator receives only
-MIGRATION_DATABASE_URL rendered as its DATABASE_URL plus process identity.
-Neither process receives GHCR, PostgreSQL admin or the other application role's
-credential.
+The API receives only the runtime database URL, auth Redis URL, auth secrets
+and application inputs. The migrator receives only its migration database URL
+and process identity. GHCR, PostgreSQL admin, runtime, auth and Redis secrets
+are not cross-exposed.
 
-## Caddy handoff and status
+## Caddy handoff and bounded public smoke
 
-Caddy remains host-owned and joins the external CADDY_NETWORK. Its minimal
-site block keeps automatic HTTPS outside this repository's Compose project:
+Caddy is host-owned and remains outside application Compose. The API is attached
+to the external CADDY_NETWORK with the unique alias. The same non-secret
+CADDY_UPSTREAM_ALIAS is copied into the host Caddy process environment. It is
+explicitly copied, for example through a separate /etc/caddy/caddy.env or systemd
+Environment= entry). Caddy does not automatically load /opt/nest-js-starter/.env.
+
+The host-owned Caddyfile site block is kept outside this repository:
 
     api.example.com {
-        reverse_proxy ${CADDY_UPSTREAM_ALIAS}:3000
+        reverse_proxy {$CADDY_UPSTREAM_ALIAS}:3000
     }
 
-The DNS record, certificates, Caddy configuration and proxy service remain
-outside the repository. Verify the Compose project with bounded output:
+After installing the value in Caddy own environment, validate and reload the
+host service, then inspect both network memberships:
 
-    docker compose ps
-    docker compose logs --tail=200 postgres redis-auth migrator api
+    caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+    sudo systemctl reload caddy
+    docker network inspect "$CADDY_NETWORK" >/dev/null
+    docker inspect "$CADDY_CONTAINER" --format '{{json .NetworkSettings.Networks}}'
+    "${production_compose[@]}" ps
+    "${production_compose[@]}" logs --tail=200 postgres redis-auth migrator api
 
-The API healthcheck is Node-based and calls
-http://127.0.0.1:3000/health/ready. The public operator check must also cover
-/health/live, /health/startup, /health/ready and the unauthenticated
-/v1/auth/me problem response.
+The hostname enables automatic HTTPS; DNS, certificates and the Caddy service remain host-owned.
+Bounded public smoke uses a unique request ID and expects these boundaries:
 
-## Restart recovery and workers
+    request_id="production-drill-$(date -u +%Y%m%dT%H%M%SZ)"
+    live_body="$(mktemp)"
+    live_status="$(curl --fail-with-body --silent --show-error --max-time 10 \
+      --output "$live_body" --write-out '%{http_code}' \
+      "$PUBLIC_API_URL/health/live")"
+    test "$live_status" = 200
+    grep -q '"status":"ok"' "$live_body"
 
-PostgreSQL, auth Redis and API use the restart unless-stopped policy. After a Docker or
-VPS restart, inspect docker compose ps and bounded logs, then wait for healthy
-dependencies and API readiness. The migrator remains one-shot and is not a
-worker or a permanent restart loop.
+    auth_body="$(mktemp)"
+    auth_status="$(curl --fail-with-body --silent --show-error --max-time 10 \
+      -H "X-Request-ID: $request_id" --output "$auth_body" \
+      --write-out '%{http_code}' "$PUBLIC_API_URL/v1/auth/me")"
+    case "$auth_status" in 401|403) ;; *) exit 1 ;; esac
+    grep -q 'requestId' "$auth_body"
 
-If a real durable worker is later required, the feature owning that queue must
-add a separate Compose service using the same immutable image and its own
-payload, processor, retry, idempotency and durable-state contract. Do not add a
-demo worker or a global Redis abstraction here.
+The live/startup/ready endpoints must return HTTP 200 and a JSON health body.
+The unauthenticated auth endpoint must return HTTP 401 or 403 and a problem
+body containing requestId; no credential is used by this smoke.
+Expected boundary: HTTP 401 or 403 and a problem body containing requestId.
 
-## Hosted telemetry drill boundary
+## Recovery and observability drill
 
-A hosted drill would send one unique request ID through the public HTTPS origin,
-look up that request ID in Loki, then use the returned trace ID to find the
-corresponding Tempo trace. Those observations are environment evidence, not
-repository evidence; this runbook does not perform that drill.
+PostgreSQL, auth Redis and API use restart unless-stopped; the migrator stays
+one-shot. After a Docker daemon or VPS restart, inspect volumes and network
+membership, then wait for readiness:
+Record volume/network/readiness verification as bounded recovery evidence.
+
+    "${production_compose[@]}" ps
+    "${production_compose[@]}" restart postgres redis-auth api
+    "${production_compose[@]}" ps
+    docker volume ls --filter name=nest-js-starter-production
+    docker network inspect "$CADDY_NETWORK" >/dev/null
+    "${production_compose[@]}" up --detach --wait postgres redis-auth api
+    "${production_compose[@]}" logs --tail=200 postgres redis-auth api
+
+The hosted telemetry procedure sends the unique request above, queries Loki,
+then fetches the exact trace from Tempo. Alloy labels the API stream
+compose_service="api" and preserves requestId/traceId JSON fields:
+The exact LogQL selector is {compose_service="api"} | json | requestId = request_id.
+
+    loki_query="{compose_service=\"api\"} | json | requestId = \"$request_id\""
+    curl -fsS --max-time 10 --get "$LOKI_URL/loki/api/v1/query_range" \
+      --data-urlencode "query=$loki_query" >"$loki_response"
+    trace_id="$(jq -er '.data.result[0].values[0][1] | fromjson | .traceId' "$loki_response")"
+    curl -fsS --max-time 10 "$TEMPO_URL/api/v2/traces/$trace_id" >"$tempo_response"
+    jq -e --arg trace_id "$trace_id" '.. | objects | select(.traceId? == $trace_id)' "$tempo_response" >/dev/null
+
+This is an unperformed repository procedure. Hosted HTTPS, Caddy routing,
+Loki requestId lookup, Tempo traceId lookup and restart recovery require an
+authorized VPS drill and must not be reported as local PASS evidence.
+
+If a real worker is later needed, its feature owns a separate Compose service
+using the same image, payload, retry, idempotency and durable-state contract.
+Do not add a demo worker or a global Redis abstraction.

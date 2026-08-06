@@ -35,6 +35,21 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'refusing application roles with unsafe attributes';
   END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_auth_members AS membership
+    JOIN pg_roles AS member ON member.oid = membership.member
+    WHERE member.rolname IN ('app_migrator', 'app_runtime')
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_roles AS member
+    JOIN pg_roles AS target ON target.rolname <> member.rolname
+    WHERE member.rolname IN ('app_migrator', 'app_runtime')
+      AND pg_has_role(member.rolname, target.rolname, 'SET')
+  ) THEN
+    RAISE EXCEPTION 'refusing application roles with unexpected membership or SET ROLE capability';
+  END IF;
 END
 $$;
 
