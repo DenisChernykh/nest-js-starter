@@ -1,0 +1,159 @@
+services:
+  postgres:
+    image: postgres:18.4-trixie@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:?POSTGRES_ADMIN_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?POSTGRES_ADMIN_PASSWORD is required}
+      APP_MIGRATOR_PASSWORD: ${POSTGRES_MIGRATOR_PASSWORD:?POSTGRES_MIGRATOR_PASSWORD is required}
+      APP_RUNTIME_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?POSTGRES_RUNTIME_PASSWORD is required}
+    volumes:
+      - postgres-production-data:/var/lib/postgresql
+      - ./config/deployment/postgres/prepare-roles.sql:/opt/nest-js-starter/deployment/postgres/prepare-roles.sql:ro
+      - ./config/deployment/postgres/finalize-roles.sql:/opt/nest-js-starter/deployment/postgres/finalize-roles.sql:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_ADMIN_USER:?POSTGRES_ADMIN_USER is required} -d ${POSTGRES_DB:?POSTGRES_DB is required}
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
+    networks:
+      - application
+
+  redis-auth:
+    image: redis:8.8.0-trixie@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b
+    command:
+      - redis-server
+      - --appendonly
+      - 'yes'
+      - --appendfsync
+      - always
+      - --maxmemory-policy
+      - noeviction
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis-auth-production-data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep PONG
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
+    networks:
+      - application
+
+  migrator:
+    image: ${APP_IMAGE:?APP_IMAGE is required}
+    command:
+      - corepack
+      - pnpm@11.15.1
+      - run
+      - start:migrate
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_MIGRATOR_USER:-app_migrator}:${POSTGRES_MIGRATOR_PASSWORD:?POSTGRES_MIGRATOR_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+      NODE_ENV: production
+      SERVICE_REVISION: ${SERVICE_REVISION:?SERVICE_REVISION is required}
+      SERVICE_VERSION: ${SERVICE_VERSION:?SERVICE_VERSION is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
+    networks:
+      - application
+
+  api:
+    image: ${APP_IMAGE:?APP_IMAGE is required}
+    command:
+      - node
+      - dist/bootstrap/api/main.js
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:?LOG_LEVEL is required}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:?OTEL_SERVICE_NAME is required}
+      SERVICE_VERSION: ${SERVICE_VERSION:?SERVICE_VERSION is required}
+      SERVICE_REVISION: ${SERVICE_REVISION:?SERVICE_REVISION is required}
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:?OTEL_SDK_DISABLED is required}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:?OTEL_EXPORTER_OTLP_ENDPOINT is required}
+      API_HOST: 0.0.0.0
+      API_PORT: '3000'
+      API_DOCS_MODE: ${API_DOCS_MODE:?API_DOCS_MODE is required}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:?PUBLIC_API_URL is required}
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
+      TRUST_PROXY_CIDRS: ${TRUST_PROXY_CIDRS:?TRUST_PROXY_CIDRS is required}
+      DATABASE_URL: postgresql://${POSTGRES_RUNTIME_USER:-app_runtime}:${POSTGRES_RUNTIME_PASSWORD:?POSTGRES_RUNTIME_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+      DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:?DATABASE_POOL_MAX is required}
+      REDIS_AUTH_URL: redis://default:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis-auth:6379
+      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:?REDIS_KEY_PREFIX is required}
+      AUTH_SESSION_KEY_SECRET: ${AUTH_SESSION_KEY_SECRET:?AUTH_SESSION_KEY_SECRET is required}
+      AUTH_CSRF_SECRET: ${AUTH_CSRF_SECRET:?AUTH_CSRF_SECRET is required}
+      AUTH_RATE_LIMIT_KEY_SECRET: ${AUTH_RATE_LIMIT_KEY_SECRET:?AUTH_RATE_LIMIT_KEY_SECRET is required}
+      AUTH_NETWORK_METADATA_SECRET: ${AUTH_NETWORK_METADATA_SECRET:?AUTH_NETWORK_METADATA_SECRET is required}
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis-auth:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:3000/health/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    stop_grace_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
+    networks:
+      application:
+      caddy:
+        aliases:
+          - ${CADDY_UPSTREAM_ALIAS:?CADDY_UPSTREAM_ALIAS is required}
+      observability:
+
+volumes:
+  postgres-production-data:
+  redis-auth-production-data:
+
+networks:
+  application:
+    internal: true
+  caddy:
+    external: true
+    name: ${CADDY_NETWORK:?CADDY_NETWORK is required}
+  observability:
+    external: true
+    name: ${OBSERVABILITY_NETWORK:?OBSERVABILITY_NETWORK is required}
