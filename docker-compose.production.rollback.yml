@@ -1,0 +1,5 @@
+services:
+  api:
+    image: ${ACTIVE_API_IMAGE:?ACTIVE_API_IMAGE is required}
+    environment:
+      SERVICE_REVISION: ${ACTIVE_API_REVISION:?ACTIVE_API_REVISION is required}

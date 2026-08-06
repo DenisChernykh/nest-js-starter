@@ -114,59 +114,57 @@ The adoption and recovery contracts are `docs/architecture/durable-jobs.md` and
 - Every implementation slice updates its configuration, architecture, test and
   recovery documentation in the same pull request.
 
-## Milestone 7: deployment and recovery contract
+## Milestone 7: Compose+Caddy deployment and recovery contract
 
-**Goal:** prove that the existing immutable image can be promoted, migrated,
-rolled back and recovered without changing the application core.
+**Goal:** leave one explicit production Compose path with host-owned Caddy,
+separate PostgreSQL roles and image-only rollback, without changing the
+application core.
 
 **Deliverables:**
 
-- repository-owned `deployment:preflight`, offline `deployment:promote`
-  dry-run, explicit apply and `deployment:rollback` mechanics with strict
-  non-secret manifests, bounded adapters and atomic redacted evidence;
-- `docs/runbooks/deployment.md` for exact-digest promotion and bounded terminal
-  polling;
-- `docs/runbooks/rollback.md` for returning to the previous digest without
-  database down-migrations;
-- `docs/runbooks/failed-prisma-migration.md` for a failed one-shot migrator;
-- `docs/runbooks/postgres-backup-restore.md` for daily backups, retention and a
-  restore into a separate database;
-- `docs/runbooks/session-secret-compromise.md` for invalidating every active
-  session after secret exposure;
-- deployment-specific documentation for TLS/domain, least-privilege runtime and
-  migration credentials, and auth Redis persistence;
-- an environment-owned schedule for quarterly restore drills.
+- standalone `docker-compose.production.yml` using one immutable image for the
+  migrator and API, persistent PostgreSQL/auth Redis volumes, internal network,
+  external Caddy/observability networks and bounded json-file logs;
+- `docs/runbooks/production.env.example` with symbolic input placeholders only;
+- tracked idempotent SQL for manual role preparation and post-migration grant
+  verification, plus Docker-backed integration proof;
+- `docs/runbooks/deployment.md` for VPS file installation, digest verification,
+  manual role preparation, migration-first startup, Caddy handoff and bounded
+  status/log inspection;
+- `docs/runbooks/deployment-preparation.md` and
+  `docs/runbooks/deployment-security.md` for the input and secret boundaries;
+- `docs/runbooks/rollback.md` for schema-compatible API-only recreation with
+  the canonical production Compose prefix plus
+  `docker-compose.production.rollback.yml`, persistent non-secret
+  `active-api.env` release metadata and `up --detach --no-deps --wait api`;
+- `docs/runbooks/stage-image-publication.md` preserving the full Stage gate,
+  immutable digest, Trivy, same-digest pull and OCI smoke order.
 
 **Required sequence:**
 
-1. Resolve one image digest produced by the successful `stage` workflow.
-2. Run the one-shot Prisma migrator using the migration role.
-3. Stop the rollout if migration fails.
-4. Roll out the API using the same digest and wait for readiness with a bounded
-   deadline.
-5. Run an external health/auth smoke.
-6. On application failure, restore the previous image digest; do not attempt an
-   automatic schema rollback.
+1. Install the tracked Compose, SQL and env-template files on a normal VPS.
+2. Copy the template to the server `.env`, verify mode `0600`, then enter
+   secrets through the protected server path.
+3. Create or inspect external Caddy and observability networks.
+4. Pull `APP_IMAGE` by digest and compare its OCI revision byte-for-byte with
+   `SERVICE_REVISION`.
+5. Start healthy PostgreSQL/auth Redis, run manual role preparation, execute
+   the migrator and inspect exit `0`, then finalize/verify grants.
+6. Start and wait for the API, then verify host Caddy and the public health/auth
+   contract.
+7. For rollback, require explicit schema compatibility and change only the API
+   image/revision; never invoke a migrator or down-migration.
 
 **Exit evidence:**
 
-- the runtime database role cannot apply schema migrations;
-- a controlled migration failure leaves the previous API revision available;
-- a healthy promotion and digest rollback are recorded;
-- the latest PostgreSQL backup restores into an isolated database and supports
-  representative application queries;
-- the auth Redis loss and session-secret compromise procedures are
-  executed and recorded.
-
-Dokploy may be the first deployment adapter, but the contract above is the
-stable boundary. Dokploy identifiers, credentials and polling details belong
-to its runbook or deployment automation, not to application code.
-
-As of 2026-07-30, the repository-owned operator mechanics and local contract
-tests are implemented on the deployment feature branch. This is local
-repository evidence only. A hosted Stage promotion/rollback drill, Dokploy
-runtime observation, production PostgreSQL/Redis verification and recovery
-record remain unperformed Milestone 7 exit evidence.
+- runtime PostgreSQL role integration proves DML/sequence access and DDL,
+  ownership and `_prisma_migrations` denial;
+- Compose config and focused tests pass, while local/OCI development paths and
+  the Stage workflow remain unchanged;
+- previous image/revision metadata is non-secret and rollback is API-only;
+- repository documentation names hosted Caddy, Loki and Tempo verification as
+  hosted verification remains unperformed until an authorized drill supplies
+  fresh evidence.
 
 ## Milestone 8: clean-copy certification
 

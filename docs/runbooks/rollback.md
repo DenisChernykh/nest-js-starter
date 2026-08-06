@@ -1,69 +1,84 @@
-# Explicit rollback or roll-forward decision
+# Explicit API rollback
 
-Use this procedure after a failed Stage promotion, terminal Dokploy failure,
-polling timeout or failed external smoke. Preserve the promotion evidence,
-deployment records and public observations. Redact credentials, connection
-URLs, complete environments, cookies and user data.
+Rollback is a human decision after explicit schema compatibility approval. Keep
+only the previous immutable image and exact revision as non-secret release
+metadata. The previous non-secret image/revision is the only rollback record.
+Never copy the complete .env or credentials into rollback metadata.
 
-The promotion CLI performs no automatic rollback. This runbook requires a new
-human decision and a separate explicit command.
+The canonical production prefix is:
 
-## Schema compatibility gate
+    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --env-file /opt/nest-js-starter/active-api.env --file /opt/nest-js-starter/docker-compose.production.yml --file /opt/nest-js-starter/docker-compose.production.rollback.yml)
 
-Before any rollback call, prove that the distinct rollback image in the release
-manifest can safely run against the database schema left by the candidate
-migration. The manifest's `schemaCompatibilityEvidence` must reference that
-review.
+## Compatibility and image gates
 
-There is **no down-migration** in this procedure. If the previous API cannot
-read the current schema, image rollback is forbidden. Keep the incident open
-and roll forward with a newly reviewed immutable image compatible with the
-current schema.
+Prove that the previous API image can read the candidate schema. If that review
+is absent or negative, choose a forward-only fix; there is no down-migration.
+Validate the previous image and revision with the tracked helper without changing
+the global APP_IMAGE or SERVICE_REVISION values in .env:
 
-This gate applies even when Dokploy reached `done`: an unhealthy public
-health/auth contract is still a failed promotion.
+    set -eu
+    set +x
+    set -a
+    . /opt/nest-js-starter/.env
+    set +a
+    (
+      registry_config="$(mktemp -d /run/user/$(id -u)/nest-js-starter-ghcr.XXXXXX)"
+      chmod 700 "$registry_config"
+      cleanup_registry_config() {
+        DOCKER_CONFIG="$registry_config" docker logout ghcr.io >/dev/null 2>&1 || true
+        rm -rf "$registry_config"
+      }
+      trap cleanup_registry_config EXIT
+      trap 'exit 129' HUP
+      trap 'exit 130' INT
+      trap 'exit 143' TERM
+      printf '%s' "$GHCR_READ_TOKEN" | DOCKER_CONFIG="$registry_config" docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+      DOCKER_CONFIG="$registry_config" docker pull "$previous_image"
+      APP_IMAGE="$previous_image" SERVICE_REVISION="$previous_revision" DOCKER_CONFIG="$registry_config" \
+        /opt/nest-js-starter/config/deployment/production-preflight.sh
+    )
+    unset GHCR_READ_TOKEN GHCR_USERNAME
 
-## Explicit rollback command
+The helper requires a lowercase GHCR digest, exact 40-hex revision, matching
+org.opencontainers.image.revision label and an exact pulled RepoDigest. The
+approved previous image is pulled explicitly inside the transient mode-0700
+registry subshell before it is inspected; the credential state is removed before
+rollback continues.
 
-Freeze concurrent deployments and use the same protected manifest/live inputs
-as the promotion:
+## API-only desired configuration
 
-```sh
-pnpm deployment:rollback -- --manifest /protected/path/release.json \
-  --apply \
-  --evidence /protected/path/rollback-evidence.json
-```
+The rollback override is tracked at
+docker-compose.production.rollback.yml. The canonical Compose prefix always
+loads it together with the non-secret `active-api.env`. A normal promotion writes
+the candidate digest/revision there; rollback atomically replaces only
+ACTIVE_API_IMAGE and ACTIVE_API_REVISION with the approved previous values. It
+does not edit /opt/nest-js-starter/.env, global APP_IMAGE or global
+SERVICE_REVISION. The resolved rollback diff changes only api.image and
+api.environment.SERVICE_REVISION. Migrator desired image/environment stays
+byte-equivalent.
 
-The rollback command:
+After approval and validation, persist the desired API state and recreate only
+API. Because every production and recovery command uses the same prefix, a later
+`up api` cannot silently restore the rejected candidate:
 
-1. rejects empty schema-compatibility evidence before an external call;
-2. authenticates to private GHCR in an isolated temporary Docker config;
-3. pulls the exact rollback digest and verifies its OCI revision;
-4. does not invoke the migrator;
-5. snapshots current Dokploy deployment records;
-6. restores `DOKPLOY_PREVIOUS_APPLICATION_ENV`;
-7. saves the exact rollback digest as the Docker provider;
-8. deploys with a rollback-revision-bound title;
-9. identifies exactly one new record and polls only it to `done`;
-10. repeats all external health/auth smoke checks;
-11. atomically writes redacted rollback evidence without overwriting an
-    existing file.
+    active_api_next="$(mktemp /opt/nest-js-starter/.active-api.env.XXXXXX)"
+    chmod 0640 "$active_api_next"
+    printf 'ACTIVE_API_IMAGE=%s\nACTIVE_API_REVISION=%s\n' \
+      "$previous_image" "$previous_revision" >"$active_api_next"
+    mv -f "$active_api_next" /opt/nest-js-starter/active-api.env
+    "${production_compose[@]}" up --detach --no-deps --wait api
+    "${production_compose[@]}" ps api
+    "${production_compose[@]}" logs --tail=200 api
 
-The command contains no automatic rollback path of its own. A failure after
-environment mutation triggers one bounded attempt to save the protected
-previous environment again, records that outcome and stops.
+This does not invoke the migrator, does not run a down-migration and does not
+recreate PostgreSQL or auth Redis. The API uses the existing finalized runtime
+role and external Caddy/observability networks.
 
-## Outcomes
+## Verify and record
 
-- **Rollback succeeds:** record the exact rollback digest/revision, identified
-  deployment ID, terminal status and four smoke outcomes. Keep the incident
-  open until the human recovery criteria are met.
-- **Rollback image verification fails:** no Dokploy mutation occurred. Diagnose
-  registry access or artifact identity.
-- **Dokploy or smoke fails:** preserve the new failure evidence; do not select
-  an arbitrary newest deployment and do not loop automatic retries.
-- **Schema compatibility is uncertain:** do not run the command; choose a
-  reviewed roll-forward.
-
-Local unit/mock tests and this runbook are not proof of recovery on a hosted
-environment.
+Run bounded public live/startup/ready and unauthenticated auth smoke through
+host-owned Caddy. Record only previous/current non-secret image and revision,
+timestamps, approval reference and bounded status/log outcomes. If readiness or
+public smoke fails, preserve the failure and stop; do not select an arbitrary
+newest image or loop automatic retries. Hosted Caddy, Loki and Tempo results
+remain unverified until an authorized drill.

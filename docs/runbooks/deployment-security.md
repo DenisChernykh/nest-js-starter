@@ -1,71 +1,113 @@
-# Безопасность deployment
+# Production Compose security baseline
 
-Этот runbook задаёт минимальный security baseline для каждого deployment
-starter. Он не выполняет deployment, не содержит значений secrets и не меняет
-runtime-конфигурацию приложения.
+This document describes the production security contract. It does not enter
+secrets or mutate a VPS, DNS, Caddy, Alloy, Loki, Tempo or Grafana.
 
-## Публичный периметр
+The canonical production prefix is:
 
-1. Привяжите один контролируемый domain к точному `PUBLIC_API_URL` и разрешите
-   только ожидаемые origins в `CORS_ORIGINS`. Для production оба значения должны
-   использовать HTTPS.
-2. TLS завершается на доверенном reverse proxy/load balancer; сертификат,
-   hostname и цепочка должны быть действительны. HTTP перенаправляйте на HTTPS,
-   не завершая TLS в API process.
-3. Передавайте client IP только от явно разрешённых proxy CIDR в
-   `TRUST_PROXY_CIDRS`; прямой доступ к API не должен позволять подменить
-   forwarded headers.
-4. В production установите `API_DOCS_MODE=protected` либо `off`. Для
-   `protected` приложение само применяет `DocsAccessPolicyAdapter`: проверяйте
-   отказ анонимного запроса и успешный доступ через session пользователя
-   `system.admin` с permission `system.docs.read`. Внешняя proxy-auth policy
-   сама по себе не заменяет application session и authorization. Не оставляйте
-   docs public.
+    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --env-file /opt/nest-js-starter/active-api.env --file /opt/nest-js-starter/docker-compose.production.yml --file /opt/nest-js-starter/docker-compose.production.rollback.yml)
 
-## Учётные данные и роли
+## Secret format and exposure
 
-- API запускается от отдельной non-root service identity с минимальными
-  правами: только чтение своего image/configuration и сетевой доступ к нужным
-  PostgreSQL, Redis и telemetry endpoints.
-- Миграции выполняются отдельным одноразовым identity с правами на schema;
-  runtime-identity не получает права на migration/DDL.
-- Выдавайте отдельные least-privilege credentials для PostgreSQL, Redis и
-  deployment control plane. Ограничьте Redis ACL только командами и keyspace,
-  нужными auth-сессиям и login limits.
-- Храните credentials и четыре auth secrets только в secret provider. Не
-  помещайте их в image, Git, shell history, логи, evidence или support tickets.
-  Отзывайте доступ уходящих людей и старые credentials по процедуре владельца.
+The filled server-side .env is the only persistent deployment/runtime secret
+file. It is 0600 before entry, after entry and after every rotation:
 
-## Auth Redis: durability contract
+    chmod 600 /opt/nest-js-starter/.env
+    stat -c '%a %n' /opt/nest-js-starter/.env
 
-Auth Redis содержит активные opaque sessions и login-limit state, это
-не disposable cache. Его data directory должен находиться на persistent storage,
-который переживает replacement container/VM и имеет проверяемое резервное
-копирование.
+PostgreSQL admin, migrator, runtime and Redis passwords use unpadded base64url
+with only A-Z, a-z, 0-9, hyphen and underscore. This excludes URL delimiters
+such as colon, at-sign, slash, question mark, hash and equals, so constructed
+DATABASE_URL and REDIS_AUTH_URL values cannot be corrupted. The four
+AUTH_SESSION_KEY_SECRET, AUTH_CSRF_SECRET, AUTH_RATE_LIMIT_KEY_SECRET and
+AUTH_NETWORK_METADATA_SECRET values are independent unpadded base64url
+encodings of exactly 32 random bytes (43 characters each), use canonical final
+base64url quanta and are pairwise distinct. POSTGRES_MIGRATOR_USER and
+POSTGRES_RUNTIME_USER are fixed to app_migrator and app_runtime so the Compose
+URLs cannot diverge from the tracked SQL role contract.
+The server inputs are POSTGRES_ADMIN_PASSWORD, POSTGRES_MIGRATOR_PASSWORD and
+POSTGRES_RUNTIME_PASSWORD plus REDIS_PASSWORD.
 
-Перед promotion проверьте у владельца Redis configuration:
+Never place them in image, Git, shell history, logs, command arguments, release
+metadata or tickets. Compose uses explicit environment mappings. The API
+receives only runtime DB/Redis/application inputs and auth secrets; the
+migrator receives only its migration DB URL and process identity. GHCR,
+PostgreSQL admin/migrator/runtime and Redis credentials never cross into the
+wrong process.
+Security rule: never place them in image, Git, shell history, logs, command
+arguments, release metadata or tickets.
 
-```text
-appendonly yes
-appendfsync everysec
-maxmemory-policy noeviction
-```
+Redis command argv contains no resolved password. Redis uses AOF and noeviction.
+Its container receives
+REDIS_PASSWORD through environment, writes a mode-0600 config under the
+mode-0700 noexec/nosuid/nodev /run/redis tmpfs, and execs redis-server from that
+config. The resolved Compose command contains only the variable reference.
 
-`appendfsync everysec` означает ограниченный, но не нулевой риск потери до
-последней секунды записей при аварии; более строгий `always` оценивают отдельно
-по latency. Контролируйте доступное место, AOF rewrite и успешное восстановление
-из backup. Не меняйте `REDIS_KEY_PREFIX`, Redis key bytes и не выполняйте
-automatic `FLUSHDB`/`FLUSHALL` как часть deployment или recovery.
+## Atomic rotation and recovery order
 
-## Перед запуском и после него
+Prepare a new protected file beside the existing one, validate its mode and
+syntax, then atomically replace the path:
 
-1. Проверьте, что domain/TLS, protected Swagger, proxy allowlist и секреты
-   настроены, но не выводите их значения.
-2. Убедитесь, что все API replicas получают один согласованный configuration
-   revision и что Redis использует authoritative persistent storage.
-3. После запуска проверьте `/health/live`, `/health/startup` и `/health/ready`;
-   readiness допускает traffic только при доступных PostgreSQL и auth
-   Redis.
-4. Если security input или Redis durability contract не подтверждён, остановите
-   promotion и эскалируйте владельцу infrastructure. Не исправляйте это
-   изменением application code или ослаблением readiness.
+    install -m 0600 /opt/nest-js-starter/.env /opt/nest-js-starter/.env.next
+    chmod 600 /opt/nest-js-starter/.env.next
+    mv -f /opt/nest-js-starter/.env.next /opt/nest-js-starter/.env
+    stat -c '%a %n' /opt/nest-js-starter/.env
+
+Rotate one secret class at a time. This per-secret recreation order retains only the old non-secret release
+identifier, never the old complete environment:
+
+1. GHCR: use a mode-0700 transient DOCKER_CONFIG, login with password-stdin,
+   pull and run production-preflight.sh, then logout and remove that directory.
+   On failure, retain the old deployment and discard only the temporary client
+   state.
+2. Auth: replace one of the four 32-byte encodings, recreate only API with the
+   canonical Compose prefix and verify public live/ready plus expected auth
+   boundaries. A failed smoke restores the previous single value atomically;
+   sessions are expected to be invalidated when the session key changes.
+3. Redis: rotate REDIS_PASSWORD, recreate auth Redis and API with the canonical
+   prefix, verify readiness and session/limit behavior, and restore the old
+   value atomically if bounded verification fails. Persistent Redis data is not
+   deleted.
+4. PostgreSQL: rotate admin, migrator and runtime role passwords separately
+   through a protected SQL client using stdin/environment, verify each role's
+   intended ownership/privileges, then recreate only the process that owns the
+   changed credential. Restore the previous role password and environment value
+   in the reverse order if verification fails; never merge the roles.
+
+Each recreation is explicit and bounded:
+
+    "${production_compose[@]}" up --detach --no-deps --wait api
+    "${production_compose[@]}" ps
+
+No complete .env copy is used for rollback. The separate `active-api.env`
+contains only the current non-secret API digest/revision and keeps rollback
+state effective for every later canonical Compose recovery command.
+
+## Public perimeter and host-owned Caddy
+
+PUBLIC_API_URL and CORS_ORIGINS are HTTPS. TLS terminates in host-owned Caddy;
+the API has no host port and is reached through the external CADDY_NETWORK
+alias. OBSERVABILITY_NETWORK is also an external host-owned input. The same non-secret CADDY_UPSTREAM_ALIAS is copied into the host Caddy
+process environment. Caddy does not automatically load
+/opt/nest-js-starter/.env.
+
+    api.example.com {
+        reverse_proxy {$CADDY_UPSTREAM_ALIAS}:3000
+    }
+    caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+    sudo systemctl reload caddy
+    docker network inspect "$CADDY_NETWORK" >/dev/null
+    docker inspect "$CADDY_CONTAINER" --format '{{json .NetworkSettings.Networks}}'
+
+## PostgreSQL and hosted evidence boundary
+
+app_migrator and app_runtime are separate NOINHERIT, non-superuser login roles.
+Preparation fails closed on unexpected direct membership or SET ROLE capability.
+Migration/schema ownership stays with app_migrator. Runtime has DML and sequence
+access only, no DDL, temporary objects, public-object ownership or
+_prisma_migrations access.
+
+Local Compose config, SQL integration and helper tests prove repository
+contracts only. A hosted drill must separately verify HTTPS, Caddy routing,
+volume/network/readiness recovery, and the unique requestId-to-traceId path in
+Loki and Tempo. Those results remain unperformed repository evidence.
