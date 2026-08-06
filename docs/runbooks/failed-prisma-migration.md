@@ -3,7 +3,7 @@
 This is a forward-only recovery reference for the tracked Compose path. The
 canonical prefix is:
 
-    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --file /opt/nest-js-starter/docker-compose.production.yml)
+    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --env-file /opt/nest-js-starter/active-api.env --file /opt/nest-js-starter/docker-compose.production.yml --file /opt/nest-js-starter/docker-compose.production.rollback.yml)
 
 MIGRATION_DATABASE_URL and RUNTIME_DATABASE_URL are historical names, not
 canonical production inputs. Do not create a host pnpm promotion process.

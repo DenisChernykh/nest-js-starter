@@ -1,5 +1,5 @@
 services:
   api:
-    image: ${ROLLBACK_APP_IMAGE:?ROLLBACK_APP_IMAGE is required}
+    image: ${ACTIVE_API_IMAGE:?ACTIVE_API_IMAGE is required}
     environment:
-      SERVICE_REVISION: ${ROLLBACK_SERVICE_REVISION:?ROLLBACK_SERVICE_REVISION is required}
+      SERVICE_REVISION: ${ACTIVE_API_REVISION:?ACTIVE_API_REVISION is required}

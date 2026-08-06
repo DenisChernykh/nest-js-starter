@@ -5,7 +5,7 @@ secrets or mutate a VPS, DNS, Caddy, Alloy, Loki, Tempo or Grafana.
 
 The canonical production prefix is:
 
-    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --file /opt/nest-js-starter/docker-compose.production.yml)
+    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --env-file /opt/nest-js-starter/active-api.env --file /opt/nest-js-starter/docker-compose.production.yml --file /opt/nest-js-starter/docker-compose.production.rollback.yml)
 
 ## Secret format and exposure
 
@@ -21,7 +21,10 @@ such as colon, at-sign, slash, question mark, hash and equals, so constructed
 DATABASE_URL and REDIS_AUTH_URL values cannot be corrupted. The four
 AUTH_SESSION_KEY_SECRET, AUTH_CSRF_SECRET, AUTH_RATE_LIMIT_KEY_SECRET and
 AUTH_NETWORK_METADATA_SECRET values are independent unpadded base64url
-encodings of exactly 32 random bytes (43 characters each).
+encodings of exactly 32 random bytes (43 characters each), use canonical final
+base64url quanta and are pairwise distinct. POSTGRES_MIGRATOR_USER and
+POSTGRES_RUNTIME_USER are fixed to app_migrator and app_runtime so the Compose
+URLs cannot diverge from the tracked SQL role contract.
 The server inputs are POSTGRES_ADMIN_PASSWORD, POSTGRES_MIGRATOR_PASSWORD and
 POSTGRES_RUNTIME_PASSWORD plus REDIS_PASSWORD.
 
@@ -76,7 +79,9 @@ Each recreation is explicit and bounded:
     "${production_compose[@]}" up --detach --no-deps --wait api
     "${production_compose[@]}" ps
 
-No complete .env copy is used for rollback.
+No complete .env copy is used for rollback. The separate `active-api.env`
+contains only the current non-secret API digest/revision and keeps rollback
+state effective for every later canonical Compose recovery command.
 
 ## Public perimeter and host-owned Caddy
 

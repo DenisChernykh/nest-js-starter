@@ -62,14 +62,14 @@ interface ResolvedComposeConfiguration {
 
 const appImage =
   'ghcr.io/example/nest-js-starter@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-const rollbackAppImage =
+const activeApiImage =
   'ghcr.io/example/nest-js-starter@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 const postgresImage =
   'postgres:18.4-trixie@sha256:3a82e1f56c8f0f5616a11103ac3d47e632c3938698946a7ad26da0df1334744a'
 const redisImage =
   'redis:8.8.0-trixie@sha256:234c902a2db49461a129e2d4aeff85b28cf20187ed274a67f6e50995fa713c7b'
 const serviceRevision = '0123456789abcdef0123456789abcdef01234567'
-const rollbackServiceRevision = 'fedcba9876543210fedcba9876543210fedcba98'
+const activeApiRevision = 'fedcba9876543210fedcba9876543210fedcba98'
 const secrets = Object.freeze({
   adminPassword: 'YWRtaW4tcGFzc3dvcmQxMjM0NTY',
   authCsrf: Buffer.alloc(32, 2).toString('base64url'),
@@ -105,12 +105,14 @@ function productionEnvironmentFile(): string {
     'POSTGRES_ADMIN_USER=postgres_admin',
     'POSTGRES_DB=nest_js_starter',
     'POSTGRES_MIGRATOR_PASSWORD=' + secrets.migratorPassword,
+    'POSTGRES_MIGRATOR_USER=app_migrator',
     'POSTGRES_RUNTIME_PASSWORD=' + secrets.runtimePassword,
+    'POSTGRES_RUNTIME_USER=app_runtime',
     'PUBLIC_API_URL=https://api.example.invalid',
     'REDIS_KEY_PREFIX=nest-js-starter',
     'REDIS_PASSWORD=' + secrets.redisPassword,
-    `ROLLBACK_APP_IMAGE=${rollbackAppImage}`,
-    'ROLLBACK_SERVICE_REVISION=' + rollbackServiceRevision,
+    `ACTIVE_API_IMAGE=${activeApiImage}`,
+    'ACTIVE_API_REVISION=' + activeApiRevision,
     'SERVICE_REVISION=' + serviceRevision,
     'SERVICE_VERSION=0.1.0-alpha.0',
     'TRUST_PROXY_CIDRS=10.0.0.0/8',
@@ -397,9 +399,9 @@ describe('production Compose runtime contract', () => {
     ]).configuration
 
     expect(rollback.services.migrator).toEqual(normal.services.migrator)
-    expect(rollback.services.api?.image).toBe(rollbackAppImage)
+    expect(rollback.services.api?.image).toBe(activeApiImage)
     expect(rollback.services.api?.environment?.SERVICE_REVISION).toBe(
-      rollbackServiceRevision,
+      activeApiRevision,
     )
 
     type MutableComposeService = {

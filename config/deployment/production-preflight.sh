@@ -25,6 +25,16 @@ validate_unpadded_base64url() {
   fi
 }
 
+validate_auth_secret() {
+  local name="$1"
+  local value="${!name-}"
+  require_environment "$name"
+  if [[ ! "$value" =~ ^[A-Za-z0-9_-]{43}$ ]] ||
+    [[ ! "${value: -1}" =~ ^[AEIMQUYcgkosw048]$ ]]; then
+    fail "$name must be the canonical unpadded base64url encoding of exactly 32 random bytes"
+  fi
+}
+
 require_environment APP_IMAGE
 require_environment SERVICE_REVISION
 
@@ -33,6 +43,12 @@ if [[ ! "$APP_IMAGE" =~ ^ghcr[.]io/[a-z0-9][a-z0-9._/-]*@sha256:[0-9a-f]{64}$ ]]
 fi
 if [[ ! "$SERVICE_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
   fail 'SERVICE_REVISION must be exactly 40 lowercase hexadecimal characters'
+fi
+if [[ "${POSTGRES_MIGRATOR_USER-}" != 'app_migrator' ]]; then
+  fail 'POSTGRES_MIGRATOR_USER must be app_migrator'
+fi
+if [[ "${POSTGRES_RUNTIME_USER-}" != 'app_runtime' ]]; then
+  fail 'POSTGRES_RUNTIME_USER must be app_runtime'
 fi
 
 for secret_name in \
@@ -43,16 +59,23 @@ for secret_name in \
   validate_unpadded_base64url "$secret_name"
 done
 
-for auth_secret_name in \
-  AUTH_SESSION_KEY_SECRET \
-  AUTH_CSRF_SECRET \
-  AUTH_RATE_LIMIT_KEY_SECRET \
-  AUTH_NETWORK_METADATA_SECRET; do
-  validate_unpadded_base64url "$auth_secret_name"
-  auth_value="${!auth_secret_name}"
-  if (( ${#auth_value} != 43 )); then
-    fail "$auth_secret_name must encode exactly 32 random bytes"
-  fi
+auth_secret_names=(
+  AUTH_SESSION_KEY_SECRET
+  AUTH_CSRF_SECRET
+  AUTH_RATE_LIMIT_KEY_SECRET
+  AUTH_NETWORK_METADATA_SECRET
+)
+for auth_secret_name in "${auth_secret_names[@]}"; do
+  validate_auth_secret "$auth_secret_name"
+done
+for ((left_index = 0; left_index < ${#auth_secret_names[@]}; left_index++)); do
+  for ((right_index = left_index + 1; right_index < ${#auth_secret_names[@]}; right_index++)); do
+    left_name="${auth_secret_names[$left_index]}"
+    right_name="${auth_secret_names[$right_index]}"
+    if [[ "${!left_name}" == "${!right_name}" ]]; then
+      fail 'auth secrets must be pairwise unique'
+    fi
+  done
 done
 
 if ! command -v docker >/dev/null 2>&1; then

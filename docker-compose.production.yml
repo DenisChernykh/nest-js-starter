@@ -68,7 +68,7 @@ services:
       - run
       - start:migrate
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_MIGRATOR_USER:-app_migrator}:${POSTGRES_MIGRATOR_PASSWORD:?POSTGRES_MIGRATOR_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_MIGRATOR_USER:?POSTGRES_MIGRATOR_USER is required}:${POSTGRES_MIGRATOR_PASSWORD:?POSTGRES_MIGRATOR_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
       NODE_ENV: production
       SERVICE_REVISION: ${SERVICE_REVISION:?SERVICE_REVISION is required}
       SERVICE_VERSION: ${SERVICE_VERSION:?SERVICE_VERSION is required}
@@ -103,7 +103,7 @@ services:
       PUBLIC_API_URL: ${PUBLIC_API_URL:?PUBLIC_API_URL is required}
       CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
       TRUST_PROXY_CIDRS: ${TRUST_PROXY_CIDRS:?TRUST_PROXY_CIDRS is required}
-      DATABASE_URL: postgresql://${POSTGRES_RUNTIME_USER:-app_runtime}:${POSTGRES_RUNTIME_PASSWORD:?POSTGRES_RUNTIME_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_RUNTIME_USER:?POSTGRES_RUNTIME_USER is required}:${POSTGRES_RUNTIME_PASSWORD:?POSTGRES_RUNTIME_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:?DATABASE_POOL_MAX is required}
       REDIS_AUTH_URL: redis://default:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis-auth:6379
       REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:?REDIS_KEY_PREFIX is required}

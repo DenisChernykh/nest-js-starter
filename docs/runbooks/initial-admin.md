@@ -19,6 +19,30 @@ pnpm auth:create-admin -- --email admin@example.com
 Терминал покажет `Password:`, отключит echo на время ввода и восстановит режим
 TTY после Enter. Пароль нельзя передавать через аргументы или переменные среды.
 
+## Production Compose
+
+На VPS не устанавливаются исходники, `tsx` или development-зависимости. После
+успешных миграций и `finalize-roles.sql` запустите скомпилированную one-shot
+команду из того же immutable image. Канонический Compose prefix и защищённый
+`.env` определены в [production deployment](./deployment.md).
+
+```bash
+set -eu
+set +x
+set -a
+. /opt/nest-js-starter/.env
+set +a
+production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --env-file /opt/nest-js-starter/active-api.env --file /opt/nest-js-starter/docker-compose.production.yml --file /opt/nest-js-starter/docker-compose.production.rollback.yml)
+export DATABASE_URL="postgresql://app_runtime:${POSTGRES_RUNTIME_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public"
+"${production_compose[@]}" run --rm --no-deps -e DATABASE_URL migrator \
+  node dist/bootstrap/admin/main.js --email admin@example.com
+unset DATABASE_URL
+```
+
+URL передаётся контейнеру только через environment, а пароль администратора —
+через интерактивный stdin. Команда не получает PostgreSQL admin/migrator,
+Redis, auth или GHCR credentials.
+
 ## Piped stdin
 
 Для автоматизированного защищённого окружения пароль можно передать одной

@@ -102,6 +102,26 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$PO
       '/tmp/prepare-roles.sql',
       'config/deployment/postgres/prepare-roles.sql',
     )
+
+    await adminPool.query(`
+      CREATE ROLE compromised_role NOLOGIN;
+      GRANT app_migrator TO compromised_role;
+    `)
+    const inboundMembership = await adminPool.query<{ can_set: boolean }>(
+      "SELECT pg_has_role('compromised_role', 'app_migrator', 'SET') AS can_set",
+    )
+    expect(inboundMembership.rows).toEqual([{ can_set: true }])
+    await expect(
+      runRoleScript(
+        '/tmp/prepare-roles.sql',
+        'config/deployment/postgres/prepare-roles.sql',
+      ),
+    ).rejects.toThrow()
+    await adminPool.query('REVOKE app_migrator FROM compromised_role')
+    await runRoleScript(
+      '/tmp/prepare-roles.sql',
+      'config/deployment/postgres/prepare-roles.sql',
+    )
     await runRoleScript(
       '/tmp/prepare-roles.sql',
       'config/deployment/postgres/prepare-roles.sql',
@@ -138,6 +158,14 @@ psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$PO
       '/tmp/finalize-roles.sql',
       'config/deployment/postgres/finalize-roles.sql',
     )
+    await adminPool.query('GRANT app_runtime TO compromised_role')
+    await expect(
+      runRoleScript(
+        '/tmp/finalize-roles.sql',
+        'config/deployment/postgres/finalize-roles.sql',
+      ),
+    ).rejects.toThrow()
+    await adminPool.query('REVOKE app_runtime FROM compromised_role')
     await runRoleScript(
       '/tmp/finalize-roles.sql',
       'config/deployment/postgres/finalize-roles.sql',

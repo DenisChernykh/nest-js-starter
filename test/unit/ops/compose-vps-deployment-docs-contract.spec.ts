@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 
 const baseline = '608410abc2885010a266075eb4b0107d1fc69417'
 const canonicalComposePrefix =
-  'production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --file /opt/nest-js-starter/docker-compose.production.yml)'
+  'production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --env-file /opt/nest-js-starter/active-api.env --file /opt/nest-js-starter/docker-compose.production.yml --file /opt/nest-js-starter/docker-compose.production.rollback.yml)'
 const productionRunbooks = [
   'docs/runbooks/deployment.md',
   'docs/runbooks/deployment-preparation.md',
@@ -103,7 +103,7 @@ describe('Compose VPS deployment documentation contract', () => {
       '"${production_compose[@]}" exec -T postgres',
       'prepare-roles.sql',
       '"${production_compose[@]}" up --detach migrator',
-      '"${production_compose[@]}" wait migrator',
+      'timeout --foreground --signal=TERM --kill-after=30s 300s "${production_compose[@]}" wait migrator',
       '"${production_compose[@]}" ps --all migrator',
       'finalize-roles.sql',
       '"${production_compose[@]}" up --detach --wait api',
@@ -173,10 +173,11 @@ describe('Compose VPS deployment documentation contract', () => {
       'no down-migration',
       'previous non-secret image/revision',
       'docker-compose.production.rollback.yml',
-      'ROLLBACK_APP_IMAGE',
-      'ROLLBACK_SERVICE_REVISION',
+      'ACTIVE_API_IMAGE',
+      'ACTIVE_API_REVISION',
+      'active-api.env',
       'does not edit /opt/nest-js-starter/.env',
-      '"${production_compose[@]}" --file /opt/nest-js-starter/docker-compose.production.rollback.yml up --detach --no-deps --wait api',
+      '"${production_compose[@]}" up --detach --no-deps --wait api',
       'does not invoke the migrator',
       'SERVICE_REVISION',
     ]) {
@@ -217,6 +218,34 @@ describe('Compose VPS deployment documentation contract', () => {
     expect(backupRestore).toContain('isolated restore validation')
     expect(backupRestore).not.toContain('production promotion path')
     expect(backupRestore).toContain('POSTGRES_ADMIN_USER')
+
+    for (const phrase of [
+      'set -a',
+      'set +a',
+      'unset GHCR_READ_TOKEN GHCR_USERNAME',
+      'cat /proc/sys/kernel/random/uuid',
+      'startup_status',
+      'ready_status',
+      'auth_status="$(curl --silent --show-error --max-time 10',
+      'loki_response="$(mktemp)"',
+      'tempo_response="$(mktemp)"',
+      'dist/bootstrap/admin/main.js',
+      'stop --timeout 30 migrator',
+    ]) {
+      expect(deployment).toContain(phrase)
+    }
+    expect(deployment).not.toContain('request_id="production-drill-')
+
+    for (const phrase of [
+      'aws s3 cp',
+      'shasum -a 256 --check',
+      'prepare-roles.sql',
+      'finalize-roles.sql',
+      'cleanup_backup_workdir',
+      'cleanup_restore_workdir',
+    ]) {
+      expect(backupRestore).toContain(phrase)
+    }
 
     for (const phrase of [
       'full stage gate',

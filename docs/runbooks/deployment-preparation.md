@@ -28,7 +28,7 @@ support tickets.
 
 Every production command uses this exact prefix:
 
-    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --file /opt/nest-js-starter/docker-compose.production.yml)
+    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --env-file /opt/nest-js-starter/active-api.env --file /opt/nest-js-starter/docker-compose.production.yml --file /opt/nest-js-starter/docker-compose.production.rollback.yml)
 
 ## Inputs and immutable publication
 
@@ -51,14 +51,25 @@ Use the transient client credential directory and the tracked executable helper:
 
     set -eu
     set +x
+    set -a
     . /opt/nest-js-starter/.env
-    registry_config="$(mktemp -d /run/user/$(id -u)/nest-js-starter-ghcr.XXXXXX)"
-    chmod 700 "$registry_config"
-    printf '%s' "$GHCR_READ_TOKEN" | DOCKER_CONFIG="$registry_config" docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
-    DOCKER_CONFIG="$registry_config" docker pull "$APP_IMAGE"
-    DOCKER_CONFIG="$registry_config" /opt/nest-js-starter/config/deployment/production-preflight.sh
-    DOCKER_CONFIG="$registry_config" docker logout ghcr.io >/dev/null 2>&1 || true
-    rm -rf "$registry_config"
+    set +a
+    (
+      registry_config="$(mktemp -d /run/user/$(id -u)/nest-js-starter-ghcr.XXXXXX)"
+      chmod 700 "$registry_config"
+      trap 'DOCKER_CONFIG="$registry_config" docker logout ghcr.io >/dev/null 2>&1 || true; rm -rf "$registry_config"' EXIT
+      trap 'exit 129' HUP
+      trap 'exit 130' INT
+      trap 'exit 143' TERM
+      printf '%s' "$GHCR_READ_TOKEN" | DOCKER_CONFIG="$registry_config" docker login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+      DOCKER_CONFIG="$registry_config" docker pull "$APP_IMAGE"
+      DOCKER_CONFIG="$registry_config" /opt/nest-js-starter/config/deployment/production-preflight.sh
+    )
+    unset GHCR_READ_TOKEN GHCR_USERNAME
+    active_api_next="$(mktemp /opt/nest-js-starter/.active-api.env.XXXXXX)"
+    chmod 0640 "$active_api_next"
+    printf 'ACTIVE_API_IMAGE=%s\nACTIVE_API_REVISION=%s\n' "$APP_IMAGE" "$SERVICE_REVISION" >"$active_api_next"
+    mv -f "$active_api_next" /opt/nest-js-starter/active-api.env
 
 The helper checks the lowercase GHCR digest, exact revision,
 org.opencontainers.image.revision label and RepoDigests. It does not print
@@ -77,7 +88,10 @@ The fixed order is:
     "${production_compose[@]}" up --detach --wait postgres redis-auth
     "${production_compose[@]}" exec -T postgres sh -ceu 'psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --file /opt/nest-js-starter/deployment/postgres/prepare-roles.sql'
     "${production_compose[@]}" up --detach migrator
-    "${production_compose[@]}" wait migrator
+    if ! timeout --foreground --signal=TERM --kill-after=30s 300s "${production_compose[@]}" wait migrator; then
+      "${production_compose[@]}" stop --timeout 30 migrator || true
+      exit 1
+    fi
     "${production_compose[@]}" ps --all migrator
     "${production_compose[@]}" exec -T postgres sh -ceu 'psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --file /opt/nest-js-starter/deployment/postgres/finalize-roles.sql'
     "${production_compose[@]}" up --detach --wait api

@@ -3,7 +3,7 @@
 This reference explains the separate PostgreSQL roles used by the one Compose
 production path. The canonical prefix is:
 
-    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --file /opt/nest-js-starter/docker-compose.production.yml)
+    production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --env-file /opt/nest-js-starter/active-api.env --file /opt/nest-js-starter/docker-compose.production.yml --file /opt/nest-js-starter/docker-compose.production.rollback.yml)
 
 MIGRATION_DATABASE_URL and RUNTIME_DATABASE_URL are historical names and are not
 canonical production inputs. Production uses POSTGRES_ADMIN_USER,
@@ -17,12 +17,21 @@ DATABASE_URL values explicitly.
 The SQL files are read-only mounts outside docker-entrypoint-initdb.d. Run them
 manually through the canonical Compose project:
 
+    set -eu
     "${production_compose[@]}" config --quiet
     "${production_compose[@]}" up --detach --wait postgres redis-auth
     "${production_compose[@]}" exec -T postgres sh -ceu 'psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --file /opt/nest-js-starter/deployment/postgres/prepare-roles.sql'
     "${production_compose[@]}" up --detach migrator
-    "${production_compose[@]}" wait migrator
+    if ! timeout --foreground --signal=TERM --kill-after=30s 300s "${production_compose[@]}" wait migrator; then
+      "${production_compose[@]}" stop --timeout 30 migrator || true
+      "${production_compose[@]}" ps --all migrator
+      "${production_compose[@]}" logs --tail=200 migrator
+      exit 1
+    fi
     "${production_compose[@]}" ps --all migrator
+    migrator_id="$("${production_compose[@]}" ps --all --quiet migrator)"
+    migrator_exit="$(docker inspect "$migrator_id" --format '{{.State.ExitCode}}')"
+    test "$migrator_exit" = 0
     "${production_compose[@]}" exec -T postgres sh -ceu 'psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --file /opt/nest-js-starter/deployment/postgres/finalize-roles.sql'
     "${production_compose[@]}" up --detach --wait api
 

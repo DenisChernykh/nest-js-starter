@@ -1,5 +1,29 @@
 \set ON_ERROR_STOP on
 
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_auth_members AS membership
+    JOIN pg_roles AS member ON member.oid = membership.member
+    WHERE member.rolname IN ('app_migrator', 'app_runtime')
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_auth_members AS membership
+    JOIN pg_roles AS granted_role ON granted_role.oid = membership.roleid
+    WHERE granted_role.rolname IN ('app_migrator', 'app_runtime')
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_roles AS member
+    JOIN pg_roles AS target ON target.rolname <> member.rolname
+    WHERE member.rolname IN ('app_migrator', 'app_runtime')
+      AND pg_has_role(member.rolname, target.rolname, 'SET')
+  ) THEN
+    RAISE EXCEPTION 'refusing inbound or outbound application-role membership or SET ROLE capability';
+  END IF;
+END
+$$;
+
 SELECT format('REVOKE TEMPORARY ON DATABASE %I FROM PUBLIC', current_database()) \gexec
 GRANT USAGE ON SCHEMA public TO app_runtime;
 REVOKE CREATE ON SCHEMA public FROM app_runtime;
@@ -68,6 +92,12 @@ SELECT (
     FROM pg_auth_members AS membership
     JOIN pg_roles AS member ON member.oid = membership.member
     WHERE member.rolname IN ('app_migrator', 'app_runtime')
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM pg_auth_members AS membership
+    JOIN pg_roles AS granted_role ON granted_role.oid = membership.roleid
+    WHERE granted_role.rolname IN ('app_migrator', 'app_runtime')
   )
   AND NOT EXISTS (
     SELECT 1

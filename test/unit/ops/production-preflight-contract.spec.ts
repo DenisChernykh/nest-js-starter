@@ -6,17 +6,24 @@ import { join } from 'node:path'
 const appImage =
   'ghcr.io/example/nest-js-starter@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 const serviceRevision = '0123456789abcdef0123456789abcdef01234567'
-const authSecret = Buffer.alloc(32, 1).toString('base64url')
+const authSecrets = {
+  csrf: Buffer.alloc(32, 2).toString('base64url'),
+  network: Buffer.alloc(32, 4).toString('base64url'),
+  rateLimit: Buffer.alloc(32, 3).toString('base64url'),
+  session: Buffer.alloc(32, 1).toString('base64url'),
+}
 
 const validEnvironment = {
   APP_IMAGE: appImage,
-  AUTH_CSRF_SECRET: authSecret,
-  AUTH_NETWORK_METADATA_SECRET: authSecret,
-  AUTH_RATE_LIMIT_KEY_SECRET: authSecret,
-  AUTH_SESSION_KEY_SECRET: authSecret,
+  AUTH_CSRF_SECRET: authSecrets.csrf,
+  AUTH_NETWORK_METADATA_SECRET: authSecrets.network,
+  AUTH_RATE_LIMIT_KEY_SECRET: authSecrets.rateLimit,
+  AUTH_SESSION_KEY_SECRET: authSecrets.session,
   POSTGRES_ADMIN_PASSWORD: 'YWRtaW4tcGFzc3dvcmQxMjM0NTY',
   POSTGRES_MIGRATOR_PASSWORD: 'bWlncmF0b3ItcGFzc3dvcmQxMjM0',
+  POSTGRES_MIGRATOR_USER: 'app_migrator',
   POSTGRES_RUNTIME_PASSWORD: 'cnVudGltZS1wYXNzd29yZDEyMzQ',
+  POSTGRES_RUNTIME_USER: 'app_runtime',
   REDIS_PASSWORD: 'cmVkaXMtcGFzc3dvcmQxMjM0NTY',
   SERVICE_REVISION: serviceRevision,
 }
@@ -115,6 +122,26 @@ describe('production preflight helper contract', () => {
 
     expect(result.status).not.toBe(0)
     expect(result.output).not.toContain(value)
+  })
+
+  it('rejects non-canonical and repeated auth secrets', () => {
+    const nonCanonical = `${authSecrets.session.slice(0, -1)}B`
+    const malformed = runHelper({ AUTH_SESSION_KEY_SECRET: nonCanonical })
+    const repeated = runHelper({ AUTH_CSRF_SECRET: authSecrets.session })
+
+    expect(malformed.status).not.toBe(0)
+    expect(malformed.output).not.toContain(nonCanonical)
+    expect(repeated.status).not.toBe(0)
+    expect(repeated.output).not.toContain(authSecrets.session)
+  })
+
+  it.each([
+    ['migrator', { POSTGRES_MIGRATOR_USER: 'custom_migrator' }],
+    ['runtime', { POSTGRES_RUNTIME_USER: 'custom_runtime' }],
+  ])('rejects a non-canonical %s role name', (_name, overrides) => {
+    const result = runHelper(overrides)
+
+    expect(result.status).not.toBe(0)
   })
 
   it.each([
