@@ -40,6 +40,20 @@ export interface AuthRuntimeDefaults {
   readonly loginIpLimit: number
   readonly loginAccountLimit: number
   readonly loginWindowMs: number
+  readonly selfService: {
+    readonly verificationTtlMs: number
+    readonly passwordResetTtlMs: number
+    readonly acceptedResponseFloorMs: number
+    readonly mailDeliveryTimeoutMs: number
+    readonly registrationIpLimit: number
+    readonly registrationAccountLimit: number
+    readonly resendIpLimit: number
+    readonly resendAccountLimit: number
+    readonly resetRequestIpLimit: number
+    readonly resetRequestAccountLimit: number
+    readonly requestWindowMs: number
+    readonly resendCooldownMs: number
+  }
 }
 
 /** Fixed OpenTelemetry trace exporter and batch processor deadlines. */
@@ -97,6 +111,20 @@ export const runtimeDefaults: RuntimeDefaults = Object.freeze({
     loginIpLimit: 20,
     loginAccountLimit: 10,
     loginWindowMs: 900_000,
+    selfService: Object.freeze({
+      verificationTtlMs: 86_400_000,
+      passwordResetTtlMs: 1_800_000,
+      acceptedResponseFloorMs: 2_000,
+      mailDeliveryTimeoutMs: 1_500,
+      registrationIpLimit: 10,
+      registrationAccountLimit: 3,
+      resendIpLimit: 10,
+      resendAccountLimit: 3,
+      resetRequestIpLimit: 10,
+      resetRequestAccountLimit: 3,
+      requestWindowMs: 3_600_000,
+      resendCooldownMs: 60_000,
+    }),
   }),
   observability: Object.freeze({
     exporterTimeoutMs: 1_000,

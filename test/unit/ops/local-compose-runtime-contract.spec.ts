@@ -118,6 +118,32 @@ function requireService(
 }
 
 describe('local Compose runtime contract', () => {
+  it('keeps Mailpit opt-in, loopback-only and independent from API readiness', () => {
+    const configuration = resolveLocalCompose(['mail'])
+    const mail = requireService(configuration, 'mail')
+
+    expect(mail.profiles).toEqual(['mail'])
+    expect(mail.image).toBe(
+      'axllent/mailpit:v1.30.5@sha256:b868afa176bfd6cce2323ea316cd99ccad77915e51e595748f6d786700ecf109',
+    )
+    expect(mail.environment).toEqual({ MP_MAX_MESSAGES: '500' })
+    expect(mail.ports).toEqual([
+      expect.objectContaining({
+        host_ip: '127.0.0.1',
+        published: '1025',
+        target: 1025,
+      }),
+      expect.objectContaining({
+        host_ip: '127.0.0.1',
+        published: '8025',
+        target: 8025,
+      }),
+    ])
+    expect(mail.volumes).toBeUndefined()
+    expect(mail.depends_on).toBeUndefined()
+    expect(configuration.services.api).toBeUndefined()
+  })
+
   it('runs committed migrations before the watched API and keeps Redis separate', () => {
     const configuration = resolveLocalCompose()
     const migrator = requireService(configuration, 'migrator')

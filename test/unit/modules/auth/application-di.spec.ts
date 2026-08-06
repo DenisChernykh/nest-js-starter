@@ -9,6 +9,8 @@ import {
   AUTH_AUDIT,
   NOOP_AUTH_AUDIT,
 } from '@/modules/auth/application/auth-audit.port'
+import type { AuthMailDeliveryPort } from '@/modules/auth/application/auth-mail-delivery.port'
+import { AUTH_MAIL_DELIVERY } from '@/modules/auth/application/auth-mail-delivery.port'
 import {
   AUTH_DUMMY_PASSWORD_HASH,
   AUTH_SESSION_CLEANUP_OBSERVER,
@@ -18,6 +20,8 @@ import {
 } from '@/modules/auth/application/auth.types'
 import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
 import { ChangePasswordUseCase } from '@/modules/auth/application/change-password.use-case'
+import { ConfirmEmailVerificationUseCase } from '@/modules/auth/application/confirm-email-verification.use-case'
+import { ConfirmPasswordResetUseCase } from '@/modules/auth/application/confirm-password-reset.use-case'
 import { CreateInitialAdminUseCase } from '@/modules/auth/application/create-initial-admin.use-case'
 import { CreateUserUseCase } from '@/modules/auth/application/create-user.use-case'
 import { GetCsrfTokenQuery } from '@/modules/auth/application/get-csrf-token.query'
@@ -36,6 +40,11 @@ import {
 } from '@/modules/auth/application/password-hasher.port'
 import type { PermissionKey } from '@/modules/auth/application/permission'
 import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
+import { ONE_TIME_TOKEN_CODEC } from '@/modules/auth/application/one-time-token-codec.port'
+import { PUBLIC_AUTH_RATE_LIMITER } from '@/modules/auth/application/public-auth-rate-limiter.port'
+import { RegisterUserUseCase } from '@/modules/auth/application/register-user.use-case'
+import { RequestPasswordResetUseCase } from '@/modules/auth/application/request-password-reset.use-case'
+import { ResendEmailVerificationUseCase } from '@/modules/auth/application/resend-email-verification.use-case'
 import {
   createAuthRoleRegistry,
   RoleRegistry,
@@ -54,10 +63,15 @@ import { RedisLoginRateLimiter } from '@/modules/auth/infrastructure/redis-login
 import { RedisSessionStore } from '@/modules/auth/infrastructure/redis-session.store'
 import { AuthModule } from '@/modules/auth/composition/auth.module'
 import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
+import { SelfServiceAuthPolicy } from '@/modules/auth/application/self-service-auth.policy'
+import type { OneTimeTokenCodecPort } from '@/modules/auth/application/one-time-token-codec.port'
+import type { PublicAuthRateLimiterPort } from '@/modules/auth/application/public-auth-rate-limiter.port'
 
 const applicationClasses = [
   AuthenticateSessionUseCase,
   ChangePasswordUseCase,
+  ConfirmEmailVerificationUseCase,
+  ConfirmPasswordResetUseCase,
   CreateInitialAdminUseCase,
   CreateUserUseCase,
   GetCsrfTokenQuery,
@@ -67,6 +81,9 @@ const applicationClasses = [
   LogoutAllUseCase,
   LogoutUseCase,
   RevokeSessionUseCase,
+  RegisterUserUseCase,
+  RequestPasswordResetUseCase,
+  ResendEmailVerificationUseCase,
 ] as const
 
 const apiApplicationClasses = applicationClasses.filter(
@@ -87,11 +104,17 @@ describe('auth application Nest dependency injection', () => {
     const persistence: AuthPersistencePort = {
       bootstrapInitialAdmin: jest.fn(),
       createUser: jest.fn(),
+      deletePasswordResetToken: jest.fn(),
       findAuthProjectionByUserId: jest.fn(),
       findCredentialByNormalizedEmail: jest.fn(),
       incrementSessionGeneration: jest.fn(),
       readGlobalSessionEpoch: jest.fn(),
       replacePasswordIfVersion: jest.fn(),
+      registerSelfServiceUser: jest.fn(),
+      rotateEmailVerificationToken: jest.fn(),
+      confirmEmailVerification: jest.fn(),
+      rotatePasswordResetToken: jest.fn(),
+      confirmPasswordReset: jest.fn(),
     }
     const passwords: PasswordHasherPort = {
       hash: jest.fn(),
@@ -132,6 +155,32 @@ describe('auth application Nest dependency injection', () => {
         },
         { provide: AUTH_DUMMY_PASSWORD_HASH, useValue: 'dummy-hash' },
         { provide: RoleRegistry, useValue: createAuthRoleRegistry([]) },
+        {
+          provide: ONE_TIME_TOKEN_CODEC,
+          useValue: {
+            issue: jest.fn(),
+            digest: jest.fn(),
+          } as OneTimeTokenCodecPort,
+        },
+        {
+          provide: PUBLIC_AUTH_RATE_LIMITER,
+          useValue: { consume: jest.fn() } as PublicAuthRateLimiterPort,
+        },
+        {
+          provide: AUTH_MAIL_DELIVERY,
+          useValue: {
+            sendEmailVerification: jest.fn(),
+            sendPasswordReset: jest.fn(),
+          } as AuthMailDeliveryPort,
+        },
+        {
+          provide: SelfServiceAuthPolicy,
+          useValue: new SelfServiceAuthPolicy({
+            mode: 'disabled',
+            verificationTtlMs: 86_400_000,
+            passwordResetTtlMs: 1_800_000,
+          }),
+        },
       ],
     }).compile()
 

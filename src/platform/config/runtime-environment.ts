@@ -146,6 +146,19 @@ export function buildApiRuntimeConfig(
         environment.AUTH_NETWORK_METADATA_SECRET,
       ),
       csrfOrigins: Object.freeze(csrfOrigins),
+      selfService: Object.freeze({
+        mode: environment.AUTH_SELF_SERVICE_MODE,
+        ...(environment.AUTH_PUBLIC_APP_URL === undefined
+          ? {}
+          : { publicAppUrl: environment.AUTH_PUBLIC_APP_URL }),
+        ...(environment.AUTH_SMTP_URL === undefined
+          ? {}
+          : { smtpUrl: environment.AUTH_SMTP_URL }),
+        ...(environment.AUTH_MAIL_FROM === undefined
+          ? {}
+          : { mailFrom: environment.AUTH_MAIL_FROM }),
+        ...runtimeDefaults.auth.selfService,
+      }),
     }),
   })
 }

@@ -13,6 +13,7 @@ describe('PrismaAuthRepository', () => {
   let container: StartedPostgreSqlContainer
   let provider: PrismaClientProvider
   let repository: PrismaAuthRepository
+  let transaction: PrismaTransactionAdapter
 
   beforeAll(async () => {
     container = await startPostgresContainer()
@@ -33,7 +34,7 @@ describe('PrismaAuthRepository', () => {
     const config = new RuntimeConfigService(environment)
     const context = new PrismaTransactionContext()
     provider = new PrismaClientProvider(config, context)
-    const transaction = new PrismaTransactionAdapter(provider, context, config)
+    transaction = new PrismaTransactionAdapter(provider, context, config)
     repository = new PrismaAuthRepository(provider, transaction)
     await provider.connect(AbortSignal.timeout(2_000))
   })
@@ -143,6 +144,49 @@ describe('PrismaAuthRepository', () => {
     await expect(repository.incrementSessionGeneration(user.id)).resolves.toBe(
       1n,
     )
+  })
+
+  it('deletes a pending reset token inside the credential transition transaction', async () => {
+    const user = await provider.withClient(async (client) => {
+      const created = await client.user.create({
+        data: {
+          email: 'change-password@example.com',
+          normalizedEmail: 'change-password@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'old', version: 2 } },
+        },
+      })
+      await client.passwordResetToken.create({
+        data: {
+          userId: created.id,
+          tokenDigest: Buffer.alloc(32, 7).toString('base64url'),
+          expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+          createdAt: new Date('2026-08-06T00:00:00.000Z'),
+        },
+      })
+      return created
+    })
+
+    await transaction.run(async () => {
+      expect(await repository.replacePasswordIfVersion(user.id, 2, 'new')).toBe(
+        true,
+      )
+      await repository.deletePasswordResetToken(user.id)
+      await repository.incrementSessionGeneration(user.id)
+    })
+
+    await provider.withClient(async (client) => {
+      const persisted = await client.user.findUniqueOrThrow({
+        where: { id: user.id },
+        include: { credential: true },
+      })
+      expect(persisted.credential?.passwordHash).toBe('new')
+      expect(persisted.credential?.version).toBe(3)
+      expect(persisted.sessionGeneration).toBe(1n)
+      expect(
+        await client.passwordResetToken.count({ where: { userId: user.id } }),
+      ).toBe(0)
+    })
   })
 
   it('allows exactly one concurrent initial admin bootstrap', async () => {

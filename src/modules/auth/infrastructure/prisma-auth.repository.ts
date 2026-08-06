@@ -104,6 +104,12 @@ export class PrismaAuthRepository implements AuthPersistencePort {
     return user.sessionGeneration
   }
 
+  public async deletePasswordResetToken(userId: string): Promise<void> {
+    await this.provider.withClient((client) =>
+      client.passwordResetToken.deleteMany({ where: { userId } }),
+    )
+  }
+
   public bootstrapInitialAdmin(
     input: InitialAdminInput,
   ): Promise<InitialAdminResult> {
@@ -210,8 +216,9 @@ export class PrismaAuthRepository implements AuthPersistencePort {
   public async rotateEmailVerificationToken(
     normalizedEmail: string,
     token: SelfServiceTokenInput,
-    _now: Date,
+    now: Date,
   ): Promise<SelfServiceDeliveryTarget | undefined> {
+    if (token.expiresAt <= now) return undefined
     return this.transaction.run(() =>
       this.provider.withClient(async (client) => {
         const user = await client.user.findUnique({
@@ -286,8 +293,9 @@ export class PrismaAuthRepository implements AuthPersistencePort {
   public async rotatePasswordResetToken(
     normalizedEmail: string,
     token: SelfServiceTokenInput,
-    _now: Date,
+    now: Date,
   ): Promise<SelfServiceDeliveryTarget | undefined> {
+    if (token.expiresAt <= now) return undefined
     return this.transaction.run(() =>
       this.provider.withClient(async (client) => {
         const user = await client.user.findUnique({

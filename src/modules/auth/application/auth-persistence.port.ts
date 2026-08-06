@@ -36,6 +36,7 @@ export interface AuthPersistencePort {
   bootstrapInitialAdmin(input: InitialAdminInput): Promise<InitialAdminResult>
   /** Atomically creates one user, credential and deduplicated role set. */
   createUser(input: UserProvisioningInput): Promise<CreateUserResult>
+  deletePasswordResetToken(userId: string): Promise<void>
   registerSelfServiceUser(
     input: SelfServiceRegistrationInput,
   ): Promise<SelfServiceRegistrationResult>

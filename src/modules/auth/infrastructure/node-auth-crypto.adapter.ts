@@ -35,13 +35,11 @@ export class NodeAuthCryptoAdapter {
     return this.randomBytes(32).toString('base64url')
   }
 
-  /** Issues a canonical 256-bit one-time token and stores only its digest. */
   public issue(): { readonly rawToken: string; readonly digest: string } {
     const rawToken = this.randomBytes(32).toString('base64url')
     return { rawToken, digest: this.digest(rawToken) as string }
   }
 
-  /** Digests only canonical base64url values containing exactly 32 bytes. */
   public digest(rawToken: string): string | undefined {
     const decoded = decodeCanonicalBase64Url(rawToken)
     if (decoded === undefined || decoded.length !== 32) return undefined

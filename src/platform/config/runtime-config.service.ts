@@ -53,6 +53,7 @@ export class RuntimeConfigService {
       rateLimitKeySecret: new Uint8Array(config.auth.rateLimitKeySecret),
       networkMetadataSecret: new Uint8Array(config.auth.networkMetadataSecret),
       csrfOrigins: Object.freeze([...config.auth.csrfOrigins]),
+      selfService: Object.freeze({ ...config.auth.selfService }),
     })
     this.summary = Object.freeze({
       environment: this.runtimeEnvironment,
@@ -65,6 +66,8 @@ export class RuntimeConfigService {
       redisAuthConfigured: true,
       redisQueueConfigured: this.redisConfig.queueUrl !== undefined,
       authCookieName: this.authConfig.sessionCookieName,
+      authSelfServiceMode: this.authConfig.selfService.mode,
+      authSmtpConfigured: this.authConfig.selfService.smtpUrl !== undefined,
     })
   }
 
@@ -113,6 +116,7 @@ export class RuntimeConfigService {
       networkMetadataSecret: new Uint8Array(
         this.authConfig.networkMetadataSecret,
       ),
+      selfService: Object.freeze({ ...this.authConfig.selfService }),
     })
   }
 

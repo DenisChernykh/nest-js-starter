@@ -62,7 +62,6 @@ export class AuthenticationFailedError extends AuthError {
   }
 }
 
-/** Correct credentials for an active account whose email is not verified. */
 export class EmailVerificationRequiredError extends AuthError {
   public constructor() {
     super('AUTHENTICATION_FAILED', 'Email verification required')

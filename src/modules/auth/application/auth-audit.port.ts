@@ -10,6 +10,11 @@ export type AuthAuditAction =
   | 'role_change'
   | 'status_change'
   | 'docs_access'
+  | 'registration'
+  | 'email_verification_send'
+  | 'email_verification_confirm'
+  | 'password_reset_request'
+  | 'password_reset_confirm'
 
 /** Reviewed result classes shared by all auth audit actions. */
 export type AuthAuditOutcome = 'success' | 'denied' | 'partial' | 'conflict'

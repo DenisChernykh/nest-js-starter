@@ -85,6 +85,7 @@ export class ChangePasswordUseCase {
           nextHash,
         )
         if (!replaced) throw new AuthStateConflictError()
+        await this.persistence.deletePasswordResetToken(input.userId)
         await this.persistence.incrementSessionGeneration(input.userId)
       })
       try {

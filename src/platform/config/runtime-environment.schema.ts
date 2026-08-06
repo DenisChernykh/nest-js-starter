@@ -84,6 +84,29 @@ function normalizeRedisUrl(value: string): string | undefined {
   }
 }
 
+function normalizeSmtpUrl(value: string): string | undefined {
+  try {
+    const url = new URL(value.trim())
+    if (
+      !['smtp:', 'smtps:'].includes(url.protocol) ||
+      url.hostname === '' ||
+      url.hash !== '' ||
+      url.search !== '' ||
+      !['', '/'].includes(url.pathname)
+    ) {
+      return undefined
+    }
+    return url.toString()
+  } catch {
+    return undefined
+  }
+}
+
+function normalizeMailFrom(value: string): string | undefined {
+  const normalized = value.trim()
+  return /^[^\s@<>]+@[^\s@<>]+$/u.test(normalized) ? normalized : undefined
+}
+
 function redisEndpointIdentity(value: string): string {
   const url = new URL(value)
   return `${url.protocol}//${url.hostname.toLowerCase()}:${url.port || '6379'}`
@@ -166,6 +189,33 @@ const secretBytes = Joi.string()
     (value: string, helpers) =>
       decodeSecret(value) ?? helpers.error('any.invalid'),
   )
+const selfServiceMode = Joi.string()
+  .valid('disabled', 'open')
+  .default('disabled')
+const selfServiceAppUrl = Joi.string()
+  .trim()
+  .empty('')
+  .custom(
+    (value: string, helpers) =>
+      normalizeOrigin(value) ?? helpers.error('any.invalid'),
+  )
+  .optional()
+const selfServiceSmtpUrl = Joi.string()
+  .trim()
+  .empty('')
+  .custom(
+    (value: string, helpers) =>
+      normalizeSmtpUrl(value) ?? helpers.error('any.invalid'),
+  )
+  .optional()
+const selfServiceMailFrom = Joi.string()
+  .trim()
+  .empty('')
+  .custom(
+    (value: string, helpers) =>
+      normalizeMailFrom(value) ?? helpers.error('any.invalid'),
+  )
+  .optional()
 
 /**
  * Validates only deployment inputs; internal deadlines and auth tuning come
@@ -219,6 +269,10 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     AUTH_CSRF_SECRET: secretBytes,
     AUTH_RATE_LIMIT_KEY_SECRET: secretBytes,
     AUTH_NETWORK_METADATA_SECRET: secretBytes,
+    AUTH_SELF_SERVICE_MODE: selfServiceMode,
+    AUTH_PUBLIC_APP_URL: selfServiceAppUrl,
+    AUTH_SMTP_URL: selfServiceSmtpUrl,
+    AUTH_MAIL_FROM: selfServiceMailFrom,
   },
 ).custom((value: ValidatedRuntimeEnvironment, helpers) => {
   const authSecrets = [
@@ -241,8 +295,21 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     value.REDIS_QUEUE_URL === undefined ||
     redisEndpointIdentity(value.REDIS_AUTH_URL) !==
       redisEndpointIdentity(value.REDIS_QUEUE_URL)
+  const selfServiceIsComplete =
+    value.AUTH_SELF_SERVICE_MODE === 'disabled' ||
+    (value.AUTH_PUBLIC_APP_URL !== undefined &&
+      value.AUTH_SMTP_URL !== undefined &&
+      value.AUTH_MAIL_FROM !== undefined)
+  const productionSelfServiceIsSafe =
+    value.AUTH_SELF_SERVICE_MODE !== 'open' ||
+    value.NODE_ENV !== 'production' ||
+    value.AUTH_PUBLIC_APP_URL?.startsWith('https://') === true
 
-  return secretsAreDistinct && productionIsSafe && queueEndpointIsDistinct
+  return secretsAreDistinct &&
+    productionIsSafe &&
+    queueEndpointIsDistinct &&
+    selfServiceIsComplete &&
+    productionSelfServiceIsSafe
     ? value
     : helpers.error('any.invalid')
 })
