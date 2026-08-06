@@ -96,6 +96,8 @@ function normalizeSmtpUrl(value: string): string | undefined {
     ) {
       return undefined
     }
+    decodeURIComponent(url.username)
+    decodeURIComponent(url.password)
     return url.toString()
   } catch {
     return undefined
@@ -300,6 +302,10 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     (value.AUTH_PUBLIC_APP_URL !== undefined &&
       value.AUTH_SMTP_URL !== undefined &&
       value.AUTH_MAIL_FROM !== undefined)
+  const selfServiceAppOriginIsAllowed =
+    value.AUTH_SELF_SERVICE_MODE === 'disabled' ||
+    (value.AUTH_PUBLIC_APP_URL !== undefined &&
+      value.CORS_ORIGINS.includes(value.AUTH_PUBLIC_APP_URL))
   const productionSelfServiceIsSafe =
     value.AUTH_SELF_SERVICE_MODE !== 'open' ||
     value.NODE_ENV !== 'production' ||
@@ -309,6 +315,7 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     productionIsSafe &&
     queueEndpointIsDistinct &&
     selfServiceIsComplete &&
+    selfServiceAppOriginIsAllowed &&
     productionSelfServiceIsSafe
     ? value
     : helpers.error('any.invalid')

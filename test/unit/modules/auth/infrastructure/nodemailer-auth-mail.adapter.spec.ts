@@ -12,6 +12,7 @@ function harness(
     Promise.resolve({}),
   ),
   security: NodemailerAuthMailAdapterConfig['security'] = 'production',
+  smtpUrl = 'smtp://mailer:secret@smtp.example.com:587',
 ): {
   readonly adapter: NodemailerAuthMailAdapter
   readonly createTransport: jest.MockedFunction<NodemailerTransportFactory>
@@ -28,7 +29,7 @@ function harness(
   >(() => transport)
   const adapter = new NodemailerAuthMailAdapter(
     {
-      smtpUrl: 'smtp://mailer:secret@smtp.example.com:587',
+      smtpUrl,
       mailFrom: 'no-reply@example.com',
       timeoutMs: 1_500,
       security,
@@ -110,6 +111,25 @@ describe('NodemailerAuthMailAdapter', () => {
       }),
     )
     expect(createTransport.mock.calls[0]?.[0]).not.toHaveProperty('requireTLS')
+  })
+
+  it('passes an IPv6 SMTP literal to the transport without URL brackets', async () => {
+    const { adapter, createTransport } = harness(
+      jest.fn(() => Promise.resolve({})),
+      'local',
+      'smtp://[::1]:1025',
+    )
+
+    await expect(
+      adapter.sendEmailVerification({
+        to: 'user@example.com',
+        verificationUrl: 'http://localhost:3000/auth/verify-email#token=test',
+      }),
+    ).resolves.toEqual({ delivered: true })
+
+    expect(createTransport.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ host: '::1', port: 1025 }),
+    )
   })
 
   it('returns a redacted typed failure and closes a timed-out transport attempt', async () => {

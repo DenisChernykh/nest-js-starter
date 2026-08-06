@@ -1,7 +1,7 @@
 export class PublicAuthResponseDelay {
   public constructor(
     private readonly minimumMs: number,
-    private readonly now: () => number = Date.now,
+    private readonly now: () => number = () => performance.now(),
     private readonly sleep: (delayMs: number) => Promise<void> = (delayMs) =>
       new Promise((resolve) => setTimeout(resolve, delayMs)),
   ) {}

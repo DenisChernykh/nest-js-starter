@@ -65,7 +65,7 @@ export class SelfServiceAuthController {
     @Body() body: RegisterUserRequestDto,
     @Req() request: Request,
   ): Promise<void> {
-    const startedAt = Date.now()
+    const startedAt = performance.now()
     await this.registerUser.execute({
       email: body.email,
       password: body.password,
@@ -103,7 +103,7 @@ export class SelfServiceAuthController {
     @Body() body: SelfServiceEmailRequestDto,
     @Req() request: Request,
   ): Promise<void> {
-    const startedAt = Date.now()
+    const startedAt = performance.now()
     await this.resendVerification.execute({
       email: body.email,
       ipAddress: request.ip ?? request.socket.remoteAddress ?? 'unknown',
@@ -171,7 +171,7 @@ export class SelfServiceAuthController {
     @Body() body: SelfServiceEmailRequestDto,
     @Req() request: Request,
   ): Promise<void> {
-    const startedAt = Date.now()
+    const startedAt = performance.now()
     await this.requestPasswordReset.execute({
       email: body.email,
       ipAddress: request.ip ?? request.socket.remoteAddress ?? 'unknown',

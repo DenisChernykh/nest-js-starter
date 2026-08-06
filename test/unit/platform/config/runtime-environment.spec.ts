@@ -63,6 +63,7 @@ describe('runtime environment', () => {
       validate({
         AUTH_SELF_SERVICE_MODE: 'open',
         AUTH_PUBLIC_APP_URL: 'https://app.example.com/',
+        CORS_ORIGINS: 'https://app.example.com',
         AUTH_SMTP_URL: 'smtps://mailer:secret@smtp.example.com:465',
         AUTH_MAIL_FROM: 'no-reply@example.com',
       }),
@@ -74,6 +75,18 @@ describe('runtime environment', () => {
         AUTH_MAIL_FROM: 'no-reply@example.com',
       }),
     )
+  })
+
+  it('rejects an open self-service app origin absent from browser origins', () => {
+    expect(() =>
+      validate({
+        AUTH_SELF_SERVICE_MODE: 'open',
+        AUTH_PUBLIC_APP_URL: 'https://app.example.com',
+        CORS_ORIGINS: 'https://other-app.example.com',
+        AUTH_SMTP_URL: 'smtp://mailer:secret@smtp.example.com:587',
+        AUTH_MAIL_FROM: 'no-reply@example.com',
+      }),
+    ).toThrow(RuntimeConfigurationError)
   })
   it('derives CSRF origins and cookies from deployment inputs', () => {
     const config = buildApiRuntimeConfig({
@@ -125,6 +138,10 @@ describe('runtime environment', () => {
     ['invalid CORS origin', { CORS_ORIGINS: '*' }],
     ['missing secret', { AUTH_CSRF_SECRET: undefined }],
     ['invalid SMTP protocol', { AUTH_SMTP_URL: 'http://smtp.example.com' }],
+    [
+      'SMTP URL with undecodable credentials',
+      { AUTH_SMTP_URL: 'smtp://mailer:%ZZ@smtp.example.com:587' },
+    ],
     [
       'open self-service without mail values',
       { AUTH_SELF_SERVICE_MODE: 'open' },

@@ -159,6 +159,7 @@ describe('RuntimeConfigService', () => {
     const service = createService({
       AUTH_SELF_SERVICE_MODE: 'open',
       AUTH_PUBLIC_APP_URL: 'http://app.local:3001',
+      CORS_ORIGINS: 'http://localhost:3000, http://app.local:3001',
       AUTH_SMTP_URL: 'smtp://mailer:secret@smtp.local:587',
       AUTH_MAIL_FROM: 'no-reply@app.local',
     })

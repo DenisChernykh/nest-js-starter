@@ -131,7 +131,7 @@ export class NodemailerAuthMailAdapter implements AuthMailDeliveryPort {
       const username = decodeUrlComponent(url.username)
       const password = decodeUrlComponent(url.password)
       transport = this.createTransport({
-        host: url.hostname,
+        host: normalizeSmtpHost(url.hostname),
         port: url.port === '' ? (secure ? 465 : 587) : Number(url.port),
         secure,
         pool: false,
@@ -176,6 +176,12 @@ export class NodemailerAuthMailAdapter implements AuthMailDeliveryPort {
 
 function decodeUrlComponent(value: string): string {
   return decodeURIComponent(value)
+}
+
+function normalizeSmtpHost(value: string): string {
+  return value.startsWith('[') && value.endsWith(']')
+    ? value.slice(1, -1)
+    : value
 }
 
 function closeTransport(transport: NodemailerTransport | undefined): void {
