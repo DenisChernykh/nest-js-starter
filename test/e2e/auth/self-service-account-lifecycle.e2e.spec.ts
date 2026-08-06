@@ -230,6 +230,11 @@ describe('self-service account lifecycle real flow', () => {
     expect(login.status).toBe(200)
     const sessionCookie = login.headers.get('set-cookie')?.split(';', 1)[0]
     expect(sessionCookie).toBeDefined()
+    const me = await fetch(`${apiUrl}/v1/auth/me`, {
+      headers: { Cookie: sessionCookie ?? '' },
+    })
+    expect(me.status).toBe(200)
+    expect(await me.json()).toMatchObject({ roleKeys: [], permissions: [] })
 
     const unknownReset = await postJson(
       apiUrl,

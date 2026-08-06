@@ -1,9 +1,12 @@
+import { createServer } from 'node:net'
+
 import {
   mailpitApiUrl,
   mailpitSmtpUrl,
   startMailpitContainer,
   type StartedMailpitContainer,
 } from '@test/integration/support/mailpit-container'
+import { AuthMailDeliveryError } from '@/modules/auth/application/auth-mail-delivery.port'
 import { NodemailerAuthMailAdapter } from '@/modules/auth/infrastructure/nodemailer-auth-mail.adapter'
 
 interface MailpitMessageSummary {
@@ -34,6 +37,7 @@ describe('Nodemailer auth mail delivery against Mailpit', () => {
       smtpUrl: mailpitSmtpUrl(container),
       mailFrom: 'no-reply@example.com',
       timeoutMs: 1_500,
+      security: 'local',
     })
 
     await expect(
@@ -88,7 +92,93 @@ describe('Nodemailer auth mail delivery against Mailpit', () => {
     )
     expect(reset?.raw).toContain('reset@example.com')
   })
+
+  it('fails production smtp safely when STARTTLS is unavailable', async () => {
+    const server = createServer((socket) => {
+      socket.write('220 test.smtp.local ESMTP\r\n')
+      socket.on('data', (chunk: Buffer) => {
+        if (/EHLO|HELO/iu.test(chunk.toString('ascii'))) {
+          socket.write('250 test.smtp.local\r\n')
+        }
+      })
+    })
+    const port = await listen(server)
+    try {
+      const adapter = new NodemailerAuthMailAdapter({
+        smtpUrl: `smtp://127.0.0.1:${port}`,
+        mailFrom: 'no-reply@example.com',
+        timeoutMs: 500,
+        security: 'production',
+      })
+
+      await expect(
+        adapter.sendEmailVerification({
+          to: 'recipient@example.com',
+          verificationUrl:
+            'https://app.example.com/auth/verify-email#token=test',
+        }),
+      ).rejects.toBeInstanceOf(AuthMailDeliveryError)
+    } finally {
+      await closeServer(server)
+    }
+  })
+
+  it('destroys the in-flight socket at the delivery deadline', async () => {
+    let closedResolve: (() => void) | undefined
+    const closed = new Promise<void>((resolve) => {
+      closedResolve = resolve
+    })
+    let received = ''
+    const server = createServer((socket) => {
+      socket.on('data', (chunk: Buffer) => {
+        received += chunk.toString('ascii')
+      })
+      socket.once('close', () => closedResolve?.())
+    })
+    const port = await listen(server)
+    try {
+      const adapter = new NodemailerAuthMailAdapter({
+        smtpUrl: `smtp://127.0.0.1:${port}`,
+        mailFrom: 'no-reply@example.com',
+        timeoutMs: 100,
+        security: 'local',
+      })
+
+      await expect(
+        adapter.sendPasswordReset({
+          to: 'recipient@example.com',
+          resetUrl: 'https://app.example.com/auth/reset-password#token=test',
+        }),
+      ).rejects.toBeInstanceOf(AuthMailDeliveryError)
+      await closed
+      expect(received).toBe('')
+    } finally {
+      await closeServer(server)
+    }
+  })
 })
+
+async function listen(
+  server: ReturnType<typeof createServer>,
+): Promise<number> {
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => resolve())
+  })
+  const address = server.address()
+  if (address === null || typeof address === 'string') {
+    throw new Error('Expected a TCP server address')
+  }
+  return address.port
+}
+
+async function closeServer(
+  server: ReturnType<typeof createServer>,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => (error === undefined ? resolve() : reject(error)))
+  })
+}
 
 function mailRecipients(summary: MailpitMessageSummary | undefined): string {
   return (summary?.To ?? [])

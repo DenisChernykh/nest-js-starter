@@ -6,6 +6,7 @@ describe('AuthAuditLogger', () => {
     ['login', 'denied', 'INVALID_CREDENTIALS'],
     ['login', 'denied', 'RATE_LIMITED'],
     ['login', 'denied', 'DEPENDENCY_UNAVAILABLE'],
+    ['login', 'denied', 'EMAIL_VERIFICATION_REQUIRED'],
     ['logout', 'success', 'LOGOUT_COMPLETED'],
     ['logout_all', 'success', 'LOGOUT_ALL_COMPLETED'],
     ['logout_all', 'partial', 'CLEANUP_INCOMPLETE'],

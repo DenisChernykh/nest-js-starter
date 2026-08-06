@@ -18,7 +18,7 @@ import type {
   SelfServiceTokenInput,
 } from '../application/auth.types'
 import { mapAuthProjection, mapCredentialSnapshot } from './prisma-auth.mapper'
-import { Prisma } from '@/generated/prisma/client'
+import { Prisma, type PrismaClient } from '@/generated/prisma/client'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import {
   TRANSACTION_PORT,
@@ -84,29 +84,38 @@ export class PrismaAuthRepository implements AuthPersistencePort {
     expectedVersion: number,
     passwordHash: string,
   ): Promise<boolean> {
-    const result = await this.provider.withClient((client) =>
-      client.passwordCredential.updateMany({
-        where: { userId, version: expectedVersion },
-        data: { passwordHash, version: { increment: 1 } },
+    const result = await this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        await lockUser(client, userId)
+        return client.passwordCredential.updateMany({
+          where: { userId, version: expectedVersion },
+          data: { passwordHash, version: { increment: 1 } },
+        })
       }),
     )
     return result.count === 1
   }
 
   public async incrementSessionGeneration(userId: string): Promise<bigint> {
-    const user = await this.provider.withClient((client) =>
-      client.user.update({
-        where: { id: userId },
-        data: { sessionGeneration: { increment: 1 } },
-        select: { sessionGeneration: true },
+    const user = await this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        await lockUser(client, userId)
+        return client.user.update({
+          where: { id: userId },
+          data: { sessionGeneration: { increment: 1 } },
+          select: { sessionGeneration: true },
+        })
       }),
     )
     return user.sessionGeneration
   }
 
   public async deletePasswordResetToken(userId: string): Promise<void> {
-    await this.provider.withClient((client) =>
-      client.passwordResetToken.deleteMany({ where: { userId } }),
+    await this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        await lockUser(client, userId)
+        await client.passwordResetToken.deleteMany({ where: { userId } })
+      }),
     )
   }
 
@@ -221,6 +230,10 @@ export class PrismaAuthRepository implements AuthPersistencePort {
     if (token.expiresAt <= now) return undefined
     return this.transaction.run(() =>
       this.provider.withClient(async (client) => {
+        const lockedUser = await client.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM users WHERE normalized_email = ${normalizedEmail} FOR UPDATE
+        `
+        if (lockedUser[0] === undefined) return undefined
         const user = await client.user.findUnique({
           where: { normalizedEmail },
           select: {
@@ -253,6 +266,12 @@ export class PrismaAuthRepository implements AuthPersistencePort {
   ): Promise<SelfServiceDeliveryTarget | undefined> {
     return this.transaction.run(() =>
       this.provider.withClient(async (client) => {
+        const tokenOwner = await client.emailVerificationToken.findUnique({
+          where: { tokenDigest },
+          select: { userId: true },
+        })
+        if (tokenOwner === null) return undefined
+        await lockUser(client, tokenOwner.userId)
         const token = await client.emailVerificationToken.findUnique({
           where: { tokenDigest },
           select: {
@@ -298,6 +317,10 @@ export class PrismaAuthRepository implements AuthPersistencePort {
     if (token.expiresAt <= now) return undefined
     return this.transaction.run(() =>
       this.provider.withClient(async (client) => {
+        const lockedUser = await client.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM users WHERE normalized_email = ${normalizedEmail} FOR UPDATE
+        `
+        if (lockedUser[0] === undefined) return undefined
         const user = await client.user.findUnique({
           where: { normalizedEmail },
           select: {
@@ -359,6 +382,12 @@ export class PrismaAuthRepository implements AuthPersistencePort {
   ): Promise<SelfServiceDeliveryTarget | undefined> {
     return this.transaction.run(() =>
       this.provider.withClient(async (client) => {
+        const tokenOwner = await client.passwordResetToken.findUnique({
+          where: { tokenDigest: input.tokenDigest },
+          select: { userId: true },
+        })
+        if (tokenOwner === null) return undefined
+        await lockUser(client, tokenOwner.userId)
         const token = await client.passwordResetToken.findUnique({
           where: { tokenDigest: input.tokenDigest },
           select: {
@@ -404,4 +433,13 @@ export class PrismaAuthRepository implements AuthPersistencePort {
       }),
     )
   }
+}
+
+async function lockUser(
+  client: Prisma.TransactionClient | PrismaClient,
+  userId: string,
+): Promise<void> {
+  await client.$queryRaw`
+    SELECT id FROM users WHERE id = ${userId} FOR UPDATE
+  `
 }

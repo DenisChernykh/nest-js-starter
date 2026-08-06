@@ -59,6 +59,7 @@ export class SelfServiceAuthController {
     'RATE_LIMIT_EXCEEDED',
     'INTERNAL_ERROR',
     'DEPENDENCY_UNAVAILABLE',
+    'AUTHORIZATION_DENIED',
   )
   public async register(
     @Body() body: RegisterUserRequestDto,
@@ -96,6 +97,7 @@ export class SelfServiceAuthController {
     'RATE_LIMIT_EXCEEDED',
     'INTERNAL_ERROR',
     'DEPENDENCY_UNAVAILABLE',
+    'AUTHORIZATION_DENIED',
   )
   public async resend(
     @Body() body: SelfServiceEmailRequestDto,
@@ -124,10 +126,12 @@ export class SelfServiceAuthController {
   @DocumentedProblemResponses(
     'MALFORMED_REQUEST',
     'NOT_FOUND',
+    'PAYLOAD_TOO_LARGE',
     'UNSUPPORTED_MEDIA_TYPE',
     'VALIDATION_FAILED',
     'INTERNAL_ERROR',
     'DEPENDENCY_UNAVAILABLE',
+    'AUTHORIZATION_DENIED',
     AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
   )
   public confirmEmail(
@@ -161,6 +165,7 @@ export class SelfServiceAuthController {
     'RATE_LIMIT_EXCEEDED',
     'INTERNAL_ERROR',
     'DEPENDENCY_UNAVAILABLE',
+    'AUTHORIZATION_DENIED',
   )
   public async requestReset(
     @Body() body: SelfServiceEmailRequestDto,
@@ -189,10 +194,12 @@ export class SelfServiceAuthController {
   @DocumentedProblemResponses(
     'MALFORMED_REQUEST',
     'NOT_FOUND',
+    'PAYLOAD_TOO_LARGE',
     'UNSUPPORTED_MEDIA_TYPE',
     'VALIDATION_FAILED',
     'INTERNAL_ERROR',
     'DEPENDENCY_UNAVAILABLE',
+    'AUTHORIZATION_DENIED',
     AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
   )
   public confirmReset(

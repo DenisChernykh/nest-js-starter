@@ -12,6 +12,7 @@ import { TestHealthModule } from '@test/e2e/fixtures/health/test-health.module'
 import { assertOpenApiResponseConforms } from '@test/e2e/openapi/openapi-test-harness'
 import { HealthRegistry } from '@/platform/http/health/health-registry'
 import { ApplicationLifecycleState } from '@/platform/lifecycle/application-lifecycle.state'
+import { runtimeDefaults } from '@/platform/config/runtime-defaults'
 
 describe('committed OpenAPI response conformance', () => {
   let healthApp: INestApplication
@@ -165,5 +166,48 @@ describe('committed OpenAPI response conformance', () => {
       .send('not-json')
       .expect(415)
     await assertOpenApiResponseConforms('authLogin', unsupportedMediaType)
+  })
+
+  it('validates self-service guard and JSON body-limit responses', async () => {
+    const guardedOperations = [
+      ['/v1/auth/register', 'authRegister'],
+      ['/v1/auth/email-verification/resend', 'authResendEmailVerification'],
+      ['/v1/auth/email-verification/confirm', 'authConfirmEmailVerification'],
+      ['/v1/auth/password-reset/request', 'authRequestPasswordReset'],
+      ['/v1/auth/password-reset/confirm', 'authConfirmPasswordReset'],
+    ] as const
+    for (const [path, operationId] of guardedOperations) {
+      const response = await request(auth.server)
+        .post(path)
+        .set('Content-Type', 'application/json')
+        .send({ email: 'guard@example.com', token: 'A'.repeat(43) })
+        .expect(403)
+      await assertOpenApiResponseConforms(operationId, response)
+    }
+
+    const oversizedBody = {
+      token: 'A'.repeat(43),
+      padding: 'x'.repeat(runtimeDefaults.http.jsonBodyLimitBytes),
+    }
+    const oversizedEmailConfirmation = await request(auth.server)
+      .post('/v1/auth/email-verification/confirm')
+      .set('Origin', 'https://app.example.com')
+      .set('Content-Type', 'application/json')
+      .send(oversizedBody)
+      .expect(413)
+    await assertOpenApiResponseConforms(
+      'authConfirmEmailVerification',
+      oversizedEmailConfirmation,
+    )
+    const oversizedPasswordConfirmation = await request(auth.server)
+      .post('/v1/auth/password-reset/confirm')
+      .set('Origin', 'https://app.example.com')
+      .set('Content-Type', 'application/json')
+      .send({ ...oversizedBody, newPassword: 'new secure password' })
+      .expect(413)
+    await assertOpenApiResponseConforms(
+      'authConfirmPasswordReset',
+      oversizedPasswordConfirmation,
+    )
   })
 })

@@ -1,4 +1,7 @@
+import { Socket } from 'node:net'
+
 import nodemailer, { type SendMailOptions } from 'nodemailer'
+import type * as SMTPTransport from 'nodemailer/lib/smtp-transport'
 
 import {
   AuthMailDeliveryError,
@@ -10,19 +13,51 @@ export interface NodemailerTransport {
   close(): void
 }
 
+export type NodemailerTransportOptions = SMTPTransport.Options & {
+  readonly pool: false
+}
+
 export type NodemailerTransportFactory = (
-  url: string,
-  options: Record<string, unknown>,
+  options: NodemailerTransportOptions,
 ) => NodemailerTransport
+
+export type NodemailerAuthMailSecurity = 'local' | 'production'
 
 export interface NodemailerAuthMailAdapterConfig {
   readonly smtpUrl: string
   readonly mailFrom: string
   readonly timeoutMs: number
+  readonly security: NodemailerAuthMailSecurity
 }
 
-const createDefaultTransport: NodemailerTransportFactory = (url, options) =>
-  nodemailer.createTransport(url, options)
+const createDefaultTransport: NodemailerTransportFactory = (options) => {
+  const sockets = new Set<Socket>()
+  const getSocket = (
+    _transportOptions: SMTPTransport.Options,
+    callback: (
+      error: Error | null,
+      socketOptions: { readonly socket: Socket },
+    ) => void,
+  ): void => {
+    const socket = new Socket()
+    sockets.add(socket)
+    socket.once('close', () => sockets.delete(socket))
+    callback(null, { socket })
+  }
+  const transporterOptions: NodemailerTransportOptions = {
+    ...options,
+    getSocket,
+  }
+  const transporter = nodemailer.createTransport(transporterOptions)
+  return {
+    sendMail: (mailOptions) => transporter.sendMail(mailOptions),
+    close: () => {
+      for (const socket of sockets) socket.destroy()
+      sockets.clear()
+      transporter.close()
+    },
+  }
+}
 
 export class NodemailerAuthMailAdapter implements AuthMailDeliveryPort {
   public constructor(
@@ -60,34 +95,51 @@ export class NodemailerAuthMailAdapter implements AuthMailDeliveryPort {
     readonly text: string
     readonly html: string
   }): Promise<{ readonly delivered: boolean }> {
-    const url = new URL(this.config.smtpUrl)
-    const secure = url.protocol === 'smtps:'
-    const transport = this.createTransport(this.config.smtpUrl, {
-      pool: false,
-      secure,
-      ...(secure ? {} : { requireTLS: true }),
-      connectionTimeout: this.config.timeoutMs,
-      greetingTimeout: this.config.timeoutMs,
-      socketTimeout: this.config.timeoutMs,
-      tls: { rejectUnauthorized: true },
-    })
+    let transport: NodemailerTransport | undefined
     let timer: ReturnType<typeof setTimeout> | undefined
+    let closed = false
+    const closeAttempt = (): void => {
+      if (closed) return
+      closed = true
+      closeTransport(transport)
+    }
     try {
+      const url = new URL(this.config.smtpUrl)
+      const secure = url.protocol === 'smtps:'
+      const username = decodeUrlComponent(url.username)
+      const password = decodeUrlComponent(url.password)
+      transport = this.createTransport({
+        host: url.hostname,
+        port: url.port === '' ? (secure ? 465 : 587) : Number(url.port),
+        secure,
+        pool: false,
+        ...(secure || this.config.security === 'local'
+          ? {}
+          : { requireTLS: true }),
+        connectionTimeout: this.config.timeoutMs,
+        greetingTimeout: this.config.timeoutMs,
+        socketTimeout: this.config.timeoutMs,
+        tls: { rejectUnauthorized: true },
+        ...(username === '' && password === ''
+          ? {}
+          : { auth: { user: username, pass: password } }),
+      })
+      const delivery = transport.sendMail({
+        from: this.config.mailFrom,
+        to: input.to,
+        subject: input.subject,
+        text: input.text,
+        html: input.html,
+        disableFileAccess: true,
+        disableUrlAccess: true,
+      })
       await Promise.race([
-        transport.sendMail({
-          from: this.config.mailFrom,
-          to: input.to,
-          subject: input.subject,
-          text: input.text,
-          html: input.html,
-          disableFileAccess: true,
-          disableUrlAccess: true,
-        }),
+        delivery,
         new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error('SMTP delivery deadline exceeded')),
-            this.config.timeoutMs,
-          )
+          timer = setTimeout(() => {
+            closeAttempt()
+            reject(new Error('SMTP delivery deadline exceeded'))
+          }, this.config.timeoutMs)
         }),
       ])
       return { delivered: true }
@@ -95,12 +147,21 @@ export class NodemailerAuthMailAdapter implements AuthMailDeliveryPort {
       throw new AuthMailDeliveryError()
     } finally {
       if (timer !== undefined) clearTimeout(timer)
-      try {
-        transport.close()
-      } catch {
-        // Closing a best-effort transport cannot replace its result.
-      }
+      closeAttempt()
     }
+  }
+}
+
+function decodeUrlComponent(value: string): string {
+  return decodeURIComponent(value)
+}
+
+function closeTransport(transport: NodemailerTransport | undefined): void {
+  if (transport === undefined) return
+  try {
+    transport.close()
+  } catch {
+    // Closing a best-effort transport cannot replace its result.
   }
 }
 

@@ -13,7 +13,7 @@ Set the following server-side values before starting the API:
 AUTH_SELF_SERVICE_MODE=open
 AUTH_PUBLIC_APP_URL=https://app.example.com
 AUTH_SMTP_URL=smtps://username:password@smtp.example.com:465
-AUTH_MAIL_FROM=Accounts <accounts@example.com>
+AUTH_MAIL_FROM=no-reply@example.com
 ```
 
 The application origin must be HTTPS in production. The SMTP URL must use
@@ -30,8 +30,17 @@ provider outage must not make `/health/ready` fail.
 
 ## Local Mailpit
 
-Copy `.env.example` to `.env`, set `AUTH_SELF_SERVICE_MODE=open`, and start the
-opt-in Mailpit profile:
+For an API running in Compose, copy `.env.example` to `.env` and use this
+complete open-mode block. The `mail` hostname is the Compose service name:
+
+```dotenv
+AUTH_SELF_SERVICE_MODE=open
+AUTH_PUBLIC_APP_URL=http://localhost:3000
+AUTH_SMTP_URL=smtp://mail:1025
+AUTH_MAIL_FROM=no-reply@example.com
+```
+
+Then start the opt-in Mailpit profile:
 
 ```sh
 docker compose --profile mail up --detach --wait mail
@@ -40,6 +49,11 @@ docker compose up --detach --wait postgres redis-auth migrator api
 
 Inspect captured messages at <http://127.0.0.1:8025>. Mailpit is local test
 transport only and is not part of production Compose or API readiness.
+
+When the API runs directly on the host, use
+`AUTH_SMTP_URL=smtp://127.0.0.1:1025` instead; do not use `mail:1025` from a
+host-mode API because that hostname is available only inside the Compose
+network.
 
 ## Smoke test
 

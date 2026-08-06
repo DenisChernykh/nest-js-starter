@@ -1,6 +1,8 @@
 import { AuthMailDeliveryError } from '@/modules/auth/application/auth-mail-delivery.port'
 import {
   NodemailerAuthMailAdapter,
+  type NodemailerAuthMailAdapterConfig,
+  type NodemailerTransportFactory,
   type NodemailerTransport,
 } from '@/modules/auth/infrastructure/nodemailer-auth-mail.adapter'
 import type { SendMailOptions } from 'nodemailer'
@@ -9,11 +11,10 @@ function harness(
   sendMail: NodemailerTransport['sendMail'] = jest.fn(() =>
     Promise.resolve({}),
   ),
+  security: NodemailerAuthMailAdapterConfig['security'] = 'production',
 ): {
   readonly adapter: NodemailerAuthMailAdapter
-  readonly createTransport: jest.MockedFunction<
-    (url: string, options: Record<string, unknown>) => NodemailerTransport
-  >
+  readonly createTransport: jest.MockedFunction<NodemailerTransportFactory>
   readonly transport: NodemailerTransport & { readonly close: jest.Mock }
 } {
   const close = jest.fn()
@@ -21,18 +22,16 @@ function harness(
     sendMail,
     close,
   }
-  const createTransport = jest.fn(
-    (url: string, options: Record<string, unknown>): NodemailerTransport => {
-      void url
-      void options
-      return transport
-    },
-  )
+  const createTransport = jest.fn<
+    NodemailerTransport,
+    Parameters<NodemailerTransportFactory>
+  >(() => transport)
   const adapter = new NodemailerAuthMailAdapter(
     {
       smtpUrl: 'smtp://mailer:secret@smtp.example.com:587',
       mailFrom: 'no-reply@example.com',
       timeoutMs: 1_500,
+      security,
     },
     createTransport,
   )
@@ -63,14 +62,18 @@ describe('NodemailerAuthMailAdapter', () => {
       }),
     ).resolves.toEqual({ delivered: true })
 
-    expect(createTransport).toHaveBeenCalledWith(
-      'smtp://mailer:secret@smtp.example.com:587',
+    const transportOptions = createTransport.mock.calls[0]?.[0]
+    expect(transportOptions).toEqual(
       expect.objectContaining({
+        host: 'smtp.example.com',
+        port: 587,
+        secure: false,
         pool: false,
         requireTLS: true,
         tls: { rejectUnauthorized: true },
       }),
     )
+    expect(createTransport.mock.calls[0]).toHaveLength(1)
     const first = sendMailMock.mock.calls[0]?.[0]
     const second = sendMailMock.mock.calls[1]?.[0]
     expect(first?.from).toBe('no-reply@example.com')
@@ -88,11 +91,44 @@ describe('NodemailerAuthMailAdapter', () => {
     expect(second?.disableUrlAccess).toBe(true)
   })
 
+  it('allows plaintext only for the explicit local Mailpit policy', async () => {
+    const { adapter, createTransport } = harness(
+      jest.fn(() => Promise.resolve({})),
+      'local',
+    )
+
+    await expect(
+      adapter.sendEmailVerification({
+        to: 'user@example.com',
+        verificationUrl: 'http://localhost:3000/auth/verify-email#token=test',
+      }),
+    ).resolves.toEqual({ delivered: true })
+
+    expect(createTransport.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        secure: false,
+      }),
+    )
+    expect(createTransport.mock.calls[0]?.[0]).not.toHaveProperty('requireTLS')
+  })
+
   it('returns a redacted typed failure and closes a timed-out transport attempt', async () => {
     jest.useFakeTimers()
     try {
-      const sendMail = jest.fn(() => new Promise(() => undefined))
+      let lateDelivery = false
+      let lateDeliveryTimer: ReturnType<typeof setTimeout> | undefined
+      const sendMail = jest.fn(
+        () =>
+          new Promise(() => {
+            lateDeliveryTimer = setTimeout(() => {
+              lateDelivery = true
+            }, 5_000)
+          }),
+      )
       const { adapter, transport } = harness(sendMail)
+      transport.close.mockImplementation(() => {
+        if (lateDeliveryTimer !== undefined) clearTimeout(lateDeliveryTimer)
+      })
       const attempt = adapter
         .sendPasswordReset({
           to: 'user@example.com',
@@ -108,6 +144,8 @@ describe('NodemailerAuthMailAdapter', () => {
         expect.stringContaining('smtp://mailer:secret'),
       )
       expect((transport.close as jest.Mock).mock.calls).toHaveLength(1)
+      await jest.advanceTimersByTimeAsync(5_000)
+      expect(lateDelivery).toBe(false)
     } finally {
       jest.useRealTimers()
     }

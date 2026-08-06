@@ -12,6 +12,13 @@ describe('auth security audit records', () => {
     runtime = await createAuthTestRuntime(1)
     baseUrl = runtime.instances[0]?.baseUrl ?? ''
     await runtime.createUser('audit@example.com')
+    const unverifiedUserId = await runtime.createUser(
+      'unverified-audit@example.com',
+    )
+    await runtime.pool.query(
+      'UPDATE users SET email_verified_at = NULL WHERE id = $1',
+      [unverifiedUserId],
+    )
   })
 
   afterAll(async () => runtime.stop())
@@ -139,6 +146,33 @@ describe('auth security audit records', () => {
       }
     } finally {
       await outage.stop()
+    }
+  })
+
+  it('keeps the unverified-login audit event and does not issue a session', async () => {
+    const requestId = '019219c3-dc52-7cc1-9e70-f293ca14c200'
+    const response = await login(
+      'unverified-audit@example.com',
+      'valid password',
+      requestId,
+    )
+    expect(response.status).toBe(403)
+    expect(response.headers.get('set-cookie')).toBeNull()
+    const record = await waitForAudit('EMAIL_VERIFICATION_REQUIRED')
+    expect(record).toMatchObject({
+      kind: 'audit',
+      action: 'login',
+      outcome: 'denied',
+      reasonCode: 'EMAIL_VERIFICATION_REQUIRED',
+      requestId,
+    })
+    const output = runtime.instances[0]?.output() ?? ''
+    for (const forbidden of [
+      'unverified-audit@example.com',
+      'valid password',
+      'token',
+    ]) {
+      expect(output).not.toContain(forbidden)
     }
   })
 

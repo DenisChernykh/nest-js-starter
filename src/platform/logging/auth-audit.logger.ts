@@ -18,6 +18,7 @@ const allowed = new Set([
   'login|denied|INVALID_CREDENTIALS',
   'login|denied|RATE_LIMITED',
   'login|denied|DEPENDENCY_UNAVAILABLE',
+  'login|denied|EMAIL_VERIFICATION_REQUIRED',
   'logout|success|LOGOUT_COMPLETED',
   'logout|denied|DEPENDENCY_UNAVAILABLE',
   'logout_all|success|LOGOUT_ALL_COMPLETED',

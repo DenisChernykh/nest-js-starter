@@ -197,6 +197,8 @@ export interface AuthModuleOptions {
           smtpUrl: selfService.smtpUrl as string,
           mailFrom: selfService.mailFrom as string,
           timeoutMs: selfService.mailDeliveryTimeoutMs,
+          security:
+            config.environment === 'production' ? 'production' : 'local',
         })
       },
     },
