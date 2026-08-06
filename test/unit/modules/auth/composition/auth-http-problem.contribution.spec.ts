@@ -1,13 +1,19 @@
 import {
   AuthDependencyUnavailableError,
   AuthError,
+  EmailVerificationRequiredError,
   type AuthFailureCode,
   AuthRateLimitedError,
 } from '@/modules/auth/application/auth-errors'
+import { AuthTokenInvalidOrExpiredError } from '@/modules/auth/application/self-service-auth.policy'
 import {
   AUTH_FAILURE_PROBLEM_CODES,
   AUTH_HTTP_PROBLEM_CONTRIBUTION,
 } from '@/modules/auth/composition/auth-http-problem.contribution'
+import {
+  AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
+  EMAIL_VERIFICATION_REQUIRED_PROBLEM,
+} from '@/modules/auth/presentation/auth-problem.definitions'
 import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
 import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registry'
 import type { CoreProblemCode } from '@/platform/http/errors/problem-registry'
@@ -18,6 +24,19 @@ const registry = new HttpProblemRegistry([
 ])
 
 describe('AUTH_HTTP_PROBLEM_CONTRIBUTION', () => {
+  it('registers both auth-owned lifecycle problem definitions', () => {
+    expect(AUTH_HTTP_PROBLEM_CONTRIBUTION.definitions).toEqual([
+      EMAIL_VERIFICATION_REQUIRED_PROBLEM,
+      AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
+    ])
+    expect(
+      registry.map(new EmailVerificationRequiredError()).definition,
+    ).toEqual(EMAIL_VERIFICATION_REQUIRED_PROBLEM)
+    expect(
+      registry.map(new AuthTokenInvalidOrExpiredError()).definition,
+    ).toEqual(AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM)
+  })
+
   it('keeps the auth failure mapping exhaustive at compile time', () => {
     const completeMapping: Readonly<Record<AuthFailureCode, CoreProblemCode>> =
       AUTH_FAILURE_PROBLEM_CODES

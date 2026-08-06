@@ -45,6 +45,7 @@ import { RedisLoginRateLimiter } from '../infrastructure/redis-login-rate-limite
 import { RedisPublicAuthRateLimiter } from '../infrastructure/redis-public-auth-rate-limiter'
 import { RedisSessionStore } from '../infrastructure/redis-session.store'
 import { AuthCookieAdapter } from '../presentation/auth-cookie.adapter'
+import { PublicAuthResponseDelay } from '../presentation/public-auth-response-delay'
 import {
   AUTH_LOGIN_METADATA_FACTORY,
   AuthController,
@@ -57,6 +58,7 @@ import { BrowserOriginGuard } from '../presentation/browser-origin.guard'
 import { DocsAccessPolicyAdapter } from '../presentation/docs-access-policy.adapter'
 import { PermissionGuard } from '../presentation/permission.guard'
 import { SessionCsrfGuard } from '../presentation/session-csrf.guard'
+import { SelfServiceAuthController } from '../presentation/self-service-auth.controller'
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { DatabaseModule } from '@/platform/database/database.module'
@@ -82,7 +84,7 @@ export interface AuthModuleOptions {
 /** Composes durable identity, Redis sessions and ordered browser policy. */
 @Module({
   imports: [RuntimeConfigModule, DatabaseModule, RedisModule],
-  controllers: [AuthController],
+  controllers: [AuthController, SelfServiceAuthController],
   providers: [
     AuthRequestContext,
     GetMeQuery,
@@ -236,6 +238,14 @@ export interface AuthModuleOptions {
     ConfirmEmailVerificationUseCase,
     RequestPasswordResetUseCase,
     ConfirmPasswordResetUseCase,
+    {
+      provide: PublicAuthResponseDelay,
+      inject: [RuntimeConfigService],
+      useFactory: (config: RuntimeConfigService): PublicAuthResponseDelay =>
+        new PublicAuthResponseDelay(
+          config.auth.selfService.acceptedResponseFloorMs,
+        ),
+    },
     {
       provide: AuthCookieAdapter,
       inject: [RuntimeConfigService],

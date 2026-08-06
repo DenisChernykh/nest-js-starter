@@ -241,11 +241,15 @@ describe('self-service account lifecycle use cases', () => {
   it('does not hash a malformed reset token and invalidates Redis sessions after success', async () => {
     const password = passwords()
     const revokeAll = jest.fn(() => Promise.resolve(1))
+    const isPasswordResetTokenEligible = jest.fn(() => Promise.resolve(true))
     const confirmPasswordReset = jest.fn(() =>
       Promise.resolve({ userId: 'user-1', email: 'user@example.com' }),
     )
     const target = new ConfirmPasswordResetUseCase(
-      { confirmPasswordReset } as unknown as AuthPersistencePort,
+      {
+        isPasswordResetTokenEligible,
+        confirmPasswordReset,
+      } as unknown as AuthPersistencePort,
       password,
       codec(),
       policy,
@@ -273,6 +277,36 @@ describe('self-service account lifecycle use cases', () => {
     expect(revokeAll.mock.calls).toEqual([['user-1']])
   })
 
+  it.each(['missing', 'expired'])(
+    'does not hash a canonical %s reset token when eligibility is false',
+    async (state) => {
+      const password = passwords()
+      const isPasswordResetTokenEligible = jest.fn(() => Promise.resolve(false))
+      const confirmPasswordReset = jest.fn()
+      const target = new ConfirmPasswordResetUseCase(
+        {
+          isPasswordResetTokenEligible,
+          confirmPasswordReset,
+        } as unknown as AuthPersistencePort,
+        password,
+        codec(),
+        policy,
+        { revokeAll: jest.fn() } as unknown as SessionStorePort,
+      )
+
+      await expect(
+        target.execute({
+          token: 'valid-token',
+          newPassword: `${state} password`,
+          now,
+        }),
+      ).rejects.toMatchObject({ code: 'AUTH_STATE_CONFLICT' })
+      expect(isPasswordResetTokenEligible.mock.calls).toEqual([['digest', now]])
+      expect(password.hash.mock.calls).toHaveLength(0)
+      expect(confirmPasswordReset).not.toHaveBeenCalled()
+    },
+  )
+
   it('reports committed reset with incomplete Redis cleanup as partial', async () => {
     const events = audit()
     const observer: jest.Mocked<AuthSessionCleanupObserver> = {
@@ -280,6 +314,7 @@ describe('self-service account lifecycle use cases', () => {
     }
     const target = new ConfirmPasswordResetUseCase(
       {
+        isPasswordResetTokenEligible: jest.fn(() => Promise.resolve(true)),
         confirmPasswordReset: jest.fn(() =>
           Promise.resolve({ userId: 'user-1', email: 'user@example.com' }),
         ),

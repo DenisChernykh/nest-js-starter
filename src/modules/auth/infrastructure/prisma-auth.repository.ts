@@ -326,6 +326,34 @@ export class PrismaAuthRepository implements AuthPersistencePort {
     )
   }
 
+  public async isPasswordResetTokenEligible(
+    tokenDigest: string,
+    now: Date,
+  ): Promise<boolean> {
+    const token = await this.provider.withClient((client) =>
+      client.passwordResetToken.findUnique({
+        where: { tokenDigest },
+        select: {
+          expiresAt: true,
+          user: {
+            select: {
+              status: true,
+              emailVerifiedAt: true,
+              credential: { select: { userId: true } },
+            },
+          },
+        },
+      }),
+    )
+    return (
+      token !== null &&
+      token.expiresAt > now &&
+      token.user.status === 'ACTIVE' &&
+      token.user.emailVerifiedAt !== null &&
+      token.user.credential !== null
+    )
+  }
+
   public async confirmPasswordReset(
     input: ConfirmPasswordResetInput,
   ): Promise<SelfServiceDeliveryTarget | undefined> {

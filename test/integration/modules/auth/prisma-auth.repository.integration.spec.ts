@@ -396,4 +396,112 @@ describe('PrismaAuthRepository', () => {
       ).toBe(0)
     })
   })
+
+  it('checks reset-token eligibility without exposing account state', async () => {
+    const now = new Date('2026-08-06T12:00:00.000Z')
+    const digests = {
+      expired: Buffer.alloc(32, 11).toString('base64url'),
+      disabled: Buffer.alloc(32, 12).toString('base64url'),
+      unverified: Buffer.alloc(32, 13).toString('base64url'),
+      noCredential: Buffer.alloc(32, 14).toString('base64url'),
+      eligible: Buffer.alloc(32, 15).toString('base64url'),
+    }
+    await provider.withClient(async (client) => {
+      await client.user.create({
+        data: {
+          email: 'expired-reset@example.com',
+          normalizedEmail: 'expired-reset@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'hash' } },
+          passwordResetToken: {
+            create: {
+              tokenDigest: digests.expired,
+              expiresAt: new Date('2026-08-06T11:59:59.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      })
+      await client.user.create({
+        data: {
+          email: 'disabled-reset@example.com',
+          normalizedEmail: 'disabled-reset@example.com',
+          status: 'DISABLED',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'hash' } },
+          passwordResetToken: {
+            create: {
+              tokenDigest: digests.disabled,
+              expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      })
+      await client.user.create({
+        data: {
+          email: 'unverified-reset@example.com',
+          normalizedEmail: 'unverified-reset@example.com',
+          emailVerifiedAt: null,
+          credential: { create: { passwordHash: 'hash' } },
+          passwordResetToken: {
+            create: {
+              tokenDigest: digests.unverified,
+              expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      })
+      await client.user.create({
+        data: {
+          email: 'no-credential-reset@example.com',
+          normalizedEmail: 'no-credential-reset@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          passwordResetToken: {
+            create: {
+              tokenDigest: digests.noCredential,
+              expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      })
+      await client.user.create({
+        data: {
+          email: 'eligible-reset@example.com',
+          normalizedEmail: 'eligible-reset@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'hash' } },
+          passwordResetToken: {
+            create: {
+              tokenDigest: digests.eligible,
+              expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      })
+    })
+
+    await expect(
+      repository.isPasswordResetTokenEligible(
+        Buffer.alloc(32, 10).toString('base64url'),
+        now,
+      ),
+    ).resolves.toBe(false)
+    for (const digest of [
+      digests.expired,
+      digests.disabled,
+      digests.unverified,
+      digests.noCredential,
+    ]) {
+      await expect(
+        repository.isPasswordResetTokenEligible(digest, now),
+      ).resolves.toBe(false)
+    }
+    await expect(
+      repository.isPasswordResetTokenEligible(digests.eligible, now),
+    ).resolves.toBe(true)
+  })
 })

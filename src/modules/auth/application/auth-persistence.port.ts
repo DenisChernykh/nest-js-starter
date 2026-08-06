@@ -54,6 +54,7 @@ export interface AuthPersistencePort {
     token: SelfServiceTokenInput,
     now: Date,
   ): Promise<SelfServiceDeliveryTarget | undefined>
+  isPasswordResetTokenEligible(tokenDigest: string, now: Date): Promise<boolean>
   confirmPasswordReset(
     input: ConfirmPasswordResetInput,
   ): Promise<SelfServiceDeliveryTarget | undefined>

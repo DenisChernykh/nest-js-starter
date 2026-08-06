@@ -59,6 +59,11 @@ export class ConfirmPasswordResetUseCase {
     try {
       const tokenDigest = this.codec.digest(input.token)
       if (tokenDigest === undefined) throw new AuthTokenInvalidOrExpiredError()
+      const eligible = await this.persistence.isPasswordResetTokenEligible(
+        tokenDigest,
+        input.now,
+      )
+      if (!eligible) throw new AuthTokenInvalidOrExpiredError()
       const passwordHash = await this.passwords.hash(input.newPassword)
       const target = await this.persistence.confirmPasswordReset({
         tokenDigest,
