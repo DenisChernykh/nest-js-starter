@@ -29,6 +29,12 @@ Redis; observability remains fail-open. See the
 [local development runbook](docs/runbooks/local-development.md) for Grafana
 Explore, Watch behavior, host debugging and shutdown.
 
+Self-service registration, email verification and password recovery remain
+disabled by default. Enable `AUTH_SELF_SERVICE_MODE=open` only with a validated
+app origin and SMTP/from values. For local testing, start the opt-in Mailpit
+profile and follow the [self-service lifecycle runbook](docs/runbooks/self-service-account-lifecycle.md);
+SMTP is not an API readiness dependency.
+
 BullMQ is intentionally opt-in. The default API receives no `REDIS_QUEUE_URL`
 and registers no queue. A product that adopts durable jobs starts the separate
 local dependency explicitly:
@@ -129,13 +135,15 @@ one-shot migrator and gates API startup on its successful exit.
 - `docs/runbooks/auth-redis-loss.md` and `docs/runbooks/queue-redis-loss.md` — separate Redis recovery contracts;
 - `docs/runbooks/deployment-preparation.md` — Compose, Caddy, GHCR and environment-input readiness before any hosted deployment;
 - `docs/runbooks/production.env.example` — symbolic production input names;
+- `docs/runbooks/self-service-account-lifecycle.md` — enable, local smoke,
+  outage/recovery, disable, rollback and frontend fragment handling;
 - `docs/runbooks/` — local PostgreSQL, Redis loss, telemetry, Compose deployment and image publication.
 
 The core grows only from a concrete consumer and failure model. The BullMQ
 platform boundary is available for a product adoption, but it does not supply a
-product queue, worker, payload or retry policy. Object storage, self-service
-auth and frontend cache invalidation remain independent candidates; none justify
-a generator, manifest, recipe engine or global Redis/cache service.
+product queue, worker, payload or retry policy. Object storage and frontend
+cache invalidation remain independent candidates; none justify a generator,
+manifest, recipe engine or global Redis/cache service.
 
 Feature branches start from `stage`, use Conventional Commits and merge to
 `stage` through pull requests. No deployment is performed by local checks.

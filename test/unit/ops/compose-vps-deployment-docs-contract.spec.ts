@@ -86,6 +86,7 @@ describe('Compose VPS deployment documentation contract', () => {
     const security = read('docs/runbooks/deployment-security.md')
     const rollback = read('docs/runbooks/rollback.md')
     const publication = read('docs/runbooks/stage-image-publication.md')
+    const selfService = read('docs/runbooks/self-service-account-lifecycle.md')
 
     for (const runbook of productionRunbooks) {
       const content = read(runbook)
@@ -207,6 +208,25 @@ describe('Compose VPS deployment documentation contract', () => {
         phrase,
       )
       expect(read('docs/runbooks/failed-prisma-migration.md')).toContain(phrase)
+    }
+
+    for (const phrase of [
+      'AUTH_SELF_SERVICE_MODE=open',
+      'AUTH_PUBLIC_APP_URL',
+      'AUTH_SMTP_URL',
+      'AUTH_MAIL_FROM',
+      'docker compose --profile mail up --detach --wait mail',
+      'http://127.0.0.1:8025',
+      'register',
+      'capture verification',
+      'old session rejected',
+      'SMTP is not readiness',
+      'partial audit',
+      'never recover raw token from DB',
+      'read fragment',
+      'clear fragment from browser history',
+    ]) {
+      expect(selfService).toContain(phrase)
     }
     expect(read('docs/runbooks/deployment-database-roles.md')).not.toContain(
       'pnpm exec prisma migrate deploy',

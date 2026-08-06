@@ -7,6 +7,20 @@ The canonical production prefix is:
 
     production_compose=(docker compose --project-name nest-js-starter-production --env-file /opt/nest-js-starter/.env --env-file /opt/nest-js-starter/active-api.env --file /opt/nest-js-starter/docker-compose.production.yml --file /opt/nest-js-starter/docker-compose.production.rollback.yml)
 
+## Self-service account lifecycle boundary
+
+Production Compose passes `AUTH_SELF_SERVICE_MODE=disabled` by default and
+does not include Mailpit, a queue worker or an SMTP readiness dependency. Open
+mode requires all of `AUTH_PUBLIC_APP_URL`, `AUTH_SMTP_URL` and `AUTH_MAIL_FROM`;
+the app origin must be HTTPS. SMTP credentials are server-side secret-manager
+values and never belong in Git, images, logs or release metadata.
+
+The API commits account and token state before best-effort mail delivery.
+SMTP outage therefore remains a partial audit outcome rather than a readiness
+failure. Use the [self-service lifecycle runbook](self-service-account-lifecycle.md)
+for resend/recovery and disable procedures. Hosted SMTP, DNS and Caddy changes
+are an authorized operations task, not repository evidence.
+
 ## Secret format and exposure
 
 The filled server-side .env is the only persistent deployment/runtime secret

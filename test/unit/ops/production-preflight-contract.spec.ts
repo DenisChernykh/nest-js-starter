@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -89,6 +90,20 @@ fi
 }
 
 describe('production preflight helper contract', () => {
+  it('keeps self-service disabled with symbolic optional mail inputs', () => {
+    const environmentTemplate = readFileSync(
+      'docs/runbooks/production.env.example',
+      'utf8',
+    )
+
+    expect(environmentTemplate).toContain('AUTH_SELF_SERVICE_MODE=disabled')
+    expect(environmentTemplate).toContain('AUTH_PUBLIC_APP_URL=')
+    expect(environmentTemplate).toContain('AUTH_SMTP_URL=')
+    expect(environmentTemplate).toContain('AUTH_MAIL_FROM=')
+    expect(environmentTemplate).not.toContain('smtp://')
+    expect(environmentTemplate).not.toContain('mailpit')
+  })
+
   it('accepts an exact GHCR digest and matching OCI revision', () => {
     const result = runHelper()
 

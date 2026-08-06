@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto'
-
 import {
   createAuthTestRuntime,
   type AuthE2eRuntime,
@@ -133,12 +131,23 @@ describe('telemetry and problem privacy matrix', () => {
     const actionUrl = tokenMatch[1]
     const rawToken = actionUrl.split('#token=', 2)[1]
     if (rawToken === undefined) throw new Error('Expected raw token')
+    const persisted = await runtime.pool.query<{
+      token_digest: string | null
+    }>(
+      `SELECT evt.token_digest
+         FROM email_verification_tokens evt
+         JOIN users u ON u.id = evt.user_id
+        WHERE u.normalized_email = $1`,
+      [email],
+    )
+    const tokenDigest = persisted.rows[0]?.token_digest
+    expect(tokenDigest).toMatch(/^[A-Za-z0-9_-]{43}$/u)
+    if (tokenDigest === undefined || tokenDigest === null) {
+      throw new Error('Expected persisted verification digest')
+    }
     const invalidToken = `${rawToken.slice(0, -1)}${
       rawToken.endsWith('A') ? 'B' : 'A'
     }`
-    const tokenDigest = createHash('sha256')
-      .update(invalidToken, 'utf8')
-      .digest('base64url')
     const smtpUrl = mailpitSmtpUrl(mailpit)
     const problemResponse = await fetch(
       `${instance.baseUrl}/v1/auth/email-verification/confirm`,

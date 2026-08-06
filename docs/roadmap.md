@@ -237,7 +237,10 @@ Roadmap status has four meanings:
 
 ### Milestone 9: self-service account lifecycle
 
-**Status:** recommended next design.
+**Status:** implemented on feature branch `feat/self-service-account-lifecycle`.
+
+This status describes local feature-branch implementation only. It does not
+claim merge, publication, deployment or hosted SMTP/DNS/secrets verification.
 
 **Goal:** add the first public account-creation path without replacing the
 existing opaque sessions, password hashing, RBAC, session revocation or
@@ -264,17 +267,22 @@ operator provisioning flows.
 - the existing session cookie bytes, CSRF/Origin policy, roles and permissions
   do not change as a side effect.
 
-**Design decisions required before an implementation plan:**
+**Implemented contract and evidence:**
 
-- whether login is allowed before email verification;
-- the first mail transport and local test transport;
-- delivery reliability and retry behavior;
-- rate-limit keys and thresholds for registration, resend and recovery.
+- active self-service users require email verification before login;
+- verification and reset tokens are purpose-specific, single-use PostgreSQL
+  digests with atomic confirmation and reset session-generation invalidation;
+- public operations are non-enumerating, rate-limited and default-disabled;
+- auth-owned Nodemailer delivery is best-effort, bounded and absent from
+  readiness, while local Mailpit is profile-gated;
+- focused unit, integration, real-container e2e, OpenAPI and operations
+  contract suites pass on this feature branch;
+- enable, local smoke, outage/recovery, disable, rollback and frontend fragment
+  procedures are in `docs/runbooks/self-service-account-lifecycle.md`.
 
-**Exit evidence:** focused token and security decision-table tests, real
-PostgreSQL/Redis integration where state crosses those boundaries, complete
-OpenAPI/problem contracts, browser-style e2e flows, recovery documentation and
-fresh unchanged-core gates.
+The coordinator-owned aggregate `pnpm check` and `pnpm oci:check` gates remain
+separate post-review evidence. Hosted SMTP/DNS/secrets and deployment remain
+unperformed boundaries.
 
 ### Milestone 10: files and media
 
@@ -352,10 +360,9 @@ commitment:
 
 ### Execution readiness
 
-No new product capability in this roadmap is implementation-ready merely
-because it is listed. Milestone 9 is the recommended next design and still has
-the explicit decisions above. Every later candidate remains `NOT READY` until
-its adoption trigger, product contract, provider choices and failure model are
+No later product capability in this roadmap is implementation-ready merely
+because it is listed. Every later candidate remains `NOT READY` until its
+adoption trigger, product contract, provider choices and failure model are
 resolved in a separate design. There is no automatic continuation from one
 milestone or track row to the next.
 
