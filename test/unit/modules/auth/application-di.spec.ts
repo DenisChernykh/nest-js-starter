@@ -172,6 +172,7 @@ describe('auth application Nest dependency injection', () => {
           useValue: {
             sendEmailVerification: jest.fn(),
             sendPasswordReset: jest.fn(),
+            sendAccountInvitation: jest.fn(),
           } as AuthMailDeliveryPort,
         },
         {

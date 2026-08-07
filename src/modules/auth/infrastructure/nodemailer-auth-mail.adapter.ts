@@ -111,6 +111,18 @@ export class NodemailerAuthMailAdapter implements AuthMailDeliveryPort {
     })
   }
 
+  public sendAccountInvitation(input: {
+    readonly to: string
+    readonly invitationUrl: string
+  }): Promise<{ readonly delivered: boolean }> {
+    return this.deliver({
+      to: input.to,
+      subject: 'Приглашение в аккаунт',
+      text: `Примите приглашение: ${input.invitationUrl}`,
+      html: `<p>Примите приглашение:</p><p><a href="${escapeHtml(input.invitationUrl)}">Принять приглашение</a></p>`,
+    })
+  }
+
   private async deliver(input: {
     readonly to: string
     readonly subject: string

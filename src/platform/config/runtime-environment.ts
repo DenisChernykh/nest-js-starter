@@ -159,6 +159,13 @@ export function buildApiRuntimeConfig(
           : { mailFrom: environment.AUTH_MAIL_FROM }),
         ...runtimeDefaults.auth.selfService,
       }),
+      accountAdministration: Object.freeze({
+        mode: environment.AUTH_ACCOUNT_ADMINISTRATION_MODE,
+      }),
+      accountEmailWorkflows: Object.freeze({
+        mode: environment.AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE,
+        ...runtimeDefaults.auth.accountEmailWorkflows,
+      }),
     }),
   })
 }

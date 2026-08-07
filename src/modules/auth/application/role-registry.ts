@@ -1,6 +1,7 @@
 import { DisabledUserError, UnknownRoleAssignmentError } from './auth-errors'
-import { definePermissions, type PermissionKey } from './permission'
+import { definePermissions } from './permission'
 import type { UserStatus } from '../domain/user-status'
+import type { PermissionKey } from '@/shared/application/permission'
 
 /** Immutable code-owned mapping from one durable role to explicit permissions. */
 export interface RoleDefinition {
@@ -8,9 +9,23 @@ export interface RoleDefinition {
   readonly permissions: readonly PermissionKey[]
 }
 
+export const AUTH_ACCOUNTS_READ_PERMISSION: PermissionKey = definePermissions([
+  'auth.accounts.read',
+])[0]!
+export const AUTH_ACCOUNTS_MANAGE_PERMISSION: PermissionKey = definePermissions(
+  ['auth.accounts.manage'],
+)[0]!
+export const AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION: PermissionKey =
+  definePermissions(['auth.accounts.roles.manage'])[0]!
+
 /** Explicit permissions held by the built-in initial administrator role. */
 export const SYSTEM_ADMIN_PERMISSIONS: readonly PermissionKey[] =
-  definePermissions(['system.docs.read'])
+  definePermissions([
+    'system.docs.read',
+    AUTH_ACCOUNTS_READ_PERMISSION,
+    AUTH_ACCOUNTS_MANAGE_PERMISSION,
+    AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION,
+  ])
 
 /**
  * Creates the immutable registry from the product-owned role catalog.
@@ -104,5 +119,28 @@ export class RoleRegistry {
       for (const permission of rolePermissions) permissions.add(permission)
     }
     return Object.freeze(new ImmutablePermissionSet([...permissions].sort()))
+  }
+
+  public hasRole(roleKey: string): boolean {
+    return this.roles.has(roleKey)
+  }
+
+  public roleKeysGranting(permission: PermissionKey): readonly string[] {
+    return Object.freeze(
+      [...this.roles.entries()]
+        .filter(([, permissions]) => permissions.includes(permission))
+        .map(([roleKey]) => roleKey)
+        .sort(),
+    )
+  }
+
+  public listRoles(): readonly RoleDefinition[] {
+    return Object.freeze(
+      [...this.roles.entries()]
+        .map(([key, permissions]) =>
+          Object.freeze({ key, permissions: Object.freeze([...permissions]) }),
+        )
+        .sort((left, right) => left.key.localeCompare(right.key)),
+    )
   }
 }

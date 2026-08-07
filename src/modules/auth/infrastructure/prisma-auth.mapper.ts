@@ -9,7 +9,7 @@ export interface AuthProjectionRow {
   readonly id: string
   readonly email: string
   readonly normalizedEmail: string
-  readonly status: 'ACTIVE' | 'DISABLED'
+  readonly status: 'INVITED' | 'ACTIVE' | 'DISABLED' | 'RETIRED'
   readonly emailVerifiedAt: Date | null
   readonly sessionGeneration: bigint
   readonly roles: readonly { readonly roleKey: string }[]

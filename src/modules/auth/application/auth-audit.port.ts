@@ -15,6 +15,11 @@ export type AuthAuditAction =
   | 'email_verification_confirm'
   | 'password_reset_request'
   | 'password_reset_confirm'
+  | 'account_retire'
+  | 'account_invitation_create'
+  | 'account_invitation_resend'
+  | 'account_invitation_accept'
+  | 'admin_password_reset_request'
 
 /** Reviewed result classes shared by all auth audit actions. */
 export type AuthAuditOutcome = 'success' | 'denied' | 'partial' | 'conflict'

@@ -55,7 +55,7 @@ export class ConfirmPasswordResetUseCase {
   public async execute(
     input: ConfirmPasswordResetInput,
   ): Promise<AuthDurableMutationResult> {
-    this.policy.assertOpen()
+    this.policy.assertPasswordResetConfirmationEnabled()
     try {
       const tokenDigest = this.codec.digest(input.token)
       if (tokenDigest === undefined) throw new AuthTokenInvalidOrExpiredError()

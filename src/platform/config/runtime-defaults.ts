@@ -54,6 +54,9 @@ export interface AuthRuntimeDefaults {
     readonly requestWindowMs: number
     readonly resendCooldownMs: number
   }
+  readonly accountEmailWorkflows: {
+    readonly invitationTtlMs: number
+  }
 }
 
 /** Fixed OpenTelemetry trace exporter and batch processor deadlines. */
@@ -124,6 +127,9 @@ export const runtimeDefaults: RuntimeDefaults = Object.freeze({
       resetRequestAccountLimit: 3,
       requestWindowMs: 3_600_000,
       resendCooldownMs: 60_000,
+    }),
+    accountEmailWorkflows: Object.freeze({
+      invitationTtlMs: 86_400_000,
     }),
   }),
   observability: Object.freeze({

@@ -69,7 +69,13 @@ export interface AuthDurableMutationResult {
 export interface AuthSessionCleanupObserver {
   /** Records a non-durable cleanup failure without changing committed success. */
   cleanupIncomplete(
-    operation: 'change-password' | 'logout-all' | 'password-reset',
+    operation:
+      | 'change-password'
+      | 'logout-all'
+      | 'password-reset'
+      | 'account-disable'
+      | 'account-retire'
+      | 'admin-logout-all',
     userId: string,
   ): void
 }

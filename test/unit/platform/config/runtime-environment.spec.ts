@@ -38,6 +38,8 @@ describe('runtime environment', () => {
         TRUST_PROXY_CIDRS: [],
         REDIS_KEY_PREFIX: 'nest-js-starter',
         AUTH_SELF_SERVICE_MODE: 'disabled',
+        AUTH_ACCOUNT_ADMINISTRATION_MODE: 'disabled',
+        AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE: 'disabled',
       }),
     )
     expect(validate()).not.toHaveProperty('REDIS_CACHE_URL')
@@ -73,6 +75,31 @@ describe('runtime environment', () => {
         AUTH_PUBLIC_APP_URL: 'https://app.example.com',
         AUTH_SMTP_URL: 'smtps://mailer:secret@smtp.example.com:465',
         AUTH_MAIL_FROM: 'no-reply@example.com',
+      }),
+    )
+  })
+
+  it('requires complete mail configuration when account email workflows are enabled', () => {
+    expect(() =>
+      validate({
+        AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
+        AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE: 'enabled',
+      }),
+    ).toThrow(RuntimeConfigurationError)
+
+    expect(
+      validate({
+        AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
+        AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE: 'enabled',
+        AUTH_PUBLIC_APP_URL: 'https://app.example.com',
+        CORS_ORIGINS: 'https://app.example.com',
+        AUTH_SMTP_URL: 'smtps://mailer:secret@smtp.example.com:465',
+        AUTH_MAIL_FROM: 'no-reply@example.com',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
+        AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE: 'enabled',
       }),
     )
   })

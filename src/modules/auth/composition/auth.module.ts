@@ -3,6 +3,14 @@ import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core'
 
 import { AUTH_AUDIT } from '../application/auth-audit.port'
 import {
+  ACCOUNT_ADMINISTRATION,
+  type AccountAdministrationPort,
+} from '../application/account-administration.port'
+import { AccountAdministrationService } from '../application/account-administration.service'
+import { ACCOUNT_EMAIL_WORKFLOWS } from '../application/account-email-workflows.port'
+import { AccountEmailWorkflowsPolicy } from '../application/account-email-workflows.policy'
+import { AccountEmailWorkflowsService } from '../application/account-email-workflows.service'
+import {
   AUTH_MAIL_DELIVERY,
   type AuthMailDeliveryPort,
 } from '../application/auth-mail-delivery.port'
@@ -11,6 +19,7 @@ import {
   AUTH_DUMMY_PASSWORD_HASH,
   AUTH_SESSION_CLEANUP_OBSERVER,
   NOOP_AUTH_SESSION_CLEANUP_OBSERVER,
+  type AuthSessionCleanupObserver,
 } from '../application/auth.types'
 import { AuthenticateSessionUseCase } from '../application/authenticate-session.use-case'
 import { ChangePasswordUseCase } from '../application/change-password.use-case'
@@ -45,6 +54,9 @@ import { RedisLoginRateLimiter } from '../infrastructure/redis-login-rate-limite
 import { RedisPublicAuthRateLimiter } from '../infrastructure/redis-public-auth-rate-limiter'
 import { RedisSessionStore } from '../infrastructure/redis-session.store'
 import { AuthCookieAdapter } from '../presentation/auth-cookie.adapter'
+import { AdminAccountController } from '../presentation/admin-account.controller'
+import { AdminAccountEmailWorkflowsController } from '../presentation/admin-account-email-workflows.controller'
+import { AccountEmailWorkflowsController } from '../presentation/account-email-workflows.controller'
 import { PublicAuthResponseDelay } from '../presentation/public-auth-response-delay'
 import {
   AUTH_LOGIN_METADATA_FACTORY,
@@ -84,7 +96,13 @@ export interface AuthModuleOptions {
 /** Composes durable identity, Redis sessions and ordered browser policy. */
 @Module({
   imports: [RuntimeConfigModule, DatabaseModule, RedisModule],
-  controllers: [AuthController, SelfServiceAuthController],
+  controllers: [
+    AuthController,
+    SelfServiceAuthController,
+    AdminAccountController,
+    AdminAccountEmailWorkflowsController,
+    AccountEmailWorkflowsController,
+  ],
   providers: [
     AuthRequestContext,
     GetMeQuery,
@@ -144,6 +162,8 @@ export interface AuthModuleOptions {
         }),
     },
     { provide: AUTH_PERSISTENCE, useExisting: PrismaAuthRepository },
+    { provide: ACCOUNT_ADMINISTRATION, useExisting: PrismaAuthRepository },
+    { provide: ACCOUNT_EMAIL_WORKFLOWS, useExisting: PrismaAuthRepository },
     { provide: PASSWORD_HASHER, useExisting: Argon2PasswordHasher },
     { provide: LOGIN_RATE_LIMITER, useExisting: RedisLoginRateLimiter },
     { provide: SESSION_STORE, useExisting: RedisSessionStore },
@@ -152,7 +172,49 @@ export interface AuthModuleOptions {
       provide: SelfServiceAuthPolicy,
       inject: [RuntimeConfigService],
       useFactory: (config: RuntimeConfigService): SelfServiceAuthPolicy =>
-        new SelfServiceAuthPolicy(config.auth.selfService),
+        new SelfServiceAuthPolicy({
+          ...config.auth.selfService,
+          emailWorkflowsEnabled:
+            config.auth.accountEmailWorkflows.mode === 'enabled',
+        }),
+    },
+    {
+      provide: AccountAdministrationService,
+      inject: [
+        ACCOUNT_ADMINISTRATION,
+        RuntimeConfigService,
+        RoleRegistry,
+        SESSION_STORE,
+        AUTH_SESSION_CLEANUP_OBSERVER,
+        AUTH_AUDIT,
+      ],
+      useFactory: (
+        persistence: AccountAdministrationPort,
+        config: RuntimeConfigService,
+        roles: RoleRegistry,
+        sessions: RedisSessionStore,
+        cleanupObserver: AuthSessionCleanupObserver,
+        audit: AuthAuditLogger,
+      ): AccountAdministrationService =>
+        new AccountAdministrationService(
+          persistence,
+          config.auth.accountAdministration,
+          roles,
+          sessions,
+          cleanupObserver,
+          audit,
+        ),
+    },
+    {
+      provide: AccountEmailWorkflowsPolicy,
+      inject: [RuntimeConfigService],
+      useFactory: (config: RuntimeConfigService): AccountEmailWorkflowsPolicy =>
+        new AccountEmailWorkflowsPolicy({
+          ...config.auth.accountEmailWorkflows,
+          ...(config.auth.selfService.publicAppUrl === undefined
+            ? {}
+            : { publicAppUrl: config.auth.selfService.publicAppUrl }),
+        }),
     },
     {
       provide: PUBLIC_AUTH_RATE_LIMITER,
@@ -187,10 +249,14 @@ export interface AuthModuleOptions {
       inject: [RuntimeConfigService],
       useFactory: (config: RuntimeConfigService): AuthMailDeliveryPort => {
         const selfService = config.auth.selfService
-        if (selfService.mode !== 'open') {
+        if (
+          selfService.mode !== 'open' &&
+          config.auth.accountEmailWorkflows.mode !== 'enabled'
+        ) {
           return {
             sendEmailVerification: () => Promise.resolve({ delivered: false }),
             sendPasswordReset: () => Promise.resolve({ delivered: false }),
+            sendAccountInvitation: () => Promise.resolve({ delivered: false }),
           }
         }
         return new NodemailerAuthMailAdapter({
@@ -240,6 +306,7 @@ export interface AuthModuleOptions {
     ConfirmEmailVerificationUseCase,
     RequestPasswordResetUseCase,
     ConfirmPasswordResetUseCase,
+    AccountEmailWorkflowsService,
     {
       provide: PublicAuthResponseDelay,
       inject: [RuntimeConfigService],

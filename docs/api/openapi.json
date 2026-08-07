@@ -1,6 +1,154 @@
 {
   "components": {
     "schemas": {
+      "AcceptAccountInvitationRequestDto": {
+        "properties": {
+          "password": {
+            "format": "password",
+            "maxLength": 1024,
+            "minLength": 12,
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 43,
+            "minLength": 43,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ],
+        "type": "object"
+      },
+      "AccountMailDeliveryResponseDto": {
+        "properties": {
+          "mailDelivery": {
+            "enum": [
+              "delivered",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "mailDelivery"
+        ],
+        "type": "object"
+      },
+      "AdminAccountListResponseDto": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminAccountResponseDto"
+            },
+            "type": "array"
+          },
+          "total": {
+            "minimum": 0,
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "type": "object"
+      },
+      "AdminAccountResponseDto": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "nullable": true,
+            "type": "string"
+          },
+          "emailVerifiedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "retiredAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "revision": {
+            "minimum": 0,
+            "type": "number"
+          },
+          "roleKeys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "state": {
+            "enum": [
+              "invited",
+              "active",
+              "disabled",
+              "retired"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "state",
+          "emailVerifiedAt",
+          "roleKeys",
+          "createdAt",
+          "updatedAt",
+          "retiredAt",
+          "revision"
+        ],
+        "type": "object"
+      },
+      "AdminRoleCatalogItemDto": {
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "permissions"
+        ],
+        "type": "object"
+      },
+      "AdminRoleCatalogResponseDto": {
+        "properties": {
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/AdminRoleCatalogItemDto"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "roles"
+        ],
+        "type": "object"
+      },
       "ApprovalRequestResponseDto": {
         "properties": {
           "createdAt": {
@@ -169,6 +317,30 @@
         "required": [
           "token",
           "newPassword"
+        ],
+        "type": "object"
+      },
+      "CreateAccountInvitationRequestDto": {
+        "properties": {
+          "email": {
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "roleKeys": {
+            "example": [
+              "system.admin"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "type": "array"
+          }
+        },
+        "required": [
+          "roleKeys",
+          "email"
         ],
         "type": "object"
       },
@@ -375,6 +547,9 @@
               "APPROVAL_SELF_DECISION_FORBIDDEN",
               "AUTHENTICATION_REQUIRED",
               "AUTHORIZATION_DENIED",
+              "AUTH_ACCOUNT_ETAG_MALFORMED",
+              "AUTH_ACCOUNT_PRECONDITION_FAILED",
+              "AUTH_ACCOUNT_PRECONDITION_REQUIRED",
               "AUTH_TOKEN_INVALID_OR_EXPIRED",
               "CONFLICT",
               "DEPENDENCY_UNAVAILABLE",
@@ -485,6 +660,24 @@
         ],
         "type": "object"
       },
+      "ReplaceAccountRolesRequestDto": {
+        "properties": {
+          "roleKeys": {
+            "example": [
+              "system.admin"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "type": "array"
+          }
+        },
+        "required": [
+          "roleKeys"
+        ],
+        "type": "object"
+      },
       "SelfServiceEmailRequestDto": {
         "properties": {
           "email": {
@@ -530,6 +723,21 @@
         ],
         "type": "object"
       },
+      "UpdateAccountStatusRequestDto": {
+        "properties": {
+          "status": {
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
       "ValidationProblemResponseDto": {
         "properties": {
           "code": {
@@ -539,6 +747,9 @@
               "APPROVAL_SELF_DECISION_FORBIDDEN",
               "AUTHENTICATION_REQUIRED",
               "AUTHORIZATION_DENIED",
+              "AUTH_ACCOUNT_ETAG_MALFORMED",
+              "AUTH_ACCOUNT_PRECONDITION_FAILED",
+              "AUTH_ACCOUNT_PRECONDITION_REQUIRED",
               "AUTH_TOKEN_INVALID_OR_EXPIRED",
               "CONFLICT",
               "DEPENDENCY_UNAVAILABLE",
@@ -784,6 +995,1830 @@
         "summary": "Check the irreversible startup latch",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/v1/admin/auth/account-invitations": {
+      "post": {
+        "operationId": "adminAuthCreateAccountInvitation",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccountInvitationRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountMailDeliveryResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHENTICATION_REQUIRED": {
+                    "summary": "Authentication required",
+                    "value": {
+                      "code": "AUTHENTICATION_REQUIRED",
+                      "detail": "Valid authentication is required for this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 401,
+                      "title": "Authentication required",
+                      "type": "https://nest-js-starter.invalid/problems/authentication-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHORIZATION_DENIED": {
+                    "summary": "Authorization denied",
+                    "value": {
+                      "code": "AUTHORIZATION_DENIED",
+                      "detail": "The authenticated principal cannot perform this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 403,
+                      "title": "Authorization denied",
+                      "type": "https://nest-js-starter.invalid/problems/authorization-denied"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authorization denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "detail": "The requested resource does not exist.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 404,
+                      "title": "Resource not found",
+                      "type": "https://nest-js-starter.invalid/problems/not-found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "CONFLICT": {
+                    "summary": "Request conflict",
+                    "value": {
+                      "code": "CONFLICT",
+                      "detail": "The request conflicts with the current resource state.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 409,
+                      "title": "Request conflict",
+                      "type": "https://nest-js-starter.invalid/problems/conflict"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Request conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "summary": "Validation failed",
+                    "value": {
+                      "code": "VALIDATION_FAILED",
+                      "detail": "One or more request fields are invalid.",
+                      "errors": [
+                        {
+                          "code": "invalid_email",
+                          "detail": "The field must be a valid email address.",
+                          "pointer": "/email"
+                        }
+                      ],
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 422,
+                      "title": "Validation failed",
+                      "type": "https://nest-js-starter.invalid/problems/validation-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponseDto"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "DEPENDENCY_UNAVAILABLE": {
+                    "summary": "Dependency unavailable",
+                    "value": {
+                      "code": "DEPENDENCY_UNAVAILABLE",
+                      "detail": "A required service is temporarily unavailable.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 503,
+                      "title": "Dependency unavailable",
+                      "type": "https://nest-js-starter.invalid/problems/dependency-unavailable"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Create an account invitation",
+        "tags": [
+          "admin auth"
+        ]
+      }
+    },
+    "/v1/admin/auth/accounts": {
+      "get": {
+        "operationId": "adminAuthListAccounts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "enum": [
+                "invited",
+                "active",
+                "disabled",
+                "retired"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccountListResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHENTICATION_REQUIRED": {
+                    "summary": "Authentication required",
+                    "value": {
+                      "code": "AUTHENTICATION_REQUIRED",
+                      "detail": "Valid authentication is required for this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 401,
+                      "title": "Authentication required",
+                      "type": "https://nest-js-starter.invalid/problems/authentication-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHORIZATION_DENIED": {
+                    "summary": "Authorization denied",
+                    "value": {
+                      "code": "AUTHORIZATION_DENIED",
+                      "detail": "The authenticated principal cannot perform this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 403,
+                      "title": "Authorization denied",
+                      "type": "https://nest-js-starter.invalid/problems/authorization-denied"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authorization denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "detail": "The requested resource does not exist.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 404,
+                      "title": "Resource not found",
+                      "type": "https://nest-js-starter.invalid/problems/not-found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Resource not found"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "List accounts",
+        "tags": [
+          "admin auth"
+        ]
+      }
+    },
+    "/v1/admin/auth/accounts/{accountId}": {
+      "delete": {
+        "operationId": "adminAuthRetireAccount",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "pattern": "^\"account-[0-9a-f-]+-[0-9]+\"$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTH_ACCOUNT_ETAG_MALFORMED": {
+                    "summary": "Malformed account ETag",
+                    "value": {
+                      "code": "AUTH_ACCOUNT_ETAG_MALFORMED",
+                      "detail": "The If-Match header is not a valid account ETag.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 400,
+                      "title": "Malformed account ETag",
+                      "type": "https://nest-js-starter.invalid/problems/auth-account-etag-malformed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Malformed account ETag"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHENTICATION_REQUIRED": {
+                    "summary": "Authentication required",
+                    "value": {
+                      "code": "AUTHENTICATION_REQUIRED",
+                      "detail": "Valid authentication is required for this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 401,
+                      "title": "Authentication required",
+                      "type": "https://nest-js-starter.invalid/problems/authentication-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHORIZATION_DENIED": {
+                    "summary": "Authorization denied",
+                    "value": {
+                      "code": "AUTHORIZATION_DENIED",
+                      "detail": "The authenticated principal cannot perform this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 403,
+                      "title": "Authorization denied",
+                      "type": "https://nest-js-starter.invalid/problems/authorization-denied"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authorization denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "detail": "The requested resource does not exist.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 404,
+                      "title": "Resource not found",
+                      "type": "https://nest-js-starter.invalid/problems/not-found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTH_ACCOUNT_PRECONDITION_FAILED": {
+                    "summary": "Account ETag no longer current",
+                    "value": {
+                      "code": "AUTH_ACCOUNT_PRECONDITION_FAILED",
+                      "detail": "The account has changed since the supplied ETag was issued.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 412,
+                      "title": "Account ETag no longer current",
+                      "type": "https://nest-js-starter.invalid/problems/auth-account-precondition-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Account ETag no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "summary": "Validation failed",
+                    "value": {
+                      "code": "VALIDATION_FAILED",
+                      "detail": "One or more request fields are invalid.",
+                      "errors": [
+                        {
+                          "code": "invalid_email",
+                          "detail": "The field must be a valid email address.",
+                          "pointer": "/email"
+                        }
+                      ],
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 422,
+                      "title": "Validation failed",
+                      "type": "https://nest-js-starter.invalid/problems/validation-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponseDto"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTH_ACCOUNT_PRECONDITION_REQUIRED": {
+                    "summary": "Account ETag required",
+                    "value": {
+                      "code": "AUTH_ACCOUNT_PRECONDITION_REQUIRED",
+                      "detail": "A current account ETag is required for this mutation.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 428,
+                      "title": "Account ETag required",
+                      "type": "https://nest-js-starter.invalid/problems/auth-account-precondition-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Account ETag required"
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Retire an account",
+        "tags": [
+          "admin auth"
+        ]
+      },
+      "get": {
+        "operationId": "adminAuthGetAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccountResponseDto"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHENTICATION_REQUIRED": {
+                    "summary": "Authentication required",
+                    "value": {
+                      "code": "AUTHENTICATION_REQUIRED",
+                      "detail": "Valid authentication is required for this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 401,
+                      "title": "Authentication required",
+                      "type": "https://nest-js-starter.invalid/problems/authentication-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHORIZATION_DENIED": {
+                    "summary": "Authorization denied",
+                    "value": {
+                      "code": "AUTHORIZATION_DENIED",
+                      "detail": "The authenticated principal cannot perform this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 403,
+                      "title": "Authorization denied",
+                      "type": "https://nest-js-starter.invalid/problems/authorization-denied"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authorization denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "detail": "The requested resource does not exist.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 404,
+                      "title": "Resource not found",
+                      "type": "https://nest-js-starter.invalid/problems/not-found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "summary": "Validation failed",
+                    "value": {
+                      "code": "VALIDATION_FAILED",
+                      "detail": "One or more request fields are invalid.",
+                      "errors": [
+                        {
+                          "code": "invalid_email",
+                          "detail": "The field must be a valid email address.",
+                          "pointer": "/email"
+                        }
+                      ],
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 422,
+                      "title": "Validation failed",
+                      "type": "https://nest-js-starter.invalid/problems/validation-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponseDto"
+                }
+              }
+            },
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Get one account",
+        "tags": [
+          "admin auth"
+        ]
+      }
+    },
+    "/v1/admin/auth/accounts/{accountId}/invitation/resend": {
+      "post": {
+        "operationId": "adminAuthResendAccountInvitation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountMailDeliveryResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHENTICATION_REQUIRED": {
+                    "summary": "Authentication required",
+                    "value": {
+                      "code": "AUTHENTICATION_REQUIRED",
+                      "detail": "Valid authentication is required for this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 401,
+                      "title": "Authentication required",
+                      "type": "https://nest-js-starter.invalid/problems/authentication-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHORIZATION_DENIED": {
+                    "summary": "Authorization denied",
+                    "value": {
+                      "code": "AUTHORIZATION_DENIED",
+                      "detail": "The authenticated principal cannot perform this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 403,
+                      "title": "Authorization denied",
+                      "type": "https://nest-js-starter.invalid/problems/authorization-denied"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authorization denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "detail": "The requested resource does not exist.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 404,
+                      "title": "Resource not found",
+                      "type": "https://nest-js-starter.invalid/problems/not-found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "CONFLICT": {
+                    "summary": "Request conflict",
+                    "value": {
+                      "code": "CONFLICT",
+                      "detail": "The request conflicts with the current resource state.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 409,
+                      "title": "Request conflict",
+                      "type": "https://nest-js-starter.invalid/problems/conflict"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Request conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "summary": "Validation failed",
+                    "value": {
+                      "code": "VALIDATION_FAILED",
+                      "detail": "One or more request fields are invalid.",
+                      "errors": [
+                        {
+                          "code": "invalid_email",
+                          "detail": "The field must be a valid email address.",
+                          "pointer": "/email"
+                        }
+                      ],
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 422,
+                      "title": "Validation failed",
+                      "type": "https://nest-js-starter.invalid/problems/validation-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponseDto"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "DEPENDENCY_UNAVAILABLE": {
+                    "summary": "Dependency unavailable",
+                    "value": {
+                      "code": "DEPENDENCY_UNAVAILABLE",
+                      "detail": "A required service is temporarily unavailable.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 503,
+                      "title": "Dependency unavailable",
+                      "type": "https://nest-js-starter.invalid/problems/dependency-unavailable"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Resend an account invitation",
+        "tags": [
+          "admin auth"
+        ]
+      }
+    },
+    "/v1/admin/auth/accounts/{accountId}/password-reset": {
+      "post": {
+        "operationId": "adminAuthRequestPasswordReset",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountMailDeliveryResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHENTICATION_REQUIRED": {
+                    "summary": "Authentication required",
+                    "value": {
+                      "code": "AUTHENTICATION_REQUIRED",
+                      "detail": "Valid authentication is required for this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 401,
+                      "title": "Authentication required",
+                      "type": "https://nest-js-starter.invalid/problems/authentication-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHORIZATION_DENIED": {
+                    "summary": "Authorization denied",
+                    "value": {
+                      "code": "AUTHORIZATION_DENIED",
+                      "detail": "The authenticated principal cannot perform this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 403,
+                      "title": "Authorization denied",
+                      "type": "https://nest-js-starter.invalid/problems/authorization-denied"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authorization denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "detail": "The requested resource does not exist.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 404,
+                      "title": "Resource not found",
+                      "type": "https://nest-js-starter.invalid/problems/not-found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "CONFLICT": {
+                    "summary": "Request conflict",
+                    "value": {
+                      "code": "CONFLICT",
+                      "detail": "The request conflicts with the current resource state.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 409,
+                      "title": "Request conflict",
+                      "type": "https://nest-js-starter.invalid/problems/conflict"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Request conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "summary": "Validation failed",
+                    "value": {
+                      "code": "VALIDATION_FAILED",
+                      "detail": "One or more request fields are invalid.",
+                      "errors": [
+                        {
+                          "code": "invalid_email",
+                          "detail": "The field must be a valid email address.",
+                          "pointer": "/email"
+                        }
+                      ],
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 422,
+                      "title": "Validation failed",
+                      "type": "https://nest-js-starter.invalid/problems/validation-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponseDto"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "DEPENDENCY_UNAVAILABLE": {
+                    "summary": "Dependency unavailable",
+                    "value": {
+                      "code": "DEPENDENCY_UNAVAILABLE",
+                      "detail": "A required service is temporarily unavailable.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 503,
+                      "title": "Dependency unavailable",
+                      "type": "https://nest-js-starter.invalid/problems/dependency-unavailable"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Dependency unavailable"
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Request an account password reset",
+        "tags": [
+          "admin auth"
+        ]
+      }
+    },
+    "/v1/admin/auth/accounts/{accountId}/roles": {
+      "put": {
+        "operationId": "adminAuthReplaceAccountRoles",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "pattern": "^\"account-[0-9a-f-]+-[0-9]+\"$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceAccountRolesRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccountResponseDto"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTH_ACCOUNT_ETAG_MALFORMED": {
+                    "summary": "Malformed account ETag",
+                    "value": {
+                      "code": "AUTH_ACCOUNT_ETAG_MALFORMED",
+                      "detail": "The If-Match header is not a valid account ETag.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 400,
+                      "title": "Malformed account ETag",
+                      "type": "https://nest-js-starter.invalid/problems/auth-account-etag-malformed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Malformed account ETag"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHENTICATION_REQUIRED": {
+                    "summary": "Authentication required",
+                    "value": {
+                      "code": "AUTHENTICATION_REQUIRED",
+                      "detail": "Valid authentication is required for this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 401,
+                      "title": "Authentication required",
+                      "type": "https://nest-js-starter.invalid/problems/authentication-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHORIZATION_DENIED": {
+                    "summary": "Authorization denied",
+                    "value": {
+                      "code": "AUTHORIZATION_DENIED",
+                      "detail": "The authenticated principal cannot perform this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 403,
+                      "title": "Authorization denied",
+                      "type": "https://nest-js-starter.invalid/problems/authorization-denied"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authorization denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "detail": "The requested resource does not exist.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 404,
+                      "title": "Resource not found",
+                      "type": "https://nest-js-starter.invalid/problems/not-found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "CONFLICT": {
+                    "summary": "Request conflict",
+                    "value": {
+                      "code": "CONFLICT",
+                      "detail": "The request conflicts with the current resource state.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 409,
+                      "title": "Request conflict",
+                      "type": "https://nest-js-starter.invalid/problems/conflict"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Request conflict"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTH_ACCOUNT_PRECONDITION_FAILED": {
+                    "summary": "Account ETag no longer current",
+                    "value": {
+                      "code": "AUTH_ACCOUNT_PRECONDITION_FAILED",
+                      "detail": "The account has changed since the supplied ETag was issued.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 412,
+                      "title": "Account ETag no longer current",
+                      "type": "https://nest-js-starter.invalid/problems/auth-account-precondition-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Account ETag no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "summary": "Validation failed",
+                    "value": {
+                      "code": "VALIDATION_FAILED",
+                      "detail": "One or more request fields are invalid.",
+                      "errors": [
+                        {
+                          "code": "invalid_email",
+                          "detail": "The field must be a valid email address.",
+                          "pointer": "/email"
+                        }
+                      ],
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 422,
+                      "title": "Validation failed",
+                      "type": "https://nest-js-starter.invalid/problems/validation-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponseDto"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTH_ACCOUNT_PRECONDITION_REQUIRED": {
+                    "summary": "Account ETag required",
+                    "value": {
+                      "code": "AUTH_ACCOUNT_PRECONDITION_REQUIRED",
+                      "detail": "A current account ETag is required for this mutation.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 428,
+                      "title": "Account ETag required",
+                      "type": "https://nest-js-starter.invalid/problems/auth-account-precondition-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Account ETag required"
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Replace account roles",
+        "tags": [
+          "admin auth"
+        ]
+      }
+    },
+    "/v1/admin/auth/accounts/{accountId}/sessions": {
+      "delete": {
+        "operationId": "adminAuthLogoutAll",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHENTICATION_REQUIRED": {
+                    "summary": "Authentication required",
+                    "value": {
+                      "code": "AUTHENTICATION_REQUIRED",
+                      "detail": "Valid authentication is required for this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 401,
+                      "title": "Authentication required",
+                      "type": "https://nest-js-starter.invalid/problems/authentication-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHORIZATION_DENIED": {
+                    "summary": "Authorization denied",
+                    "value": {
+                      "code": "AUTHORIZATION_DENIED",
+                      "detail": "The authenticated principal cannot perform this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 403,
+                      "title": "Authorization denied",
+                      "type": "https://nest-js-starter.invalid/problems/authorization-denied"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authorization denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "detail": "The requested resource does not exist.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 404,
+                      "title": "Resource not found",
+                      "type": "https://nest-js-starter.invalid/problems/not-found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "summary": "Validation failed",
+                    "value": {
+                      "code": "VALIDATION_FAILED",
+                      "detail": "One or more request fields are invalid.",
+                      "errors": [
+                        {
+                          "code": "invalid_email",
+                          "detail": "The field must be a valid email address.",
+                          "pointer": "/email"
+                        }
+                      ],
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 422,
+                      "title": "Validation failed",
+                      "type": "https://nest-js-starter.invalid/problems/validation-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponseDto"
+                }
+              }
+            },
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Revoke every account session",
+        "tags": [
+          "admin auth"
+        ]
+      }
+    },
+    "/v1/admin/auth/accounts/{accountId}/status": {
+      "put": {
+        "operationId": "adminAuthUpdateAccountStatus",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "pattern": "^\"account-[0-9a-f-]+-[0-9]+\"$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountStatusRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccountResponseDto"
+                }
+              }
+            },
+            "description": "",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTH_ACCOUNT_ETAG_MALFORMED": {
+                    "summary": "Malformed account ETag",
+                    "value": {
+                      "code": "AUTH_ACCOUNT_ETAG_MALFORMED",
+                      "detail": "The If-Match header is not a valid account ETag.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 400,
+                      "title": "Malformed account ETag",
+                      "type": "https://nest-js-starter.invalid/problems/auth-account-etag-malformed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Malformed account ETag"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHENTICATION_REQUIRED": {
+                    "summary": "Authentication required",
+                    "value": {
+                      "code": "AUTHENTICATION_REQUIRED",
+                      "detail": "Valid authentication is required for this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 401,
+                      "title": "Authentication required",
+                      "type": "https://nest-js-starter.invalid/problems/authentication-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHORIZATION_DENIED": {
+                    "summary": "Authorization denied",
+                    "value": {
+                      "code": "AUTHORIZATION_DENIED",
+                      "detail": "The authenticated principal cannot perform this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 403,
+                      "title": "Authorization denied",
+                      "type": "https://nest-js-starter.invalid/problems/authorization-denied"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authorization denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "detail": "The requested resource does not exist.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 404,
+                      "title": "Resource not found",
+                      "type": "https://nest-js-starter.invalid/problems/not-found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "CONFLICT": {
+                    "summary": "Request conflict",
+                    "value": {
+                      "code": "CONFLICT",
+                      "detail": "The request conflicts with the current resource state.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 409,
+                      "title": "Request conflict",
+                      "type": "https://nest-js-starter.invalid/problems/conflict"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Request conflict"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTH_ACCOUNT_PRECONDITION_FAILED": {
+                    "summary": "Account ETag no longer current",
+                    "value": {
+                      "code": "AUTH_ACCOUNT_PRECONDITION_FAILED",
+                      "detail": "The account has changed since the supplied ETag was issued.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 412,
+                      "title": "Account ETag no longer current",
+                      "type": "https://nest-js-starter.invalid/problems/auth-account-precondition-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Account ETag no longer current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "summary": "Validation failed",
+                    "value": {
+                      "code": "VALIDATION_FAILED",
+                      "detail": "One or more request fields are invalid.",
+                      "errors": [
+                        {
+                          "code": "invalid_email",
+                          "detail": "The field must be a valid email address.",
+                          "pointer": "/email"
+                        }
+                      ],
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 422,
+                      "title": "Validation failed",
+                      "type": "https://nest-js-starter.invalid/problems/validation-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponseDto"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTH_ACCOUNT_PRECONDITION_REQUIRED": {
+                    "summary": "Account ETag required",
+                    "value": {
+                      "code": "AUTH_ACCOUNT_PRECONDITION_REQUIRED",
+                      "detail": "A current account ETag is required for this mutation.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 428,
+                      "title": "Account ETag required",
+                      "type": "https://nest-js-starter.invalid/problems/auth-account-precondition-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Account ETag required"
+          }
+        },
+        "security": [
+          {
+            "csrfToken": [],
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Update account status",
+        "tags": [
+          "admin auth"
+        ]
+      }
+    },
+    "/v1/admin/auth/roles": {
+      "get": {
+        "operationId": "adminAuthListRoles",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminRoleCatalogResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHENTICATION_REQUIRED": {
+                    "summary": "Authentication required",
+                    "value": {
+                      "code": "AUTHENTICATION_REQUIRED",
+                      "detail": "Valid authentication is required for this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 401,
+                      "title": "Authentication required",
+                      "type": "https://nest-js-starter.invalid/problems/authentication-required"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHORIZATION_DENIED": {
+                    "summary": "Authorization denied",
+                    "value": {
+                      "code": "AUTHORIZATION_DENIED",
+                      "detail": "The authenticated principal cannot perform this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 403,
+                      "title": "Authorization denied",
+                      "type": "https://nest-js-starter.invalid/problems/authorization-denied"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authorization denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "detail": "The requested resource does not exist.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 404,
+                      "title": "Resource not found",
+                      "type": "https://nest-js-starter.invalid/problems/not-found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Resource not found"
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "List code-owned roles",
+        "tags": [
+          "admin auth"
         ]
       }
     },
@@ -1494,6 +3529,267 @@
         "summary": "Decide an approval request",
         "tags": [
           "approval-requests"
+        ]
+      }
+    },
+    "/v1/auth/account-invitations/accept": {
+      "post": {
+        "operationId": "authAcceptAccountInvitation",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptAccountInvitationRequestDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Invitation accepted without a browser session."
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTH_TOKEN_INVALID_OR_EXPIRED": {
+                    "summary": "Authentication token invalid or expired",
+                    "value": {
+                      "code": "AUTH_TOKEN_INVALID_OR_EXPIRED",
+                      "detail": "The authentication token is invalid or expired.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 400,
+                      "title": "Authentication token invalid or expired",
+                      "type": "https://nest-js-starter.invalid/problems/auth-token-invalid-or-expired"
+                    }
+                  },
+                  "MALFORMED_REQUEST": {
+                    "summary": "Malformed request",
+                    "value": {
+                      "code": "MALFORMED_REQUEST",
+                      "detail": "The request could not be parsed.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 400,
+                      "title": "Malformed request",
+                      "type": "https://nest-js-starter.invalid/problems/malformed-request"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Malformed request; Authentication token invalid or expired"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "AUTHORIZATION_DENIED": {
+                    "summary": "Authorization denied",
+                    "value": {
+                      "code": "AUTHORIZATION_DENIED",
+                      "detail": "The authenticated principal cannot perform this request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 403,
+                      "title": "Authorization denied",
+                      "type": "https://nest-js-starter.invalid/problems/authorization-denied"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Authorization denied"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "NOT_FOUND": {
+                    "summary": "Resource not found",
+                    "value": {
+                      "code": "NOT_FOUND",
+                      "detail": "The requested resource does not exist.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 404,
+                      "title": "Resource not found",
+                      "type": "https://nest-js-starter.invalid/problems/not-found"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Resource not found"
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "PAYLOAD_TOO_LARGE": {
+                    "summary": "Payload too large",
+                    "value": {
+                      "code": "PAYLOAD_TOO_LARGE",
+                      "detail": "The request payload exceeds the configured limit.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 413,
+                      "title": "Payload too large",
+                      "type": "https://nest-js-starter.invalid/problems/payload-too-large"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "UNSUPPORTED_MEDIA_TYPE": {
+                    "summary": "Unsupported media type",
+                    "value": {
+                      "code": "UNSUPPORTED_MEDIA_TYPE",
+                      "detail": "The request content type is not supported.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 415,
+                      "title": "Unsupported media type",
+                      "type": "https://nest-js-starter.invalid/problems/unsupported-media-type"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "VALIDATION_FAILED": {
+                    "summary": "Validation failed",
+                    "value": {
+                      "code": "VALIDATION_FAILED",
+                      "detail": "One or more request fields are invalid.",
+                      "errors": [
+                        {
+                          "code": "invalid_email",
+                          "detail": "The field must be a valid email address.",
+                          "pointer": "/email"
+                        }
+                      ],
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 422,
+                      "title": "Validation failed",
+                      "type": "https://nest-js-starter.invalid/problems/validation-failed"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemResponseDto"
+                }
+              }
+            },
+            "description": "Validation failed"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "RATE_LIMIT_EXCEEDED": {
+                    "summary": "Rate limit exceeded",
+                    "value": {
+                      "code": "RATE_LIMIT_EXCEEDED",
+                      "detail": "Too many requests were submitted in the allowed interval.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 429,
+                      "title": "Rate limit exceeded",
+                      "type": "https://nest-js-starter.invalid/problems/rate-limit-exceeded"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Rate limit exceeded"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "summary": "Internal server error",
+                    "value": {
+                      "code": "INTERNAL_ERROR",
+                      "detail": "The server could not complete the request.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 500,
+                      "title": "Internal server error",
+                      "type": "https://nest-js-starter.invalid/problems/internal-error"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "DEPENDENCY_UNAVAILABLE": {
+                    "summary": "Dependency unavailable",
+                    "value": {
+                      "code": "DEPENDENCY_UNAVAILABLE",
+                      "detail": "A required service is temporarily unavailable.",
+                      "instance": "urn:request:01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "requestId": "01J3G1TQ9YQ7R7FQZ5P6M2K8A4",
+                      "status": 503,
+                      "title": "Dependency unavailable",
+                      "type": "https://nest-js-starter.invalid/problems/dependency-unavailable"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemResponseDto"
+                }
+              }
+            },
+            "description": "Dependency unavailable"
+          }
+        },
+        "security": [],
+        "summary": "Accept an account invitation without creating a session",
+        "tags": [
+          "auth"
         ]
       }
     },
@@ -4103,6 +6399,10 @@
     {
       "description": "Hardened browser-session authentication endpoints.",
       "name": "auth"
+    },
+    {
+      "description": "Protected account administration endpoints.",
+      "name": "admin auth"
     },
     {
       "description": "Reference approval-request creation, visibility and decision workflow.",

@@ -45,6 +45,7 @@ function mail(
   delivery: AuthMailDeliveryPort = {
     sendEmailVerification: jest.fn(() => Promise.resolve({ delivered: true })),
     sendPasswordReset: jest.fn(() => Promise.resolve({ delivered: true })),
+    sendAccountInvitation: jest.fn(() => Promise.resolve({ delivered: true })),
   },
 ): AuthMailDeliveryPort {
   return delivery
@@ -111,6 +112,7 @@ describe('self-service account lifecycle use cases', () => {
         Promise.reject(new AuthMailDeliveryError()),
       ),
       sendPasswordReset: jest.fn(),
+      sendAccountInvitation: jest.fn(),
     })
     const registerSelfServiceUser = jest.fn(
       (

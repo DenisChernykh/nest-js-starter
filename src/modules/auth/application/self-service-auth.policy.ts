@@ -5,6 +5,7 @@ export interface SelfServiceAuthPolicyConfig {
   readonly publicAppUrl?: string
   readonly verificationTtlMs: number
   readonly passwordResetTtlMs: number
+  readonly emailWorkflowsEnabled?: boolean
 }
 
 export class SelfServiceDisabledError extends AuthError {
@@ -30,6 +31,11 @@ export class SelfServiceAuthPolicy {
 
   public assertOpen(): void {
     if (this.config.mode !== 'open') throw new SelfServiceDisabledError()
+  }
+
+  public assertPasswordResetConfirmationEnabled(): void {
+    if (this.config.mode !== 'open' && !this.config.emailWorkflowsEnabled)
+      throw new SelfServiceDisabledError()
   }
 
   public verificationUrl(rawToken: string): string {
