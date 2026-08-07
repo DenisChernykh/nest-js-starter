@@ -12,9 +12,10 @@ evidence machinery.
 
 ## Status snapshot
 
-The source baseline used for this roadmap is the clean local `stage` branch at
-`8a74ef9245fd1d9d0b8df80f55569ecebd338991` on 2026-08-06. The universal
-production foundation and the maintained `approval-requests` reference are
+The implementation baseline summarized by this roadmap is the remote `stage`
+branch at `138de8a71f892ded1653b5acfb277d0d8f0431f2` on 2026-08-07, after
+self-service account lifecycle PR #36 merged. The universal production
+foundation, the maintained `approval-requests` reference and Milestone 9 are
 present on that baseline.
 
 - PR [#13](https://github.com/DenisChernykh/nest-js-starter/pull/13)
@@ -25,17 +26,20 @@ present on that baseline.
 - PR [#35](https://github.com/DenisChernykh/nest-js-starter/pull/35)
   delivered the repository-owned production Compose, Caddy handoff and
   recovery contract described by Milestone 7.
+- PR [#36](https://github.com/DenisChernykh/nest-js-starter/pull/36)
+  delivered the self-service account lifecycle described by Milestone 9.
 - The
-  [Stage image run for `913fef3`](https://github.com/DenisChernykh/nest-js-starter/actions/runs/30192505866)
-  completed successfully.
-- The recorded `stage` quick gate had 60 unit suites and 302 tests. Integration
-  and e2e suites remain in `pnpm check`; Docker verification remains in
-  `pnpm oci:check` and stage publication.
+  [Stage image run for `138de8a`](https://github.com/DenisChernykh/nest-js-starter/actions/runs/31160138877)
+  completed successfully: `pnpm check` passed 89 unit suites/490 tests, 17
+  integration suites/79 tests and 29 e2e suites/101 tests.
+- The same run published
+  `ghcr.io/denischernykh/nest-js-starter@sha256:13fb6f6cc53663ace6402d8c0b02489e8b46f1e98ec8240b0ce32add3c946e2a`,
+  passed the Trivy High/Critical gate, pulled that immutable digest and passed
+  OCI smoke with revision `138de8a71f892ded1653b5acfb277d0d8f0431f2`.
 
-No fresh CI, OCI, hosted deployment or recovery drill was run for this
-documentation revision. This snapshot records source presence at the stated
-revision; it is not a permanent substitute for checking the current branch,
-workflow runs and hosted state.
+This snapshot records repository, CI and published-image evidence for the
+stated revision. Hosted SMTP, DNS, secrets, deployment and recovery-drill
+verification remain unperformed and must not be inferred from those results.
 
 ## Maintained vertical reference
 
@@ -175,6 +179,8 @@ application core.
 
 ## Milestone 8: clean-copy certification
 
+**Status:** pending. No Git-free clean-copy certification run is recorded.
+
 **Goal:** prove that the core is reusable after the historical generator,
 manifest, golden fixtures and custom certification engine have been removed.
 
@@ -209,8 +215,10 @@ pagination helper, HTTP client, outbox, cache or generic repository does not
 qualify on its own; those are implementation details that may be introduced
 inside an accepted product capability.
 
-Roadmap status has four meanings:
+Roadmap status has five meanings:
 
+- **delivered** — merged into `stage` with the relevant repository and CI gates
+  passing; hosted evidence is included only when explicitly recorded;
 - **recommended next design** — the strongest current candidate, but not an
   authorization to implement it;
 - **queued** — high reuse potential with a stable boundary, still requiring a
@@ -237,10 +245,14 @@ Roadmap status has four meanings:
 
 ### Milestone 9: self-service account lifecycle
 
-**Status:** implemented on feature branch `feat/self-service-account-lifecycle`.
+**Status:** delivered on `stage` by PR
+[#36](https://github.com/DenisChernykh/nest-js-starter/pull/36).
 
-This status describes local feature-branch implementation only. It does not
-claim merge, publication, deployment or hosted SMTP/DNS/secrets verification.
+The feature branch merged as
+`138de8a71f892ded1653b5acfb277d0d8f0431f2` on 2026-08-07. The PR full gate and
+the post-merge Stage image run passed, including immutable image publication,
+Trivy and OCI smoke. Hosted SMTP, DNS, secrets and deployment remain separate,
+unperformed environment evidence.
 
 **Goal:** add the first public account-creation path without replacing the
 existing opaque sessions, password hashing, RBAC, session revocation or
@@ -276,17 +288,16 @@ operator provisioning flows.
 - auth-owned Nodemailer delivery is best-effort, bounded and absent from
   readiness, while local Mailpit is profile-gated;
 - focused unit, integration, real-container e2e, OpenAPI and operations
-  contract suites pass on this feature branch;
+  contract suites pass on the recorded `stage` baseline;
 - enable, local smoke, outage/recovery, disable, rollback and frontend fragment
   procedures are in `docs/runbooks/self-service-account-lifecycle.md`.
 
-The coordinator-owned aggregate `pnpm check` and `pnpm oci:check` gates remain
-separate post-review evidence. Hosted SMTP/DNS/secrets and deployment remain
-unperformed boundaries.
+The exact aggregate test counts, published digest and OCI evidence are recorded
+in the status snapshot above.
 
 ### Milestone 10: files and media
 
-**Status:** queued and independent from Milestone 9.
+**Status:** recommended next design and independent from Milestone 9.
 
 **Goal:** give one named business module a complete upload, authorization,
 retrieval and deletion flow backed by S3-compatible object storage.
@@ -296,6 +307,11 @@ allowed content, visibility and retention. A platform adapter may provide
 object put/get/delete or presigning, but the starter does not introduce a
 global `Attachment` aggregate or allow arbitrary buckets and keys from HTTP
 input.
+
+The first design and implementation may use local, profile-gated MinIO plus
+S3-compatible integration tests. A paid hosted S3 provider is not required
+until a production adoption; provider credentials, access policy, TLS, backup
+and hosted recovery evidence stay environment-specific.
 
 **Design decisions required before an implementation plan:**
 
@@ -311,7 +327,7 @@ fresh unchanged-core gates.
 
 ### Direction-gated product tracks
 
-After Milestone 9, and independently of the queued files/media capability,
+After Milestone 9, and independently of the recommended files/media design,
 select a track only when a real product supplies its ownership and failure
 model. Track rows are ordered discovery candidates, not pre-approved delivery
 sequences.
@@ -360,11 +376,13 @@ commitment:
 
 ### Execution readiness
 
-No later product capability in this roadmap is implementation-ready merely
-because it is listed. Every later candidate remains `NOT READY` until its
-adoption trigger, product contract, provider choices and failure model are
-resolved in a separate design. There is no automatic continuation from one
-milestone or track row to the next.
+Milestone 9 is delivered. Milestone 10 is the recommended next design, but it
+remains `NOT READY` for implementation until the first consumer, visibility,
+upload flow, content policy and storage failure model are resolved. Milestone 8
+clean-copy certification also remains pending and can be scheduled separately
+because it certifies the reusable core rather than adding a product capability.
+Every direction-gated candidate still requires its own adoption trigger,
+product contract, provider choices and failure model.
 
 ### Platform adoption candidates
 
