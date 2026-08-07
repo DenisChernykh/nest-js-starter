@@ -119,6 +119,8 @@ describe('offline OpenAPI generation', () => {
       document.paths['/v1/admin/auth/accounts/{accountId}/roles']?.['put']
     const retire =
       document.paths['/v1/admin/auth/accounts/{accountId}']?.['delete']
+    const logoutAll =
+      document.paths['/v1/admin/auth/accounts/{accountId}/sessions']?.['delete']
 
     expect(list?.parameters?.map(({ name }) => name).sort()).toEqual(
       ['page', 'pageSize', 'search', 'state'].sort(),
@@ -132,7 +134,7 @@ describe('offline OpenAPI generation', () => {
       )
       expect(operation?.requestBody).toBeDefined()
       expect(Object.keys(operation?.responses ?? {})).toEqual(
-        expect.arrayContaining(['200', '400', '412', '428']),
+        expect.arrayContaining(['200', '400', '412', '415', '428']),
       )
     }
     expect(retire?.parameters).toEqual(
@@ -141,7 +143,10 @@ describe('offline OpenAPI generation', () => {
       ]),
     )
     expect(Object.keys(retire?.responses ?? {})).toEqual(
-      expect.arrayContaining(['204', '400', '412', '428']),
+      expect.arrayContaining(['204', '400', '412', '415', '428']),
+    )
+    expect(Object.keys(logoutAll?.responses ?? {})).toEqual(
+      expect.arrayContaining(['204', '415']),
     )
   })
 

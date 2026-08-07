@@ -40,7 +40,8 @@ recovery.
 
 Retirement deletes credentials, role assignments and auth one-time tokens,
 increments session generation, removes Redis sessions and replaces both email
-columns with `retired+<user-id>@invalid.local`. The user row and product-owned
+columns with the reserved non-email value `retired:<user-id>`. It cannot be
+claimed through ordinary email validation. The user row and product-owned
 foreign keys remain intact. The original normalized email is then available to
 a later provisioning or invitation workflow.
 

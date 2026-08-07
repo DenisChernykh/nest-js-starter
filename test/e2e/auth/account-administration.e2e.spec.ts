@@ -224,7 +224,7 @@ describe('account administration HTTP contract', () => {
       [targetId],
     )
     expect(persisted.rows[0]).toEqual({
-      email: `retired+${targetId}@invalid.local`,
+      email: `retired:${targetId}`,
       credentials: 0,
     })
   })

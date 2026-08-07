@@ -347,6 +347,13 @@ describe('PrismaAuthRepository', () => {
           },
         },
       })
+      const claimableTombstone = `retired+${target.id}@invalid.local`
+      await client.user.create({
+        data: {
+          email: claimableTombstone,
+          normalizedEmail: claimableTombstone,
+        },
+      })
       await client.approvalRequest.create({
         data: {
           title: 'Preserved request',
@@ -381,8 +388,8 @@ describe('PrismaAuthRepository', () => {
       })
       expect(retired).toMatchObject({
         id: target.id,
-        email: `retired+${target.id}@invalid.local`,
-        normalizedEmail: `retired+${target.id}@invalid.local`,
+        email: `retired:${target.id}`,
+        normalizedEmail: `retired:${target.id}`,
         status: 'RETIRED',
         credential: null,
         roles: [],

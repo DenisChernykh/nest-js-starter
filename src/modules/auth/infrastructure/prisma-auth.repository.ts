@@ -637,7 +637,7 @@ export class PrismaAuthRepository
         await client.passwordResetToken.deleteMany({
           where: { userId: input.accountId },
         })
-        const tombstone = `retired+${input.accountId}@invalid.local`
+        const tombstone = `retired:${input.accountId}`
         await client.user.update({
           where: { id: input.accountId },
           data: {
