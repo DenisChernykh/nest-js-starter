@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
@@ -14,6 +15,11 @@ import {
 } from '@test/e2e/support/spawn-built-api'
 import { startPostgresContainer } from '@test/integration/support/postgres-container'
 import { startRedisContainer } from '@test/integration/support/redis-container'
+import {
+  mailpitSmtpUrl,
+  startMailpitContainer,
+  type StartedMailpitContainer,
+} from '@test/integration/support/mailpit-container'
 import { runPrismaCommand } from '@test/integration/support/run-prisma-command'
 import { waitForCondition } from '@test/integration/support/wait-for-condition'
 
@@ -28,6 +34,7 @@ export interface AuthApiInstance {
 export interface AuthE2eRuntime {
   readonly postgres: StartedPostgreSqlContainer
   readonly redis: StartedRedisContainer
+  readonly mailpit?: StartedMailpitContainer
   readonly pool: Pool
   readonly instances: readonly AuthApiInstance[]
   /**
@@ -44,8 +51,15 @@ export interface AuthE2eRuntime {
     roleKeys?: readonly string[],
   ): Promise<string>
   flushRedis(): Promise<void>
+  suspendRedis(): Promise<() => Promise<void>>
   stop(): Promise<void>
 }
+
+export interface AuthTestRuntimeOptions {
+  readonly smtpFailure?: boolean
+}
+
+const smtpFailureUrl = 'smtp://127.0.0.1:1'
 
 function authEnvironment(
   databaseUrl: string,
@@ -74,18 +88,33 @@ function authEnvironment(
 export async function createAuthTestRuntime(
   instanceCount = 2,
   overrides: Record<string, string> = {},
+  options: AuthTestRuntimeOptions = {},
 ): Promise<AuthE2eRuntime> {
   const [postgres, redis] = await Promise.all([
     startPostgresContainer(),
     startRedisContainer(),
   ])
+  let mailpit: StartedMailpitContainer | undefined
+  try {
+    mailpit =
+      overrides.AUTH_SELF_SERVICE_MODE === 'open' && !options.smtpFailure
+        ? await startMailpitContainer()
+        : undefined
+  } catch (error: unknown) {
+    await Promise.all([postgres.stop(), redis.stop()])
+    throw error
+  }
   const databaseUrl = postgres.getConnectionUri()
   const migration = runPrismaCommand(
     ['migrate', 'deploy', '--config', 'prisma.config.ts'],
     databaseUrl,
   )
   if (migration.exitCode !== 0) {
-    await Promise.all([postgres.stop(), redis.stop()])
+    await Promise.all([
+      postgres.stop(),
+      redis.stop(),
+      mailpit?.stop() ?? Promise.resolve(),
+    ])
     throw new Error('Auth test migration failed')
   }
   const ports = await Promise.all(
@@ -102,7 +131,25 @@ export async function createAuthTestRuntime(
           redis.getConnectionUrl(),
           baseUrl,
           origins,
-          overrides,
+          {
+            ...overrides,
+            ...(mailpit === undefined
+              ? options.smtpFailure
+                ? {
+                    AUTH_PUBLIC_APP_URL:
+                      overrides.AUTH_PUBLIC_APP_URL ?? baseUrl,
+                    AUTH_SMTP_URL: smtpFailureUrl,
+                    AUTH_MAIL_FROM:
+                      overrides.AUTH_MAIL_FROM ?? 'no-reply@example.com',
+                  }
+                : {}
+              : {
+                  AUTH_PUBLIC_APP_URL: overrides.AUTH_PUBLIC_APP_URL ?? baseUrl,
+                  AUTH_SMTP_URL: mailpitSmtpUrl(mailpit),
+                  AUTH_MAIL_FROM:
+                    overrides.AUTH_MAIL_FROM ?? 'no-reply@example.com',
+                }),
+          },
         ),
       )
       instances.push({ baseUrl, child, output: captureChildOutput(child) })
@@ -122,7 +169,11 @@ export async function createAuthTestRuntime(
     for (const { child } of instances) {
       if (child.exitCode === null) child.kill('SIGKILL')
     }
-    await Promise.all([postgres.stop(), redis.stop()])
+    await Promise.all([
+      postgres.stop(),
+      redis.stop(),
+      mailpit?.stop() ?? Promise.resolve(),
+    ])
     throw error
   }
   const pool = new Pool({ connectionString: databaseUrl })
@@ -138,11 +189,16 @@ export async function createAuthTestRuntime(
         })
       }),
     )
-    await Promise.all([postgres.stop(), redis.stop()])
+    await Promise.all([
+      postgres.stop(),
+      redis.stop(),
+      mailpit?.stop() ?? Promise.resolve(),
+    ])
   }
   return {
     postgres,
     redis,
+    ...(mailpit === undefined ? {} : { mailpit }),
     pool,
     instances,
     createUser: async (email, passwordHash, roleKeys = ['system.admin']) => {
@@ -150,8 +206,9 @@ export async function createAuthTestRuntime(
         passwordHash ??
         (await new Argon2PasswordHasher().hash('valid password'))
       const user = await pool.query<{ id: string }>(
-        `INSERT INTO users (email, normalized_email, updated_at)
-         VALUES ($1, $2, CURRENT_TIMESTAMP) RETURNING id`,
+        `INSERT INTO users (
+           email, normalized_email, email_verified_at, updated_at
+         ) VALUES ($1, $2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id`,
         [email, email.trim().toLowerCase()],
       )
       const userId = user.rows[0]?.id
@@ -183,6 +240,30 @@ export async function createAuthTestRuntime(
         client.destroy()
       }
     },
+    suspendRedis: () => {
+      runDockerControl('pause', redis.getId())
+      let resumed = false
+      return Promise.resolve(() => {
+        if (resumed) return Promise.resolve()
+        runDockerControl('unpause', redis.getId())
+        resumed = true
+        return Promise.resolve()
+      })
+    },
     stop,
+  }
+}
+
+function runDockerControl(
+  action: 'pause' | 'unpause',
+  containerId: string,
+): void {
+  const result = spawnSync('docker', [action, containerId], {
+    encoding: 'utf8',
+  })
+  if (result.status !== 0) {
+    throw new Error(
+      `Docker ${action} failed with status ${String(result.status)}`,
+    )
   }
 }

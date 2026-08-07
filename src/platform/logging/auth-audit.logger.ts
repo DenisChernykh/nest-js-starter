@@ -18,6 +18,7 @@ const allowed = new Set([
   'login|denied|INVALID_CREDENTIALS',
   'login|denied|RATE_LIMITED',
   'login|denied|DEPENDENCY_UNAVAILABLE',
+  'login|denied|EMAIL_VERIFICATION_REQUIRED',
   'logout|success|LOGOUT_COMPLETED',
   'logout|denied|DEPENDENCY_UNAVAILABLE',
   'logout_all|success|LOGOUT_ALL_COMPLETED',
@@ -47,6 +48,17 @@ const allowed = new Set([
   'docs_access|denied|AUTHENTICATION_REQUIRED',
   'docs_access|denied|AUTHORIZATION_DENIED',
   'docs_access|denied|DEPENDENCY_UNAVAILABLE',
+  'registration|success|REGISTRATION_ACCEPTED',
+  'registration|conflict|EMAIL_ALREADY_EXISTS',
+  'email_verification_send|success|MAIL_DELIVERED',
+  'email_verification_send|partial|MAIL_DELIVERY_FAILED',
+  'email_verification_confirm|success|EMAIL_VERIFIED',
+  'email_verification_confirm|denied|TOKEN_INVALID_OR_EXPIRED',
+  'password_reset_request|success|MAIL_DELIVERED',
+  'password_reset_request|partial|MAIL_DELIVERY_FAILED',
+  'password_reset_confirm|success|PASSWORD_RESET_COMPLETED',
+  'password_reset_confirm|partial|CLEANUP_INCOMPLETE',
+  'password_reset_confirm|denied|TOKEN_INVALID_OR_EXPIRED',
 ])
 const validIdentifier = /^[A-Za-z0-9_-]{1,128}$/u
 

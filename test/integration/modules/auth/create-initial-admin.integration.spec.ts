@@ -64,6 +64,10 @@ describe('CreateInitialAdminUseCase', () => {
     expect(results.filter((result) => result.created)).toHaveLength(1)
     await provider.withClient(async (client) => {
       expect(await client.user.count()).toBe(1)
+      const admin = await client.user.findFirstOrThrow({
+        select: { emailVerifiedAt: true },
+      })
+      expect(admin.emailVerifiedAt).toBeInstanceOf(Date)
       expect(
         await client.userRole.count({ where: { roleKey: 'system.admin' } }),
       ).toBe(1)

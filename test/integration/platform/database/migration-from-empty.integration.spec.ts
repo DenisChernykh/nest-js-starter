@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 import { Pool } from 'pg'
 
@@ -32,6 +35,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
       { migration_name: '20260720000000_baseline' },
       { migration_name: '20260721090000_auth_core' },
       { migration_name: '20260728210000_approval_requests' },
+      { migration_name: '20260806090000_self_service_account_lifecycle' },
     ])
     const tables = await pool.query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables
@@ -41,7 +45,9 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     expect(tables.rows).toEqual([
       { table_name: 'approval_requests' },
       { table_name: 'auth_security_state' },
+      { table_name: 'email_verification_tokens' },
       { table_name: 'password_credentials' },
+      { table_name: 'password_reset_tokens' },
       { table_name: 'user_roles' },
       { table_name: 'users' },
     ])
@@ -87,6 +93,81 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     const migrations = await pool.query<{ count: string }>(
       'SELECT count(*) FROM _prisma_migrations',
     )
-    expect(migrations.rows[0]?.count).toBe('3')
+    expect(migrations.rows[0]?.count).toBe('4')
+  })
+
+  it('backfills an existing user when upgrading from the pre-feature schema', async () => {
+    const upgradeContainer = await startPostgresContainer()
+    const upgradePool = new Pool({
+      connectionString: upgradeContainer.getConnectionUri(),
+    })
+    const migrationRoot = join(process.cwd(), 'prisma', 'migrations')
+    const preFeatureMigrations = [
+      '20260720000000_baseline',
+      '20260721090000_auth_core',
+      '20260728210000_approval_requests',
+    ]
+    try {
+      for (const migration of preFeatureMigrations) {
+        await upgradePool.query(
+          readFileSync(join(migrationRoot, migration, 'migration.sql'), 'utf8'),
+        )
+      }
+      const oldUser = await upgradePool.query<{ id: string; created_at: Date }>(
+        `INSERT INTO users (
+           email, normalized_email, status, session_generation, created_at, updated_at
+         ) VALUES ($1, $2, 'ACTIVE', 0, $3, $3)
+         RETURNING id, created_at`,
+        [
+          'legacy@example.com',
+          'legacy@example.com',
+          new Date('2026-08-01T00:00:00.000Z'),
+        ],
+      )
+      const userId = oldUser.rows[0]?.id
+      const createdAt = oldUser.rows[0]?.created_at
+      if (userId === undefined || createdAt === undefined) {
+        throw new Error('Legacy user fixture failed')
+      }
+      await upgradePool.query(
+        `INSERT INTO password_credentials (user_id, password_hash, version, updated_at)
+         VALUES ($1, $2, 0, $3)`,
+        [userId, '$argon2id$v=19$m=19456,t=2,p=1$legacy', createdAt],
+      )
+      await upgradePool.query(
+        readFileSync(
+          join(
+            migrationRoot,
+            '20260806090000_self_service_account_lifecycle',
+            'migration.sql',
+          ),
+          'utf8',
+        ),
+      )
+
+      const upgraded = await upgradePool.query<{
+        status: string
+        created_at: Date
+        email_verified_at: Date | null
+        password_hash: string | null
+      }>(
+        `SELECT u.status, u.created_at, u.email_verified_at, pc.password_hash
+           FROM users u
+           LEFT JOIN password_credentials pc ON pc.user_id = u.id
+          WHERE u.id = $1`,
+        [userId],
+      )
+      expect(upgraded.rows).toEqual([
+        {
+          status: 'ACTIVE',
+          created_at: createdAt,
+          email_verified_at: createdAt,
+          password_hash: '$argon2id$v=19$m=19456,t=2,p=1$legacy',
+        },
+      ])
+    } finally {
+      await upgradePool.end()
+      await upgradeContainer.stop()
+    }
   })
 })

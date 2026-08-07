@@ -103,6 +103,28 @@ export interface AuthRuntimeConfig {
   readonly loginIpLimit: number
   readonly loginAccountLimit: number
   readonly loginWindowMs: number
+  readonly selfService: AuthSelfServiceRuntimeConfig
+}
+
+export type AuthSelfServiceMode = 'disabled' | 'open'
+
+export interface AuthSelfServiceRuntimeConfig {
+  readonly mode: AuthSelfServiceMode
+  readonly publicAppUrl?: string
+  readonly smtpUrl?: string
+  readonly mailFrom?: string
+  readonly verificationTtlMs: number
+  readonly passwordResetTtlMs: number
+  readonly acceptedResponseFloorMs: number
+  readonly mailDeliveryTimeoutMs: number
+  readonly registrationIpLimit: number
+  readonly registrationAccountLimit: number
+  readonly resendIpLimit: number
+  readonly resendAccountLimit: number
+  readonly resetRequestIpLimit: number
+  readonly resetRequestAccountLimit: number
+  readonly requestWindowMs: number
+  readonly resendCooldownMs: number
 }
 
 /**
@@ -143,6 +165,8 @@ export interface SafeRuntimeConfigSummary {
   readonly redisAuthConfigured: boolean
   readonly redisQueueConfigured: boolean
   readonly authCookieName: string
+  readonly authSelfServiceMode: AuthSelfServiceMode
+  readonly authSmtpConfigured: boolean
 }
 
 /**
@@ -204,6 +228,10 @@ export interface ValidatedRuntimeEnvironment {
   readonly AUTH_CSRF_SECRET: Uint8Array
   readonly AUTH_RATE_LIMIT_KEY_SECRET: Uint8Array
   readonly AUTH_NETWORK_METADATA_SECRET: Uint8Array
+  readonly AUTH_SELF_SERVICE_MODE: AuthSelfServiceMode
+  readonly AUTH_PUBLIC_APP_URL?: string
+  readonly AUTH_SMTP_URL?: string
+  readonly AUTH_MAIL_FROM?: string
 }
 
 /** Minimal normalized environment accepted by a standalone queue worker. */

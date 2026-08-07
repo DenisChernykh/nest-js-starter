@@ -68,6 +68,11 @@ describe('CreateUserUseCase integration', () => {
           where: { normalizedEmail: 'requester@example.com' },
         }),
       ).toBe(1)
+      const requester = await client.user.findUniqueOrThrow({
+        where: { normalizedEmail: 'requester@example.com' },
+        select: { emailVerifiedAt: true },
+      })
+      expect(requester.emailVerifiedAt).toBeInstanceOf(Date)
       const credential = await client.passwordCredential.findFirstOrThrow({
         where: { user: { normalizedEmail: 'requester@example.com' } },
       })

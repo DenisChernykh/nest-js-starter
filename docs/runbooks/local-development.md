@@ -24,6 +24,21 @@ Verify:
 
 Stop the workflow with `pnpm dev:down`.
 
+## Self-service account lifecycle
+
+Self-service registration, email verification and password recovery are
+disabled by default. To test them locally, set `AUTH_SELF_SERVICE_MODE=open`
+in `.env` and start the opt-in Mailpit profile:
+
+```sh
+docker compose --profile mail up --detach --wait mail
+```
+
+Open <http://127.0.0.1:8025> to inspect verification and reset messages, then
+run the registration, verification, login and reset smoke sequence in the
+[self-service account lifecycle runbook](self-service-account-lifecycle.md).
+Mailpit is not a production service and is not an API readiness dependency.
+
 ## Actual process and persistence boundary
 
 PostgreSQL becomes healthy first. The separate `migrator` container runs

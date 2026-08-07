@@ -2,6 +2,10 @@ import { Module, type DynamicModule } from '@nestjs/common'
 import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core'
 
 import { AUTH_AUDIT } from '../application/auth-audit.port'
+import {
+  AUTH_MAIL_DELIVERY,
+  type AuthMailDeliveryPort,
+} from '../application/auth-mail-delivery.port'
 import { AUTH_PERSISTENCE } from '../application/auth-persistence.port'
 import {
   AUTH_DUMMY_PASSWORD_HASH,
@@ -10,6 +14,8 @@ import {
 } from '../application/auth.types'
 import { AuthenticateSessionUseCase } from '../application/authenticate-session.use-case'
 import { ChangePasswordUseCase } from '../application/change-password.use-case'
+import { ConfirmEmailVerificationUseCase } from '../application/confirm-email-verification.use-case'
+import { ConfirmPasswordResetUseCase } from '../application/confirm-password-reset.use-case'
 import { GetCsrfTokenQuery } from '../application/get-csrf-token.query'
 import { GetMeQuery } from '../application/get-me.query'
 import { LOGIN_RATE_LIMITER } from '../application/login-rate-limiter.port'
@@ -24,13 +30,22 @@ import {
   type RoleDefinition,
 } from '../application/role-registry'
 import { RevokeSessionUseCase } from '../application/revoke-session.use-case'
+import { ONE_TIME_TOKEN_CODEC } from '../application/one-time-token-codec.port'
+import { PUBLIC_AUTH_RATE_LIMITER } from '../application/public-auth-rate-limiter.port'
+import { RegisterUserUseCase } from '../application/register-user.use-case'
+import { RequestPasswordResetUseCase } from '../application/request-password-reset.use-case'
+import { ResendEmailVerificationUseCase } from '../application/resend-email-verification.use-case'
 import { SESSION_STORE } from '../application/session-store.port'
+import { SelfServiceAuthPolicy } from '../application/self-service-auth.policy'
 import { Argon2PasswordHasher } from '../infrastructure/argon2-password.hasher'
 import { NodeAuthCryptoAdapter } from '../infrastructure/node-auth-crypto.adapter'
+import { NodemailerAuthMailAdapter } from '../infrastructure/nodemailer-auth-mail.adapter'
 import { PrismaAuthRepository } from '../infrastructure/prisma-auth.repository'
 import { RedisLoginRateLimiter } from '../infrastructure/redis-login-rate-limiter'
+import { RedisPublicAuthRateLimiter } from '../infrastructure/redis-public-auth-rate-limiter'
 import { RedisSessionStore } from '../infrastructure/redis-session.store'
 import { AuthCookieAdapter } from '../presentation/auth-cookie.adapter'
+import { PublicAuthResponseDelay } from '../presentation/public-auth-response-delay'
 import {
   AUTH_LOGIN_METADATA_FACTORY,
   AuthController,
@@ -43,6 +58,7 @@ import { BrowserOriginGuard } from '../presentation/browser-origin.guard'
 import { DocsAccessPolicyAdapter } from '../presentation/docs-access-policy.adapter'
 import { PermissionGuard } from '../presentation/permission.guard'
 import { SessionCsrfGuard } from '../presentation/session-csrf.guard'
+import { SelfServiceAuthController } from '../presentation/self-service-auth.controller'
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { DatabaseModule } from '@/platform/database/database.module'
@@ -68,12 +84,16 @@ export interface AuthModuleOptions {
 /** Composes durable identity, Redis sessions and ordered browser policy. */
 @Module({
   imports: [RuntimeConfigModule, DatabaseModule, RedisModule],
-  controllers: [AuthController],
+  controllers: [AuthController, SelfServiceAuthController],
   providers: [
     AuthRequestContext,
     GetMeQuery,
     Argon2PasswordHasher,
     NodeAuthCryptoAdapter,
+    {
+      provide: ONE_TIME_TOKEN_CODEC,
+      useExisting: NodeAuthCryptoAdapter,
+    },
     {
       provide: RoleRegistry,
       inject: [AUTH_ROLE_DEFINITIONS],
@@ -128,6 +148,60 @@ export interface AuthModuleOptions {
     { provide: LOGIN_RATE_LIMITER, useExisting: RedisLoginRateLimiter },
     { provide: SESSION_STORE, useExisting: RedisSessionStore },
     { provide: AUTH_AUDIT, useExisting: AuthAuditLogger },
+    {
+      provide: SelfServiceAuthPolicy,
+      inject: [RuntimeConfigService],
+      useFactory: (config: RuntimeConfigService): SelfServiceAuthPolicy =>
+        new SelfServiceAuthPolicy(config.auth.selfService),
+    },
+    {
+      provide: PUBLIC_AUTH_RATE_LIMITER,
+      inject: [
+        REDIS_AUTH_COMMAND_EXECUTOR,
+        NodeAuthCryptoAdapter,
+        RuntimeConfigService,
+      ],
+      useFactory: (
+        executor: RedisCommandExecutorPort,
+        crypto: NodeAuthCryptoAdapter,
+        config: RuntimeConfigService,
+      ): RedisPublicAuthRateLimiter =>
+        new RedisPublicAuthRateLimiter(executor, crypto, {
+          keyPrefix: config.redis.keyPrefix,
+          environment: config.environment,
+          hmacSecret: config.auth.rateLimitKeySecret,
+          registrationIpLimit: config.auth.selfService.registrationIpLimit,
+          registrationAccountLimit:
+            config.auth.selfService.registrationAccountLimit,
+          resendIpLimit: config.auth.selfService.resendIpLimit,
+          resendAccountLimit: config.auth.selfService.resendAccountLimit,
+          resetRequestIpLimit: config.auth.selfService.resetRequestIpLimit,
+          resetRequestAccountLimit:
+            config.auth.selfService.resetRequestAccountLimit,
+          requestWindowMs: config.auth.selfService.requestWindowMs,
+          resendCooldownMs: config.auth.selfService.resendCooldownMs,
+        }),
+    },
+    {
+      provide: AUTH_MAIL_DELIVERY,
+      inject: [RuntimeConfigService],
+      useFactory: (config: RuntimeConfigService): AuthMailDeliveryPort => {
+        const selfService = config.auth.selfService
+        if (selfService.mode !== 'open') {
+          return {
+            sendEmailVerification: () => Promise.resolve({ delivered: false }),
+            sendPasswordReset: () => Promise.resolve({ delivered: false }),
+          }
+        }
+        return new NodemailerAuthMailAdapter({
+          smtpUrl: selfService.smtpUrl as string,
+          mailFrom: selfService.mailFrom as string,
+          timeoutMs: selfService.mailDeliveryTimeoutMs,
+          security:
+            config.environment === 'production' ? 'production' : 'local',
+        })
+      },
+    },
     { provide: AUTH_DUMMY_PASSWORD_HASH, useValue: dummyPasswordHash },
     {
       provide: AUTH_SESSION_CLEANUP_OBSERVER,
@@ -161,6 +235,19 @@ export interface AuthModuleOptions {
     RevokeSessionUseCase,
     LogoutAllUseCase,
     ChangePasswordUseCase,
+    RegisterUserUseCase,
+    ResendEmailVerificationUseCase,
+    ConfirmEmailVerificationUseCase,
+    RequestPasswordResetUseCase,
+    ConfirmPasswordResetUseCase,
+    {
+      provide: PublicAuthResponseDelay,
+      inject: [RuntimeConfigService],
+      useFactory: (config: RuntimeConfigService): PublicAuthResponseDelay =>
+        new PublicAuthResponseDelay(
+          config.auth.selfService.acceptedResponseFloorMs,
+        ),
+    },
     {
       provide: AuthCookieAdapter,
       inject: [RuntimeConfigService],

@@ -12,6 +12,13 @@ describe('auth security audit records', () => {
     runtime = await createAuthTestRuntime(1)
     baseUrl = runtime.instances[0]?.baseUrl ?? ''
     await runtime.createUser('audit@example.com')
+    const unverifiedUserId = await runtime.createUser(
+      'unverified-audit@example.com',
+    )
+    await runtime.pool.query(
+      'UPDATE users SET email_verified_at = NULL WHERE id = $1',
+      [unverifiedUserId],
+    )
   })
 
   afterAll(async () => runtime.stop())
@@ -68,6 +75,107 @@ describe('auth security audit records', () => {
     }
   })
 
+  it('commits registration before SMTP failure and emits a partial value-free audit', async () => {
+    const outage = await createAuthTestRuntime(
+      1,
+      { AUTH_SELF_SERVICE_MODE: 'open' },
+      { smtpFailure: true },
+    )
+    try {
+      const instance = outage.instances[0]
+      if (instance === undefined) throw new Error('Expected one API instance')
+      const email = `smtp-outage-${Date.now()}@example.com`
+      const password = 'smtp-outage-password'
+      const response = await fetch(`${instance.baseUrl}/v1/auth/register`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          origin: instance.baseUrl,
+        },
+        body: JSON.stringify({ email, password }),
+      })
+      expect(response.status).toBe(202)
+      expect(await response.text()).toBe('')
+
+      const persisted = await outage.pool.query<{
+        token_digest: string | null
+      }>(
+        `SELECT evt.token_digest
+           FROM email_verification_tokens evt
+           JOIN users u ON u.id = evt.user_id
+          WHERE u.normalized_email = $1`,
+        [email],
+      )
+      const tokenDigest = persisted.rows[0]?.token_digest
+      expect(tokenDigest).toMatch(/^[A-Za-z0-9_-]{43}$/u)
+
+      let partial: Record<string, unknown> | undefined
+      await waitForCondition(() => {
+        const output = instance.output()
+        partial = output
+          .split('\n')
+          .flatMap((line) => {
+            try {
+              const parsed: unknown = JSON.parse(line)
+              return isRecord(parsed) && parsed['kind'] === 'audit'
+                ? [parsed]
+                : []
+            } catch {
+              return []
+            }
+          })
+          .find(
+            (record) =>
+              record['action'] === 'email_verification_send' &&
+              record['outcome'] === 'partial',
+          )
+        return Promise.resolve(partial !== undefined)
+      }, 8_000)
+      expect(partial).toMatchObject({
+        action: 'email_verification_send',
+        outcome: 'partial',
+        reasonCode: 'MAIL_DELIVERY_FAILED',
+      })
+      const output = instance.output()
+      const forbiddenValues = [email, password, 'smtp://127.0.0.1:1']
+      if (tokenDigest !== undefined && tokenDigest !== null) {
+        forbiddenValues.push(tokenDigest)
+      }
+      for (const forbidden of forbiddenValues) {
+        expect(output).not.toContain(forbidden)
+      }
+    } finally {
+      await outage.stop()
+    }
+  })
+
+  it('keeps the unverified-login audit event and does not issue a session', async () => {
+    const requestId = '019219c3-dc52-7cc1-9e70-f293ca14c200'
+    const response = await login(
+      'unverified-audit@example.com',
+      'valid password',
+      requestId,
+    )
+    expect(response.status).toBe(403)
+    expect(response.headers.get('set-cookie')).toBeNull()
+    const record = await waitForAudit('EMAIL_VERIFICATION_REQUIRED')
+    expect(record).toMatchObject({
+      kind: 'audit',
+      action: 'login',
+      outcome: 'denied',
+      reasonCode: 'EMAIL_VERIFICATION_REQUIRED',
+      requestId,
+    })
+    const output = runtime.instances[0]?.output() ?? ''
+    for (const forbidden of [
+      'unverified-audit@example.com',
+      'valid password',
+      'token',
+    ]) {
+      expect(output).not.toContain(forbidden)
+    }
+  })
+
   async function login(
     email: string,
     password: string,
@@ -120,3 +228,7 @@ describe('auth security audit records', () => {
     return records
   }
 })
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}

@@ -1,6 +1,7 @@
 import type { AuthAuditPort } from '@/modules/auth/application/auth-audit.port'
 import type { AuthPersistencePort } from '@/modules/auth/application/auth-persistence.port'
 import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
+import { EmailVerificationRequiredError } from '@/modules/auth/application/auth-errors'
 import { LoginUseCase } from '@/modules/auth/application/login.use-case'
 import type { LoginRateLimiterPort } from '@/modules/auth/application/login-rate-limiter.port'
 import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
@@ -88,6 +89,7 @@ describe('LoginUseCase', () => {
       email: 'User@Example.com',
       normalizedEmail: 'user@example.com',
       status: 'active',
+      emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
       sessionGeneration: 4n,
       passwordHash: 'stored-hash',
       passwordVersion: 2,
@@ -113,6 +115,33 @@ describe('LoginUseCase', () => {
         globalSessionEpoch: 5n,
       }),
     )
+  })
+
+  it('requires verification after a correct password without rehash or session issuance', async () => {
+    const target = harness({
+      userId: 'unverified-user',
+      email: 'User@Example.com',
+      normalizedEmail: 'user@example.com',
+      status: 'active',
+      emailVerifiedAt: undefined,
+      sessionGeneration: 0n,
+      passwordHash: 'stored-hash',
+      passwordVersion: 0,
+      roleKeys: [],
+    })
+
+    await expect(
+      target.useCase.execute({
+        email: 'user@example.com',
+        password: 'password',
+        ipAddress: '192.0.2.1',
+        nowMs: 1_000,
+        deviceLabel: 'browser',
+        networkFingerprint: 'network',
+      }),
+    ).rejects.toBeInstanceOf(EmailVerificationRequiredError)
+    expect(target.passwords.hash).not.toHaveBeenCalled()
+    expect(target.sessions.issue).not.toHaveBeenCalled()
   })
   it('denies before credential lookup when the distributed limiter rejects', async () => {
     const target = harness(undefined)

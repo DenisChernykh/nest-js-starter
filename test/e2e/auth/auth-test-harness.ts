@@ -9,6 +9,8 @@ import cookieParser from 'cookie-parser'
 import type { AuthenticatedPrincipal } from '@/modules/auth/application/auth.types'
 import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
 import { ChangePasswordUseCase } from '@/modules/auth/application/change-password.use-case'
+import { ConfirmEmailVerificationUseCase } from '@/modules/auth/application/confirm-email-verification.use-case'
+import { ConfirmPasswordResetUseCase } from '@/modules/auth/application/confirm-password-reset.use-case'
 import { GetCsrfTokenQuery } from '@/modules/auth/application/get-csrf-token.query'
 import { GetMeQuery } from '@/modules/auth/application/get-me.query'
 import { ListSessionsQuery } from '@/modules/auth/application/list-sessions.query'
@@ -16,6 +18,9 @@ import { LoginUseCase } from '@/modules/auth/application/login.use-case'
 import { LogoutAllUseCase } from '@/modules/auth/application/logout-all.use-case'
 import { LogoutUseCase } from '@/modules/auth/application/logout.use-case'
 import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
+import { RegisterUserUseCase } from '@/modules/auth/application/register-user.use-case'
+import { RequestPasswordResetUseCase } from '@/modules/auth/application/request-password-reset.use-case'
+import { ResendEmailVerificationUseCase } from '@/modules/auth/application/resend-email-verification.use-case'
 import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
 import {
   AUTH_LOGIN_METADATA_FACTORY,
@@ -26,7 +31,9 @@ import { AuthRequestContext } from '@/modules/auth/presentation/auth-request.con
 import { AuthRequestInterceptor } from '@/modules/auth/presentation/auth-request.interceptor'
 import { AuthenticationGuard } from '@/modules/auth/presentation/authentication.guard'
 import { BrowserOriginGuard } from '@/modules/auth/presentation/browser-origin.guard'
+import { PublicAuthResponseDelay } from '@/modules/auth/presentation/public-auth-response-delay'
 import { PermissionGuard } from '@/modules/auth/presentation/permission.guard'
+import { SelfServiceAuthController } from '@/modules/auth/presentation/self-service-auth.controller'
 import { SessionCsrfGuard } from '@/modules/auth/presentation/session-csrf.guard'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { createRequestContextMiddleware } from '@/platform/http/context/request-context.middleware'
@@ -36,16 +43,24 @@ import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registr
 import { RequestValidationError } from '@/platform/http/errors/request-validation.error'
 import { mapValidationErrors } from '@/platform/http/errors/validation-error.mapper'
 
+type AuthUseCaseMock = jest.Mock<Promise<unknown>, [] | [unknown]>
+
 /** Deterministic auth use-case doubles exposed to transport contract tests. */
 export interface AuthTestDoubles {
-  readonly login: { readonly execute: jest.Mock }
-  readonly authenticate: { readonly execute: jest.Mock }
-  readonly csrf: { readonly execute: jest.Mock }
-  readonly listSessions: { readonly execute: jest.Mock }
-  readonly logout: { readonly execute: jest.Mock }
-  readonly logoutAll: { readonly execute: jest.Mock }
-  readonly revokeSession: { readonly execute: jest.Mock }
-  readonly changePassword: { readonly execute: jest.Mock }
+  readonly login: { readonly execute: AuthUseCaseMock }
+  readonly authenticate: { readonly execute: AuthUseCaseMock }
+  readonly csrf: { readonly execute: AuthUseCaseMock }
+  readonly listSessions: { readonly execute: AuthUseCaseMock }
+  readonly logout: { readonly execute: AuthUseCaseMock }
+  readonly logoutAll: { readonly execute: AuthUseCaseMock }
+  readonly revokeSession: { readonly execute: AuthUseCaseMock }
+  readonly changePassword: { readonly execute: AuthUseCaseMock }
+  readonly register: { readonly execute: AuthUseCaseMock }
+  readonly resendVerification: { readonly execute: AuthUseCaseMock }
+  readonly confirmVerification: { readonly execute: AuthUseCaseMock }
+  readonly requestPasswordReset: { readonly execute: AuthUseCaseMock }
+  readonly confirmPasswordReset: { readonly execute: AuthUseCaseMock }
+  readonly responseDelay: { readonly wait: AuthUseCaseMock }
 }
 
 /** Running in-memory auth transport application and its deterministic fixtures. */
@@ -110,9 +125,19 @@ export async function createAuthTestHarness(
     changePassword: {
       execute: jest.fn(() => Promise.resolve({ cleanupComplete: true })),
     },
+    register: { execute: jest.fn(() => Promise.resolve({ accepted: true })) },
+    resendVerification: {
+      execute: jest.fn(() => Promise.resolve({ accepted: true })),
+    },
+    confirmVerification: { execute: jest.fn(() => Promise.resolve()) },
+    requestPasswordReset: {
+      execute: jest.fn(() => Promise.resolve({ accepted: true })),
+    },
+    confirmPasswordReset: { execute: jest.fn(() => Promise.resolve()) },
+    responseDelay: { wait: jest.fn(() => Promise.resolve()) },
   }
   const moduleRef = await Test.createTestingModule({
-    controllers: [AuthController],
+    controllers: [AuthController, SelfServiceAuthController],
     providers: [
       Reflector,
       AuthRequestContext,
@@ -125,6 +150,24 @@ export async function createAuthTestHarness(
       { provide: LogoutAllUseCase, useValue: doubles.logoutAll },
       { provide: RevokeSessionUseCase, useValue: doubles.revokeSession },
       { provide: ChangePasswordUseCase, useValue: doubles.changePassword },
+      { provide: RegisterUserUseCase, useValue: doubles.register },
+      {
+        provide: ResendEmailVerificationUseCase,
+        useValue: doubles.resendVerification,
+      },
+      {
+        provide: ConfirmEmailVerificationUseCase,
+        useValue: doubles.confirmVerification,
+      },
+      {
+        provide: RequestPasswordResetUseCase,
+        useValue: doubles.requestPasswordReset,
+      },
+      {
+        provide: ConfirmPasswordResetUseCase,
+        useValue: doubles.confirmPasswordReset,
+      },
+      { provide: PublicAuthResponseDelay, useValue: doubles.responseDelay },
       {
         provide: AuthCookieAdapter,
         useValue: new AuthCookieAdapter(cookieName, secureCookie),

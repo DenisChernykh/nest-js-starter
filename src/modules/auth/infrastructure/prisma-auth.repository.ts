@@ -11,9 +11,14 @@ import type {
   InitialAdminInput,
   InitialAdminResult,
   UserProvisioningInput,
+  ConfirmPasswordResetInput,
+  SelfServiceDeliveryTarget,
+  SelfServiceRegistrationInput,
+  SelfServiceRegistrationResult,
+  SelfServiceTokenInput,
 } from '../application/auth.types'
 import { mapAuthProjection, mapCredentialSnapshot } from './prisma-auth.mapper'
-import { Prisma } from '@/generated/prisma/client'
+import { Prisma, type PrismaClient } from '@/generated/prisma/client'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import {
   TRANSACTION_PORT,
@@ -79,24 +84,39 @@ export class PrismaAuthRepository implements AuthPersistencePort {
     expectedVersion: number,
     passwordHash: string,
   ): Promise<boolean> {
-    const result = await this.provider.withClient((client) =>
-      client.passwordCredential.updateMany({
-        where: { userId, version: expectedVersion },
-        data: { passwordHash, version: { increment: 1 } },
+    const result = await this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        await lockUser(client, userId)
+        return client.passwordCredential.updateMany({
+          where: { userId, version: expectedVersion },
+          data: { passwordHash, version: { increment: 1 } },
+        })
       }),
     )
     return result.count === 1
   }
 
   public async incrementSessionGeneration(userId: string): Promise<bigint> {
-    const user = await this.provider.withClient((client) =>
-      client.user.update({
-        where: { id: userId },
-        data: { sessionGeneration: { increment: 1 } },
-        select: { sessionGeneration: true },
+    const user = await this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        await lockUser(client, userId)
+        return client.user.update({
+          where: { id: userId },
+          data: { sessionGeneration: { increment: 1 } },
+          select: { sessionGeneration: true },
+        })
       }),
     )
     return user.sessionGeneration
+  }
+
+  public async deletePasswordResetToken(userId: string): Promise<void> {
+    await this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        await lockUser(client, userId)
+        await client.passwordResetToken.deleteMany({ where: { userId } })
+      }),
+    )
   }
 
   public bootstrapInitialAdmin(
@@ -118,6 +138,7 @@ export class PrismaAuthRepository implements AuthPersistencePort {
           data: {
             email: input.email,
             normalizedEmail: input.normalizedEmail,
+            emailVerifiedAt: input.emailVerifiedAt,
             credential: { create: { passwordHash: input.passwordHash } },
             roles: { create: { roleKey: 'system.admin' } },
           },
@@ -143,6 +164,7 @@ export class PrismaAuthRepository implements AuthPersistencePort {
             data: {
               email: input.email,
               normalizedEmail: input.normalizedEmail,
+              emailVerifiedAt: input.emailVerifiedAt,
               credential: { create: { passwordHash: input.passwordHash } },
               roles: {
                 create: input.roleKeys.map((roleKey) => ({ roleKey })),
@@ -163,4 +185,261 @@ export class PrismaAuthRepository implements AuthPersistencePort {
       throw error
     }
   }
+
+  public async registerSelfServiceUser(
+    input: SelfServiceRegistrationInput,
+  ): Promise<SelfServiceRegistrationResult> {
+    try {
+      return await this.transaction.run(() =>
+        this.provider.withClient(async (client) => {
+          const user = await client.user.create({
+            data: {
+              email: input.email,
+              normalizedEmail: input.normalizedEmail,
+              emailVerifiedAt: null,
+              credential: { create: { passwordHash: input.passwordHash } },
+              emailVerificationToken: {
+                create: {
+                  tokenDigest: input.tokenDigest,
+                  expiresAt: input.expiresAt,
+                  createdAt: input.createdAt,
+                },
+              },
+            },
+            select: { id: true, email: true },
+          })
+          return { created: true, userId: user.id, email: user.email }
+        }),
+      )
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        return { created: false }
+      }
+      throw error
+    }
+  }
+
+  public async rotateEmailVerificationToken(
+    normalizedEmail: string,
+    token: SelfServiceTokenInput,
+    now: Date,
+  ): Promise<SelfServiceDeliveryTarget | undefined> {
+    if (token.expiresAt <= now) return undefined
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        const lockedUser = await client.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM users WHERE normalized_email = ${normalizedEmail} FOR UPDATE
+        `
+        if (lockedUser[0] === undefined) return undefined
+        const user = await client.user.findUnique({
+          where: { normalizedEmail },
+          select: {
+            id: true,
+            email: true,
+            status: true,
+            emailVerifiedAt: true,
+          },
+        })
+        if (
+          user === null ||
+          user.status !== 'ACTIVE' ||
+          user.emailVerifiedAt !== null
+        ) {
+          return undefined
+        }
+        await client.emailVerificationToken.upsert({
+          where: { userId: user.id },
+          create: { userId: user.id, ...token },
+          update: token,
+        })
+        return { userId: user.id, email: user.email }
+      }),
+    )
+  }
+
+  public async confirmEmailVerification(
+    tokenDigest: string,
+    now: Date,
+  ): Promise<SelfServiceDeliveryTarget | undefined> {
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        const tokenOwner = await client.emailVerificationToken.findUnique({
+          where: { tokenDigest },
+          select: { userId: true },
+        })
+        if (tokenOwner === null) return undefined
+        await lockUser(client, tokenOwner.userId)
+        const token = await client.emailVerificationToken.findUnique({
+          where: { tokenDigest },
+          select: {
+            userId: true,
+            expiresAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                status: true,
+                emailVerifiedAt: true,
+              },
+            },
+          },
+        })
+        if (
+          token === null ||
+          token.expiresAt <= now ||
+          token.user.status !== 'ACTIVE' ||
+          token.user.emailVerifiedAt !== null
+        ) {
+          return undefined
+        }
+        const claimed = await client.emailVerificationToken.deleteMany({
+          where: { userId: token.userId, tokenDigest },
+        })
+        if (claimed.count !== 1) return undefined
+        const updated = await client.user.updateMany({
+          where: { id: token.userId, status: 'ACTIVE', emailVerifiedAt: null },
+          data: { emailVerifiedAt: now },
+        })
+        if (updated.count !== 1) return undefined
+        return { userId: token.user.id, email: token.user.email }
+      }),
+    )
+  }
+
+  public async rotatePasswordResetToken(
+    normalizedEmail: string,
+    token: SelfServiceTokenInput,
+    now: Date,
+  ): Promise<SelfServiceDeliveryTarget | undefined> {
+    if (token.expiresAt <= now) return undefined
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        const lockedUser = await client.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM users WHERE normalized_email = ${normalizedEmail} FOR UPDATE
+        `
+        if (lockedUser[0] === undefined) return undefined
+        const user = await client.user.findUnique({
+          where: { normalizedEmail },
+          select: {
+            id: true,
+            email: true,
+            status: true,
+            emailVerifiedAt: true,
+            credential: { select: { userId: true } },
+          },
+        })
+        if (
+          user === null ||
+          user.status !== 'ACTIVE' ||
+          user.emailVerifiedAt === null ||
+          user.credential === null
+        ) {
+          return undefined
+        }
+        await client.passwordResetToken.upsert({
+          where: { userId: user.id },
+          create: { userId: user.id, ...token },
+          update: token,
+        })
+        return { userId: user.id, email: user.email }
+      }),
+    )
+  }
+
+  public async isPasswordResetTokenEligible(
+    tokenDigest: string,
+    now: Date,
+  ): Promise<boolean> {
+    const token = await this.provider.withClient((client) =>
+      client.passwordResetToken.findUnique({
+        where: { tokenDigest },
+        select: {
+          expiresAt: true,
+          user: {
+            select: {
+              status: true,
+              emailVerifiedAt: true,
+              credential: { select: { userId: true } },
+            },
+          },
+        },
+      }),
+    )
+    return (
+      token !== null &&
+      token.expiresAt > now &&
+      token.user.status === 'ACTIVE' &&
+      token.user.emailVerifiedAt !== null &&
+      token.user.credential !== null
+    )
+  }
+
+  public async confirmPasswordReset(
+    input: ConfirmPasswordResetInput,
+  ): Promise<SelfServiceDeliveryTarget | undefined> {
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        const tokenOwner = await client.passwordResetToken.findUnique({
+          where: { tokenDigest: input.tokenDigest },
+          select: { userId: true },
+        })
+        if (tokenOwner === null) return undefined
+        await lockUser(client, tokenOwner.userId)
+        const token = await client.passwordResetToken.findUnique({
+          where: { tokenDigest: input.tokenDigest },
+          select: {
+            userId: true,
+            expiresAt: true,
+            user: {
+              select: {
+                id: true,
+                email: true,
+                status: true,
+                emailVerifiedAt: true,
+                credential: { select: { userId: true } },
+              },
+            },
+          },
+        })
+        if (
+          token === null ||
+          token.expiresAt <= input.now ||
+          token.user.status !== 'ACTIVE' ||
+          token.user.emailVerifiedAt === null ||
+          token.user.credential === null
+        ) {
+          return undefined
+        }
+        const claimed = await client.passwordResetToken.deleteMany({
+          where: {
+            userId: token.userId,
+            tokenDigest: input.tokenDigest,
+            expiresAt: { gt: input.now },
+          },
+        })
+        if (claimed.count !== 1) return undefined
+        await client.passwordCredential.update({
+          where: { userId: token.userId },
+          data: { passwordHash: input.passwordHash, version: { increment: 1 } },
+        })
+        await client.user.update({
+          where: { id: token.userId },
+          data: { sessionGeneration: { increment: 1 } },
+        })
+        return { userId: token.user.id, email: token.user.email }
+      }),
+    )
+  }
+}
+
+async function lockUser(
+  client: Prisma.TransactionClient | PrismaClient,
+  userId: string,
+): Promise<void> {
+  await client.$queryRaw`
+    SELECT id FROM users WHERE id = ${userId} FOR UPDATE
+  `
 }

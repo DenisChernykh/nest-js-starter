@@ -64,12 +64,14 @@ describe('CreateUserUseCase', () => {
       }),
     ).resolves.toEqual({ created: true, userId: 'user-1' })
 
-    expect(createUser).toHaveBeenCalledWith({
+    const input = createUser.mock.calls[0]?.[0]
+    expect(input).toMatchObject({
       email: 'Admin@Example.com',
       normalizedEmail: 'admin@example.com',
       passwordHash: '$argon2id$reviewed-hash',
       roleKeys: ['approval.reviewer', 'system.admin'],
     })
+    expect(input?.emailVerifiedAt).toBeInstanceOf(Date)
   })
 
   it('hashes a password and returns the repository result', async () => {

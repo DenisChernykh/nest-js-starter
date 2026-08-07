@@ -37,6 +37,10 @@ describe('ChangePasswordUseCase', () => {
         order.push('replace')
         return Promise.resolve(true)
       }),
+      deletePasswordResetToken: jest.fn(() => {
+        order.push('delete-reset-token')
+        return Promise.resolve()
+      }),
       incrementSessionGeneration: jest.fn(() => {
         order.push('generation')
         return Promise.resolve(1n)
@@ -76,6 +80,7 @@ describe('ChangePasswordUseCase', () => {
       'hash',
       'transaction',
       'replace',
+      'delete-reset-token',
       'generation',
       'cleanup',
     ])
@@ -95,6 +100,7 @@ describe('ChangePasswordUseCase', () => {
         }),
       ),
       replacePasswordIfVersion: jest.fn(() => Promise.resolve(true)),
+      deletePasswordResetToken: jest.fn(() => Promise.resolve()),
       incrementSessionGeneration: jest.fn(() => Promise.resolve(1n)),
     } as unknown as AuthPersistencePort
     const passwords = {

@@ -35,6 +35,20 @@ describe('runtimeDefaults', () => {
       loginIpLimit: 20,
       loginAccountLimit: 10,
       loginWindowMs: 900_000,
+      selfService: {
+        verificationTtlMs: 86_400_000,
+        passwordResetTtlMs: 1_800_000,
+        acceptedResponseFloorMs: 2_000,
+        mailDeliveryTimeoutMs: 1_500,
+        registrationIpLimit: 10,
+        registrationAccountLimit: 3,
+        resendIpLimit: 10,
+        resendAccountLimit: 3,
+        resetRequestIpLimit: 10,
+        resetRequestAccountLimit: 3,
+        requestWindowMs: 3_600_000,
+        resendCooldownMs: 60_000,
+      },
     })
     expect(runtimeDefaults.observability).toEqual({
       exporterTimeoutMs: 1_000,

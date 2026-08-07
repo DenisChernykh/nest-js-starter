@@ -43,6 +43,7 @@ import {
   SessionsResponseDto,
 } from './auth-response.dto'
 import { AuthRequestContext } from './auth-request.context'
+import { EMAIL_VERIFICATION_REQUIRED_PROBLEM } from './auth-problem.definitions'
 import { CsrfTokenExempt } from './session-csrf.guard'
 import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.decorator'
 import { PublicEndpoint } from '@/platform/http/policy/public-endpoint.decorator'
@@ -115,6 +116,7 @@ export class AuthController {
     'RATE_LIMIT_EXCEEDED',
     'INTERNAL_ERROR',
     'DEPENDENCY_UNAVAILABLE',
+    EMAIL_VERIFICATION_REQUIRED_PROBLEM,
   )
   public async login(
     @Body() body: LoginRequestDto,

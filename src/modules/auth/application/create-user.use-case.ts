@@ -63,6 +63,7 @@ export class CreateUserUseCase {
         email,
         normalizedEmail: email.toLowerCase(),
         passwordHash,
+        emailVerifiedAt: new Date(),
         roleKeys,
       })
       this.audit.emit({

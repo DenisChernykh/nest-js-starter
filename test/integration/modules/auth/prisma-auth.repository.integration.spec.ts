@@ -1,4 +1,5 @@
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
+import { Pool } from 'pg'
 
 import { PrismaAuthRepository } from '@/modules/auth/infrastructure/prisma-auth.repository'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
@@ -13,6 +14,8 @@ describe('PrismaAuthRepository', () => {
   let container: StartedPostgreSqlContainer
   let provider: PrismaClientProvider
   let repository: PrismaAuthRepository
+  let transaction: PrismaTransactionAdapter
+  let blocker: Pool
 
   beforeAll(async () => {
     container = await startPostgresContainer()
@@ -33,9 +36,10 @@ describe('PrismaAuthRepository', () => {
     const config = new RuntimeConfigService(environment)
     const context = new PrismaTransactionContext()
     provider = new PrismaClientProvider(config, context)
-    const transaction = new PrismaTransactionAdapter(provider, context, config)
+    transaction = new PrismaTransactionAdapter(provider, context, config)
     repository = new PrismaAuthRepository(provider, transaction)
     await provider.connect(AbortSignal.timeout(2_000))
+    blocker = new Pool({ connectionString: databaseUrl })
   })
 
   afterEach(async () => {
@@ -50,6 +54,7 @@ describe('PrismaAuthRepository', () => {
   })
 
   afterAll(async () => {
+    await blocker.end()
     await provider.close(AbortSignal.timeout(2_000))
     await container.stop()
   })
@@ -145,17 +150,62 @@ describe('PrismaAuthRepository', () => {
     )
   })
 
+  it('deletes a pending reset token inside the credential transition transaction', async () => {
+    const user = await provider.withClient(async (client) => {
+      const created = await client.user.create({
+        data: {
+          email: 'change-password@example.com',
+          normalizedEmail: 'change-password@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'old', version: 2 } },
+        },
+      })
+      await client.passwordResetToken.create({
+        data: {
+          userId: created.id,
+          tokenDigest: Buffer.alloc(32, 7).toString('base64url'),
+          expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+          createdAt: new Date('2026-08-06T00:00:00.000Z'),
+        },
+      })
+      return created
+    })
+
+    await transaction.run(async () => {
+      expect(await repository.replacePasswordIfVersion(user.id, 2, 'new')).toBe(
+        true,
+      )
+      await repository.deletePasswordResetToken(user.id)
+      await repository.incrementSessionGeneration(user.id)
+    })
+
+    await provider.withClient(async (client) => {
+      const persisted = await client.user.findUniqueOrThrow({
+        where: { id: user.id },
+        include: { credential: true },
+      })
+      expect(persisted.credential?.passwordHash).toBe('new')
+      expect(persisted.credential?.version).toBe(3)
+      expect(persisted.sessionGeneration).toBe(1n)
+      expect(
+        await client.passwordResetToken.count({ where: { userId: user.id } }),
+      ).toBe(0)
+    })
+  })
+
   it('allows exactly one concurrent initial admin bootstrap', async () => {
     const attempts = await Promise.all([
       repository.bootstrapInitialAdmin({
         email: 'First@Example.com',
         normalizedEmail: 'first@example.com',
         passwordHash: 'first-hash',
+        emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
       }),
       repository.bootstrapInitialAdmin({
         email: 'Second@Example.com',
         normalizedEmail: 'second@example.com',
         passwordHash: 'second-hash',
+        emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
       }),
     ])
 
@@ -164,4 +214,492 @@ describe('PrismaAuthRepository', () => {
       provider.withClient((client) => client.user.count()),
     ).resolves.toBe(1)
   })
+
+  it('creates an unverified roleless account and never mutates a duplicate', async () => {
+    const createdAt = new Date('2026-08-06T00:00:00.000Z')
+    const firstDigest = Buffer.alloc(32, 1).toString('base64url')
+    const secondDigest = Buffer.alloc(32, 2).toString('base64url')
+    await expect(
+      repository.registerSelfServiceUser({
+        email: 'New@Example.com',
+        normalizedEmail: 'new@example.com',
+        passwordHash: 'first-hash',
+        tokenDigest: firstDigest,
+        expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+        createdAt,
+      }),
+    ).resolves.toMatchObject({ created: true, email: 'New@Example.com' })
+
+    await expect(
+      repository.registerSelfServiceUser({
+        email: 'Other@Example.com',
+        normalizedEmail: 'new@example.com',
+        passwordHash: 'second-hash',
+        tokenDigest: secondDigest,
+        expiresAt: new Date('2026-08-08T00:00:00.000Z'),
+        createdAt,
+      }),
+    ).resolves.toEqual({ created: false })
+
+    await provider.withClient(async (client) => {
+      const user = await client.user.findUniqueOrThrow({
+        where: { normalizedEmail: 'new@example.com' },
+        include: {
+          credential: true,
+          roles: true,
+          emailVerificationToken: true,
+        },
+      })
+      expect(user.email).toBe('New@Example.com')
+      expect(user.emailVerifiedAt).toBeNull()
+      expect(user.credential?.passwordHash).toBe('first-hash')
+      expect(user.roles).toHaveLength(0)
+      expect(user.emailVerificationToken?.tokenDigest).toBe(firstDigest)
+      expect(user.emailVerificationToken?.tokenDigest).not.toBe(secondDigest)
+    })
+  })
+
+  it('rotates verification tokens, rejects expired tokens and has one confirmation winner', async () => {
+    const user = await provider.withClient((client) =>
+      client.user.create({
+        data: {
+          email: 'verify@example.com',
+          normalizedEmail: 'verify@example.com',
+          credential: { create: { passwordHash: 'hash' } },
+        },
+      }),
+    )
+    const first = {
+      tokenDigest: Buffer.alloc(32, 3).toString('base64url'),
+      expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+      createdAt: new Date('2026-08-06T00:00:00.000Z'),
+    }
+    const second = {
+      tokenDigest: Buffer.alloc(32, 4).toString('base64url'),
+      expiresAt: new Date('2026-08-08T00:00:00.000Z'),
+      createdAt: new Date('2026-08-06T01:00:00.000Z'),
+    }
+    await expect(
+      repository.rotateEmailVerificationToken(
+        user.normalizedEmail,
+        first,
+        new Date('2026-08-06T00:00:00.000Z'),
+      ),
+    ).resolves.toEqual({ userId: user.id, email: user.email })
+    await expect(
+      repository.rotateEmailVerificationToken(
+        user.normalizedEmail,
+        second,
+        new Date('2026-08-06T01:00:00.000Z'),
+      ),
+    ).resolves.toEqual({ userId: user.id, email: user.email })
+    await expect(
+      repository.confirmEmailVerification(
+        first.tokenDigest,
+        new Date('2026-08-06T02:00:00.000Z'),
+      ),
+    ).resolves.toBeUndefined()
+
+    const winners = await Promise.all([
+      repository.confirmEmailVerification(
+        second.tokenDigest,
+        new Date('2026-08-06T02:00:00.000Z'),
+      ),
+      repository.confirmEmailVerification(
+        second.tokenDigest,
+        new Date('2026-08-06T02:00:00.000Z'),
+      ),
+    ])
+    expect(winners.filter((winner) => winner !== undefined)).toHaveLength(1)
+    expect(winners.filter((winner) => winner === undefined)).toHaveLength(1)
+    await provider.withClient(async (client) => {
+      const persisted = await client.user.findUniqueOrThrow({
+        where: { id: user.id },
+      })
+      expect(persisted.emailVerifiedAt).toEqual(
+        new Date('2026-08-06T02:00:00.000Z'),
+      )
+      expect(
+        await client.emailVerificationToken.count({
+          where: { userId: user.id },
+        }),
+      ).toBe(0)
+    })
+  })
+
+  it('rejects disabled accounts and atomically resets a verified password once', async () => {
+    const disabled = await provider.withClient((client) =>
+      client.user.create({
+        data: {
+          email: 'disabled-verify@example.com',
+          normalizedEmail: 'disabled-verify@example.com',
+          status: 'DISABLED',
+          emailVerifiedAt: null,
+        },
+      }),
+    )
+    await expect(
+      repository.rotateEmailVerificationToken(
+        disabled.normalizedEmail,
+        {
+          tokenDigest: Buffer.alloc(32, 5).toString('base64url'),
+          expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+          createdAt: new Date('2026-08-06T00:00:00.000Z'),
+        },
+        new Date('2026-08-06T00:00:00.000Z'),
+      ),
+    ).resolves.toBeUndefined()
+
+    const user = await provider.withClient((client) =>
+      client.user.create({
+        data: {
+          email: 'reset@example.com',
+          normalizedEmail: 'reset@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'old', version: 4 } },
+        },
+      }),
+    )
+    const resetToken = {
+      tokenDigest: Buffer.alloc(32, 6).toString('base64url'),
+      expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+      createdAt: new Date('2026-08-06T00:00:00.000Z'),
+    }
+    await expect(
+      repository.rotatePasswordResetToken(
+        user.normalizedEmail,
+        resetToken,
+        new Date('2026-08-06T00:00:00.000Z'),
+      ),
+    ).resolves.toEqual({ userId: user.id, email: user.email })
+    const results = await Promise.all([
+      repository.confirmPasswordReset({
+        tokenDigest: resetToken.tokenDigest,
+        now: new Date('2026-08-06T02:00:00.000Z'),
+        passwordHash: 'new-hash',
+      }),
+      repository.confirmPasswordReset({
+        tokenDigest: resetToken.tokenDigest,
+        now: new Date('2026-08-06T02:00:00.000Z'),
+        passwordHash: 'losing-hash',
+      }),
+    ])
+    expect(results.filter((result) => result !== undefined)).toHaveLength(1)
+    await provider.withClient(async (client) => {
+      const persisted = await client.user.findUniqueOrThrow({
+        where: { id: user.id },
+        include: { credential: true },
+      })
+      expect(persisted.sessionGeneration).toBe(1n)
+      expect(persisted.credential?.version).toBe(5)
+      expect(['new-hash', 'losing-hash']).toContain(
+        persisted.credential?.passwordHash,
+      )
+      expect(
+        await client.passwordResetToken.count({ where: { userId: user.id } }),
+      ).toBe(0)
+    })
+  })
+
+  it('checks reset-token eligibility without exposing account state', async () => {
+    const now = new Date('2026-08-06T12:00:00.000Z')
+    const digests = {
+      expired: Buffer.alloc(32, 11).toString('base64url'),
+      disabled: Buffer.alloc(32, 12).toString('base64url'),
+      unverified: Buffer.alloc(32, 13).toString('base64url'),
+      noCredential: Buffer.alloc(32, 14).toString('base64url'),
+      eligible: Buffer.alloc(32, 15).toString('base64url'),
+    }
+    await provider.withClient(async (client) => {
+      await client.user.create({
+        data: {
+          email: 'expired-reset@example.com',
+          normalizedEmail: 'expired-reset@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'hash' } },
+          passwordResetToken: {
+            create: {
+              tokenDigest: digests.expired,
+              expiresAt: new Date('2026-08-06T11:59:59.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      })
+      await client.user.create({
+        data: {
+          email: 'disabled-reset@example.com',
+          normalizedEmail: 'disabled-reset@example.com',
+          status: 'DISABLED',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'hash' } },
+          passwordResetToken: {
+            create: {
+              tokenDigest: digests.disabled,
+              expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      })
+      await client.user.create({
+        data: {
+          email: 'unverified-reset@example.com',
+          normalizedEmail: 'unverified-reset@example.com',
+          emailVerifiedAt: null,
+          credential: { create: { passwordHash: 'hash' } },
+          passwordResetToken: {
+            create: {
+              tokenDigest: digests.unverified,
+              expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      })
+      await client.user.create({
+        data: {
+          email: 'no-credential-reset@example.com',
+          normalizedEmail: 'no-credential-reset@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          passwordResetToken: {
+            create: {
+              tokenDigest: digests.noCredential,
+              expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      })
+      await client.user.create({
+        data: {
+          email: 'eligible-reset@example.com',
+          normalizedEmail: 'eligible-reset@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'hash' } },
+          passwordResetToken: {
+            create: {
+              tokenDigest: digests.eligible,
+              expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      })
+    })
+
+    await expect(
+      repository.isPasswordResetTokenEligible(
+        Buffer.alloc(32, 10).toString('base64url'),
+        now,
+      ),
+    ).resolves.toBe(false)
+    for (const digest of [
+      digests.expired,
+      digests.disabled,
+      digests.unverified,
+      digests.noCredential,
+    ]) {
+      await expect(
+        repository.isPasswordResetTokenEligible(digest, now),
+      ).resolves.toBe(false)
+    }
+    await expect(
+      repository.isPasswordResetTokenEligible(digests.eligible, now),
+    ).resolves.toBe(true)
+  })
+
+  it('serializes disable versus password-reset confirmation with a user lock', async () => {
+    const user = await provider.withClient((client) =>
+      client.user.create({
+        data: {
+          email: 'lock-reset-confirm@example.com',
+          normalizedEmail: 'lock-reset-confirm@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'old' } },
+          passwordResetToken: {
+            create: {
+              tokenDigest: Buffer.alloc(32, 21).toString('base64url'),
+              expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      }),
+    )
+    const tokenDigest = Buffer.alloc(32, 21).toString('base64url')
+    const connection = await blocker.connect()
+    try {
+      await connection.query('BEGIN')
+      await connection.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [
+        user.id,
+      ])
+      const confirmation = repository.confirmPasswordReset({
+        tokenDigest,
+        now: new Date('2026-08-06T12:00:00.000Z'),
+        passwordHash: 'new',
+      })
+      await expectPending(confirmation)
+      await connection.query(
+        "UPDATE users SET status = 'DISABLED' WHERE id = $1",
+        [user.id],
+      )
+      await connection.query('COMMIT')
+      await expect(confirmation).resolves.toBeUndefined()
+    } finally {
+      await connection.query('ROLLBACK').catch(() => undefined)
+      connection.release()
+    }
+    await provider.withClient(async (client) => {
+      const persisted = await client.user.findUniqueOrThrow({
+        where: { id: user.id },
+        include: { credential: true },
+      })
+      expect(persisted.status).toBe('DISABLED')
+      expect(persisted.credential?.passwordHash).toBe('old')
+      expect(persisted.sessionGeneration).toBe(0n)
+    })
+  })
+
+  it('serializes verification confirmation versus resend on the user row', async () => {
+    const user = await provider.withClient((client) =>
+      client.user.create({
+        data: {
+          email: 'lock-verification@example.com',
+          normalizedEmail: 'lock-verification@example.com',
+          emailVerifiedAt: null,
+          credential: { create: { passwordHash: 'hash' } },
+          emailVerificationToken: {
+            create: {
+              tokenDigest: Buffer.alloc(32, 22).toString('base64url'),
+              expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      }),
+    )
+    const oldDigest = Buffer.alloc(32, 22).toString('base64url')
+    const newDigest = Buffer.alloc(32, 23).toString('base64url')
+    const connection = await blocker.connect()
+    try {
+      await connection.query('BEGIN')
+      await connection.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [
+        user.id,
+      ])
+      const confirmation = repository.confirmEmailVerification(
+        oldDigest,
+        new Date('2026-08-06T12:00:00.000Z'),
+      )
+      await expectPending(confirmation)
+      const resend = repository.rotateEmailVerificationToken(
+        user.normalizedEmail,
+        {
+          tokenDigest: newDigest,
+          expiresAt: new Date('2026-08-08T00:00:00.000Z'),
+          createdAt: new Date('2026-08-06T12:01:00.000Z'),
+        },
+        new Date('2026-08-06T12:00:00.000Z'),
+      )
+      await expectPending(resend)
+      await connection.query('COMMIT')
+      const [confirmed, resent] = await Promise.all([confirmation, resend])
+      expect(
+        [confirmed !== undefined, resent !== undefined].filter(Boolean),
+      ).toHaveLength(1)
+      await provider.withClient(async (client) => {
+        const persisted = await client.user.findUniqueOrThrow({
+          where: { id: user.id },
+          include: { emailVerificationToken: true },
+        })
+        expect(
+          persisted.emailVerifiedAt === null &&
+            persisted.emailVerificationToken?.tokenDigest === newDigest,
+        ).toBe(resent !== undefined)
+      })
+    } finally {
+      await connection.query('ROLLBACK').catch(() => undefined)
+      connection.release()
+    }
+  })
+
+  it('serializes password change versus password-reset request', async () => {
+    const user = await provider.withClient((client) =>
+      client.user.create({
+        data: {
+          email: 'lock-reset-request@example.com',
+          normalizedEmail: 'lock-reset-request@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'old', version: 2 } },
+          passwordResetToken: {
+            create: {
+              tokenDigest: Buffer.alloc(32, 25).toString('base64url'),
+              expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+              createdAt: new Date('2026-08-06T00:00:00.000Z'),
+            },
+          },
+        },
+      }),
+    )
+    const connection = await blocker.connect()
+    try {
+      await connection.query('BEGIN')
+      await connection.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [
+        user.id,
+      ])
+      const resetRequest = repository.rotatePasswordResetToken(
+        user.normalizedEmail,
+        {
+          tokenDigest: Buffer.alloc(32, 24).toString('base64url'),
+          expiresAt: new Date('2026-08-07T00:00:00.000Z'),
+          createdAt: new Date('2026-08-06T00:00:00.000Z'),
+        },
+        new Date('2026-08-06T12:00:00.000Z'),
+      )
+      await expectPending(resetRequest)
+      const passwordChange = transaction.run(async () => {
+        expect(
+          await repository.replacePasswordIfVersion(user.id, 2, 'new'),
+        ).toBe(true)
+        await repository.deletePasswordResetToken(user.id)
+        await repository.incrementSessionGeneration(user.id)
+      })
+      await expectPending(passwordChange)
+      await connection.query('COMMIT')
+      await expect(resetRequest).resolves.toEqual({
+        userId: user.id,
+        email: user.email,
+      })
+      await expect(passwordChange).resolves.toBeUndefined()
+    } finally {
+      await connection.query('ROLLBACK').catch(() => undefined)
+      connection.release()
+    }
+    await provider.withClient(async (client) => {
+      const persisted = await client.user.findUniqueOrThrow({
+        where: { id: user.id },
+        include: { credential: true },
+      })
+      expect(persisted.status).toBe('ACTIVE')
+      expect(persisted.credential?.passwordHash).toBe('new')
+      expect(persisted.sessionGeneration).toBe(1n)
+      expect(
+        await client.passwordResetToken.count({ where: { userId: user.id } }),
+      ).toBe(0)
+    })
+  })
 })
+
+async function expectPending<T>(promise: Promise<T>): Promise<void> {
+  let settled = false
+  void promise.then(
+    () => {
+      settled = true
+    },
+    () => {
+      settled = true
+    },
+  )
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  expect(settled).toBe(false)
+}

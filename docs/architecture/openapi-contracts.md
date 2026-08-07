@@ -13,7 +13,9 @@ presentation DTO/decorator data or a root-selected problem contribution, run
 `openapi:drift` and `openapi:lint`. Runtime startup and drift checks do not
 rewrite the committed artifact.
 
-The contract includes the eight `/v1/auth` endpoints, the maintained
+The contract includes the thirteen `/v1/auth` endpoints, including the five
+opt-in self-service registration, verification and password-reset operations,
+the maintained
 `/v1/approval-requests` create/get/decision operations, cookie security scheme,
 RFC 9457 problem responses, protected Swagger mode and health routes. Changes
 to endpoint paths, methods, status codes, headers, cookies or problem bodies

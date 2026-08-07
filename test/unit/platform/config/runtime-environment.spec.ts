@@ -37,6 +37,7 @@ describe('runtime environment', () => {
         CORS_ORIGINS: ['http://localhost:3000'],
         TRUST_PROXY_CIDRS: [],
         REDIS_KEY_PREFIX: 'nest-js-starter',
+        AUTH_SELF_SERVICE_MODE: 'disabled',
       }),
     )
     expect(validate()).not.toHaveProperty('REDIS_CACHE_URL')
@@ -55,6 +56,37 @@ describe('runtime environment', () => {
         REDIS_QUEUE_URL: 'rediss://queue.internal:6380',
       }),
     )
+  })
+
+  it('accepts complete open self-service mail configuration', () => {
+    expect(
+      validate({
+        AUTH_SELF_SERVICE_MODE: 'open',
+        AUTH_PUBLIC_APP_URL: 'https://app.example.com/',
+        CORS_ORIGINS: 'https://app.example.com',
+        AUTH_SMTP_URL: 'smtps://mailer:secret@smtp.example.com:465',
+        AUTH_MAIL_FROM: 'no-reply@example.com',
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        AUTH_SELF_SERVICE_MODE: 'open',
+        AUTH_PUBLIC_APP_URL: 'https://app.example.com',
+        AUTH_SMTP_URL: 'smtps://mailer:secret@smtp.example.com:465',
+        AUTH_MAIL_FROM: 'no-reply@example.com',
+      }),
+    )
+  })
+
+  it('rejects an open self-service app origin absent from browser origins', () => {
+    expect(() =>
+      validate({
+        AUTH_SELF_SERVICE_MODE: 'open',
+        AUTH_PUBLIC_APP_URL: 'https://app.example.com',
+        CORS_ORIGINS: 'https://other-app.example.com',
+        AUTH_SMTP_URL: 'smtp://mailer:secret@smtp.example.com:587',
+        AUTH_MAIL_FROM: 'no-reply@example.com',
+      }),
+    ).toThrow(RuntimeConfigurationError)
   })
   it('derives CSRF origins and cookies from deployment inputs', () => {
     const config = buildApiRuntimeConfig({
@@ -105,8 +137,33 @@ describe('runtime environment', () => {
     ['invalid public origin', { PUBLIC_API_URL: 'https://api.example.com/v1' }],
     ['invalid CORS origin', { CORS_ORIGINS: '*' }],
     ['missing secret', { AUTH_CSRF_SECRET: undefined }],
+    ['invalid SMTP protocol', { AUTH_SMTP_URL: 'http://smtp.example.com' }],
+    [
+      'SMTP URL with undecodable credentials',
+      { AUTH_SMTP_URL: 'smtp://mailer:%ZZ@smtp.example.com:587' },
+    ],
+    [
+      'open self-service without mail values',
+      { AUTH_SELF_SERVICE_MODE: 'open' },
+    ],
   ])('rejects %s without exposing values', (_name, input) => {
     expect(() => validate(input)).toThrow(RuntimeConfigurationError)
+  })
+
+  it('requires HTTPS app origin for production open self-service', () => {
+    expect(() =>
+      validate({
+        NODE_ENV: 'production',
+        API_DOCS_MODE: 'off',
+        PUBLIC_API_URL: 'https://api.example.com',
+        CORS_ORIGINS: 'https://app.example.com',
+        TRUST_PROXY_CIDRS: '10.0.0.0/8',
+        AUTH_SELF_SERVICE_MODE: 'open',
+        AUTH_PUBLIC_APP_URL: 'http://app.example.com',
+        AUTH_SMTP_URL: 'smtp://mailer:secret@smtp.example.com:587',
+        AUTH_MAIL_FROM: 'no-reply@example.com',
+      }),
+    ).toThrow(RuntimeConfigurationError)
   })
 
   it('rejects an auth and queue endpoint collision without retaining URLs', () => {

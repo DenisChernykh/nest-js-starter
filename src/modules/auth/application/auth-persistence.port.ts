@@ -5,6 +5,11 @@ import type {
   InitialAdminResult,
   UserProvisioningInput,
   CreateUserResult,
+  ConfirmPasswordResetInput,
+  SelfServiceDeliveryTarget,
+  SelfServiceRegistrationInput,
+  SelfServiceRegistrationResult,
+  SelfServiceTokenInput,
 } from './auth.types'
 
 /** Durable identity and security-state operations required by auth use cases. */
@@ -31,6 +36,28 @@ export interface AuthPersistencePort {
   bootstrapInitialAdmin(input: InitialAdminInput): Promise<InitialAdminResult>
   /** Atomically creates one user, credential and deduplicated role set. */
   createUser(input: UserProvisioningInput): Promise<CreateUserResult>
+  deletePasswordResetToken(userId: string): Promise<void>
+  registerSelfServiceUser(
+    input: SelfServiceRegistrationInput,
+  ): Promise<SelfServiceRegistrationResult>
+  rotateEmailVerificationToken(
+    normalizedEmail: string,
+    token: SelfServiceTokenInput,
+    now: Date,
+  ): Promise<SelfServiceDeliveryTarget | undefined>
+  confirmEmailVerification(
+    tokenDigest: string,
+    now: Date,
+  ): Promise<SelfServiceDeliveryTarget | undefined>
+  rotatePasswordResetToken(
+    normalizedEmail: string,
+    token: SelfServiceTokenInput,
+    now: Date,
+  ): Promise<SelfServiceDeliveryTarget | undefined>
+  isPasswordResetTokenEligible(tokenDigest: string, now: Date): Promise<boolean>
+  confirmPasswordReset(
+    input: ConfirmPasswordResetInput,
+  ): Promise<SelfServiceDeliveryTarget | undefined>
 }
 
 /** Injection token for durable auth identity and security-state operations. */

@@ -118,6 +118,56 @@ function requireService(
 }
 
 describe('local Compose runtime contract', () => {
+  it('keeps self-service disabled by default and documents the opt-in mail flow', () => {
+    const configuration = resolveLocalCompose(['development', 'mail'])
+    const api = requireService(configuration, 'api')
+    const mail = requireService(configuration, 'mail')
+    const environment = readFileSync('.env.example', 'utf8')
+    const runbook = readFileSync('docs/runbooks/local-development.md', 'utf8')
+
+    expect(api.environment).toEqual(
+      expect.objectContaining({
+        AUTH_SELF_SERVICE_MODE: 'disabled',
+        AUTH_PUBLIC_APP_URL: '',
+        AUTH_SMTP_URL: '',
+        AUTH_MAIL_FROM: '',
+      }),
+    )
+    expect(mail.profiles).toEqual(['mail'])
+    expect(environment).toContain('AUTH_SELF_SERVICE_MODE=disabled')
+    expect(runbook).toContain(
+      'docker compose --profile mail up --detach --wait mail',
+    )
+    expect(runbook).toContain('AUTH_SELF_SERVICE_MODE=open')
+    expect(runbook).toContain('http://127.0.0.1:8025')
+  })
+
+  it('keeps Mailpit opt-in, loopback-only and independent from API readiness', () => {
+    const configuration = resolveLocalCompose(['mail'])
+    const mail = requireService(configuration, 'mail')
+
+    expect(mail.profiles).toEqual(['mail'])
+    expect(mail.image).toBe(
+      'axllent/mailpit:v1.30.5@sha256:b868afa176bfd6cce2323ea316cd99ccad77915e51e595748f6d786700ecf109',
+    )
+    expect(mail.environment).toEqual({ MP_MAX_MESSAGES: '500' })
+    expect(mail.ports).toEqual([
+      expect.objectContaining({
+        host_ip: '127.0.0.1',
+        published: '1025',
+        target: 1025,
+      }),
+      expect.objectContaining({
+        host_ip: '127.0.0.1',
+        published: '8025',
+        target: 8025,
+      }),
+    ])
+    expect(mail.volumes).toBeUndefined()
+    expect(mail.depends_on).toBeUndefined()
+    expect(configuration.services.api).toBeUndefined()
+  })
+
   it('runs committed migrations before the watched API and keeps Redis separate', () => {
     const configuration = resolveLocalCompose()
     const migrator = requireService(configuration, 'migrator')

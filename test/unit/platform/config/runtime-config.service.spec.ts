@@ -71,17 +71,24 @@ describe('RuntimeConfigService', () => {
     expect(
       (service.redis as { readonly cacheUrl?: string }).cacheUrl,
     ).toBeUndefined()
-    expect(service.auth).toEqual(
+    const exposedAuth = service.auth as AuthRuntimeConfig
+    expect(exposedAuth).toEqual(
       expect.objectContaining({
         sessionCookieName: 'nest-js-starter-session',
         secureCookie: false,
         csrfOrigins: ['http://localhost:3000', 'http://admin.local:3001'],
       }),
     )
+    expect(exposedAuth.selfService).toEqual(
+      expect.objectContaining({
+        mode: 'disabled',
+        mailDeliveryTimeoutMs: 1_500,
+      }),
+    )
     expect(Object.isFrozen(service.redis)).toBe(true)
     expect(Object.isFrozen(service.auth)).toBe(true)
-    const exposedAuth = service.auth as AuthRuntimeConfig
     expect(Object.isFrozen(exposedAuth.csrfOrigins)).toBe(true)
+    expect(Object.isFrozen(exposedAuth.selfService)).toBe(true)
     exposedAuth.sessionKeySecret[0] = 255
     expect(runtimeService.auth.sessionKeySecret[0]).toBe(1)
   })
@@ -121,6 +128,8 @@ describe('RuntimeConfigService', () => {
       redisAuthConfigured: true,
       redisQueueConfigured: false,
       authCookieName: 'nest-js-starter-session',
+      authSelfServiceMode: 'disabled',
+      authSmtpConfigured: false,
     })
     expect(JSON.stringify(summary)).not.toContain('local-password')
     expect(JSON.stringify(summary)).not.toContain(secret(1))
@@ -144,6 +153,39 @@ describe('RuntimeConfigService', () => {
       }),
     )
     expect(JSON.stringify(service.safeSummary)).not.toContain('queue-secret')
+  })
+
+  it('exposes open self-service values without mutable nested state', () => {
+    const service = createService({
+      AUTH_SELF_SERVICE_MODE: 'open',
+      AUTH_PUBLIC_APP_URL: 'http://app.local:3001',
+      CORS_ORIGINS: 'http://localhost:3000, http://app.local:3001',
+      AUTH_SMTP_URL: 'smtp://mailer:secret@smtp.local:587',
+      AUTH_MAIL_FROM: 'no-reply@app.local',
+    })
+
+    expect(service.auth.selfService).toEqual(
+      expect.objectContaining({
+        mode: 'open',
+        publicAppUrl: 'http://app.local:3001',
+        smtpUrl: 'smtp://mailer:secret@smtp.local:587',
+        mailFrom: 'no-reply@app.local',
+      }),
+    )
+    expect(service.safeSummary).toEqual(
+      expect.objectContaining({
+        authSelfServiceMode: 'open',
+        authSmtpConfigured: true,
+      }),
+    )
+    expect(JSON.stringify(service.safeSummary)).not.toContain('secret')
+    const exposed = service.auth.selfService as {
+      mode: 'open' | 'disabled'
+    }
+    expect(() => {
+      exposed.mode = 'disabled'
+    }).toThrow()
+    expect(service.auth.selfService.mode).toBe('open')
   })
 
   it('does not expose an arbitrary string-key accessor', () => {

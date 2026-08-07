@@ -1,8 +1,14 @@
 import {
   AuthError,
   type AuthFailureCode,
+  EmailVerificationRequiredError,
   AuthRateLimitedError,
 } from '../application/auth-errors'
+import { AuthTokenInvalidOrExpiredError } from '../application/self-service-auth.policy'
+import {
+  AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
+  EMAIL_VERIFICATION_REQUIRED_PROBLEM,
+} from '../presentation/auth-problem.definitions'
 import type {
   HttpProblemContribution,
   HttpProblemMapping,
@@ -24,11 +30,20 @@ export const AUTH_FAILURE_PROBLEM_CODES = Object.freeze({
 /** Auth composition contribution recognizing only the module's error base. */
 export const AUTH_HTTP_PROBLEM_CONTRIBUTION: HttpProblemContribution =
   Object.freeze({
-    definitions: Object.freeze([]),
+    definitions: Object.freeze([
+      EMAIL_VERIFICATION_REQUIRED_PROBLEM,
+      AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
+    ]),
     map: mapAuthHttpProblem,
   })
 
 function mapAuthHttpProblem(error: unknown): HttpProblemMapping | undefined {
+  if (error instanceof EmailVerificationRequiredError) {
+    return { code: EMAIL_VERIFICATION_REQUIRED_PROBLEM.code }
+  }
+  if (error instanceof AuthTokenInvalidOrExpiredError) {
+    return { code: AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM.code }
+  }
   if (!(error instanceof AuthError)) return undefined
   return {
     code: AUTH_FAILURE_PROBLEM_CODES[error.code],

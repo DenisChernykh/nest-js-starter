@@ -85,6 +85,10 @@ function productionEnvironmentFile(): string {
   return [
     `APP_IMAGE=${appImage}`,
     'API_DOCS_MODE=off',
+    'AUTH_SELF_SERVICE_MODE=disabled',
+    'AUTH_PUBLIC_APP_URL=',
+    'AUTH_SMTP_URL=',
+    'AUTH_MAIL_FROM=',
     'AUTH_CSRF_SECRET=' + secrets.authCsrf,
     'AUTH_NETWORK_METADATA_SECRET=' + secrets.authNetwork,
     'AUTH_RATE_LIMIT_KEY_SECRET=' + secrets.authRateLimit,
@@ -343,6 +347,10 @@ describe('production Compose runtime contract', () => {
         OTEL_EXPORTER_OTLP_ENDPOINT: 'http://alloy:4318',
         REDIS_AUTH_URL: `redis://default:${secrets.redisPassword}@redis-auth:6379`,
         SERVICE_REVISION: serviceRevision,
+        AUTH_SELF_SERVICE_MODE: 'disabled',
+        AUTH_PUBLIC_APP_URL: '',
+        AUTH_SMTP_URL: '',
+        AUTH_MAIL_FROM: '',
       }),
     )
 
@@ -378,6 +386,11 @@ describe('production Compose runtime contract', () => {
       'GHCR_READ_TOKEN=<secret-manager-value>',
     )
     expect(composeSource).not.toContain('env_file:')
+    expect(composeSource).not.toContain('mailpit')
+    expect(environmentTemplate).toContain('AUTH_SELF_SERVICE_MODE=disabled')
+    expect(environmentTemplate).toContain('AUTH_PUBLIC_APP_URL=')
+    expect(environmentTemplate).toContain('AUTH_SMTP_URL=')
+    expect(environmentTemplate).toContain('AUTH_MAIL_FROM=')
 
     const databaseUrl = new URL(api.environment!.DATABASE_URL!)
     expect(databaseUrl.username).toBe('app_runtime')

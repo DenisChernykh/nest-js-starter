@@ -146,6 +146,23 @@ and application inputs. The migrator receives only its migration database URL
 and process identity. GHCR, PostgreSQL admin, runtime, auth and Redis secrets
 are not cross-exposed.
 
+## Self-service account lifecycle
+
+The production default is `AUTH_SELF_SERVICE_MODE=disabled`. To enable the
+feature, set `AUTH_SELF_SERVICE_MODE=open`, an HTTPS `AUTH_PUBLIC_APP_URL`, a
+valid `AUTH_SMTP_URL` and `AUTH_MAIL_FROM` in the protected server environment,
+apply the committed migration, and recreate only the API:
+
+    "${production_compose[@]}" config --quiet
+    "${production_compose[@]}" up --detach migrator
+    "${production_compose[@]}" up --detach --wait api
+
+SMTP is lazy best-effort delivery and is not checked during bootstrap or
+readiness. Follow the [self-service account lifecycle runbook](self-service-account-lifecycle.md)
+for local Mailpit, smoke, outage, recovery, frontend fragment and rollback
+procedures. To disable the capability, set `AUTH_SELF_SERVICE_MODE=disabled`
+and recreate the API; existing verified login remains available.
+
 ## Caddy handoff and bounded public smoke
 
 Caddy is host-owned and remains outside application Compose. The API is attached

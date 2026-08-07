@@ -12,14 +12,19 @@ evidence machinery.
 
 ## Status snapshot
 
-As of 2026-07-26, the universal production foundation is implemented on
-`stage`.
+The source baseline used for this roadmap is the clean local `stage` branch at
+`8a74ef9245fd1d9d0b8df80f55569ecebd338991` on 2026-08-06. The universal
+production foundation and the maintained `approval-requests` reference are
+present on that baseline.
 
 - PR [#13](https://github.com/DenisChernykh/nest-js-starter/pull/13)
   simplified the runtime, tooling, test and OCI boundaries while preserving the
   auth/RBAC and OpenAPI contracts.
 - PR [#14](https://github.com/DenisChernykh/nest-js-starter/pull/14)
   made the publisher pull the immutable digest before the smoke test.
+- PR [#35](https://github.com/DenisChernykh/nest-js-starter/pull/35)
+  delivered the repository-owned production Compose, Caddy handoff and
+  recovery contract described by Milestone 7.
 - The
   [Stage image run for `913fef3`](https://github.com/DenisChernykh/nest-js-starter/actions/runs/30192505866)
   completed successfully.
@@ -27,16 +32,18 @@ As of 2026-07-26, the universal production foundation is implemented on
   and e2e suites remain in `pnpm check`; Docker verification remains in
   `pnpm oci:check` and stage publication.
 
-This snapshot is evidence for the stated revision, not a permanent substitute
-for checking the current branch and workflow runs.
+No fresh CI, OCI, hosted deployment or recovery drill was run for this
+documentation revision. This snapshot records source presence at the stated
+revision; it is not a permanent substitute for checking the current branch,
+workflow runs and hosted state.
 
 ## Maintained vertical reference
 
-As of 2026-07-29, the `approval-requests` slice is implemented and
-production-wired on its feature branch as the first maintained vertical
-reference. It covers authenticated creation, author-or-reviewer visibility and
-an authorized non-author approve/reject decision. Prisma persists the aggregate
-and enforces the terminal transition with a pending-only compare-and-set.
+The `approval-requests` slice is production-wired on the current `stage`
+baseline as the first maintained vertical reference. It covers authenticated
+creation, author-or-reviewer visibility and an authorized non-author
+approve/reject decision. Prisma persists the aggregate and enforces the
+terminal transition with a pending-only compare-and-set.
 
 The module contributes its permissions to product-owned root role definitions
 and its explicit error-class mappings to the root-composed HTTP problem
@@ -44,17 +51,13 @@ registry. The committed OpenAPI contract includes the three operations and the
 complete composed problem-code enum. Real HTTP tests cover its authentication,
 authorization, validation, visibility and business-error responses.
 
-Fresh local Node 24.18.0 and pnpm 11.15.1 evidence for that feature-branch
-revision is `pnpm check:quick` with 68 unit suites and 346 tests, followed by
-`pnpm check` with 12 integration suites/58 tests and 28 e2e suites/85 tests.
-This is local implementation evidence only: no remote CI, merge, image
-publication, deployment or hosted verification is recorded for the slice.
-The current toolchain policy accepts every supported Node 24.x patch release;
-the version above identifies the runtime used for this historical run.
+Historical feature-branch evidence was `pnpm check:quick` with 68 unit suites
+and 346 tests, followed by `pnpm check` with 12 integration suites/58 tests and
+28 e2e suites/85 tests on Node 24.18.0 and pnpm 11.15.1. Those counts identify
+that historical run and are not fresh evidence for the current baseline.
 
 The reference is optional product code rather than universal foundation. It
-does not implement listing, user provisioning, self-service auth, email,
-queues or object storage.
+does not implement listing, self-service auth, email, queues or object storage.
 
 ## Accepted foundation
 
@@ -115,6 +118,10 @@ The adoption and recovery contracts are `docs/architecture/durable-jobs.md` and
   recovery documentation in the same pull request.
 
 ## Milestone 7: Compose+Caddy deployment and recovery contract
+
+**Repository status:** delivered on `stage` by PR #35. Hosted Caddy, DNS, TLS,
+storage, telemetry and recovery-drill evidence remain environment-specific and
+must not be inferred from the repository state.
 
 **Goal:** leave one explicit production Compose path with host-owned Caddy,
 separate PostgreSQL roles and image-only rollback, without changing the
@@ -195,29 +202,185 @@ This milestone may add one small orchestration script only if the manual
 procedure proves error-prone. It must not recreate the deleted architecture or
 evidence engines.
 
-## Capability candidates
+## Product capability expansion roadmap
 
-Candidates are independent product slices, not a sequential recipe program.
-Each candidate needs a consumer, its own design decision and an isolated
-acceptance gate before it enters the starter.
+The next roadmap phase adds new user, operator or integration scenarios. A
+pagination helper, HTTP client, outbox, cache or generic repository does not
+qualify on its own; those are implementation details that may be introduced
+inside an accepted product capability.
 
-| Candidate                        | Adoption trigger                                                        | Boundary that must remain explicit                                                                                                                                                                                                                         |
-| -------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Product durable jobs with BullMQ | A real workflow needs retries, replay or work outside the API process   | Adopt the completed platform foundation with a separate `REDIS_QUEUE_URL`, feature-owned queue/payload, BullMQ-owned connections, PostgreSQL outbox where DB-to-queue durability is required, worker health/shutdown and a migrator → worker → API rollout |
-| Auth self-service                | A browser product needs registration, verification or password recovery | Builds on current auth without changing opaque session cookies; hashed single-use tokens, non-enumerating responses and a mail port are required                                                                                                           |
-| Object storage                   | A real module needs uploads or presigned access                         | Module-local storage port, S3 adapter, size/type policy and MinIO integration tests; no generic attachment business model                                                                                                                                  |
-| Public cache invalidation        | A frontend cache has a concrete tag/webhook contract                    | Prefer a typed application event and signed HTTP adapter; TTL remains the fallback. Add an outbox/queue only when loss across process failure is unacceptable                                                                                              |
+Roadmap status has four meanings:
 
-The Amazing EKB backend demonstrates why these choices must remain
-requirement-driven. Its public-cache invalidation intentionally uses
-in-process events and a signed fire-and-forget webhook because frontend TTL is
-an acceptable fallback; its import workflows need durable background
-processing. Those are two different reliability contracts and must not be
-collapsed into a global Redis/cache/event abstraction.
+- **recommended next design** — the strongest current candidate, but not an
+  authorization to implement it;
+- **queued** — high reuse potential with a stable boundary, still requiring a
+  named consumer and approved design;
+- **direction-gated** — valuable only after the starter is pulled toward a
+  public-product, SaaS/B2B, integration or commerce use case;
+- **platform adoption** — existing infrastructure that a product capability
+  may adopt without promoting product policy into the core.
 
-The current product reference is its
-[event-driven cache invalidation design](https://github.com/DenisChernykh/amazing-ekb-hub-backend/blob/stage/docs/superpowers/specs/2026-07-19-cache-invalidation-events-design.md).
-It is evidence for that reliability choice, not a starter dependency.
+### Sequencing model
+
+1. Design, plan, implement and review one capability at a time. A roadmap track
+   is not one combined epic or pull request.
+2. Keep the universal core unchanged unless the capability proves a missing
+   cross-cutting contract through a concrete consumer.
+3. Let the consuming module own business ports, policies and durable state.
+   Platform code may own only driver configuration, lifecycle, readiness and
+   other product-neutral mechanics.
+4. Extract a shared platform only after at least two independent consumers
+   demonstrate the same contract and failure model. Do not generalize from one
+   email, webhook, file or job flow.
+5. A capability may depend on a previously accepted capability, but it must
+   remain independently removable and have its own acceptance gate.
+
+### Milestone 9: self-service account lifecycle
+
+**Status:** implemented on feature branch `feat/self-service-account-lifecycle`.
+
+This status describes local feature-branch implementation only. It does not
+claim merge, publication, deployment or hosted SMTP/DNS/secrets verification.
+
+**Goal:** add the first public account-creation path without replacing the
+existing opaque sessions, password hashing, RBAC, session revocation or
+operator provisioning flows.
+
+**New product behavior:**
+
+- anonymous email/password registration;
+- email verification and bounded resend;
+- non-enumerating password-recovery request and single-use reset;
+- explicit account states that preserve administrator disablement and existing
+  session-generation invalidation;
+- a minimal auth-owned transactional mail boundary for verification and
+  recovery messages.
+
+**Boundaries:**
+
+- verification and recovery tokens are random, hashed at rest, expiring,
+  single-use and invalidated by the relevant account transition;
+- public responses do not reveal whether an email already exists;
+- mail transport failure does not invent a second user/account source of truth;
+- social/OIDC login, passkeys, MFA, organizations, a general notification
+  center and billing remain separate capabilities;
+- the existing session cookie bytes, CSRF/Origin policy, roles and permissions
+  do not change as a side effect.
+
+**Implemented contract and evidence:**
+
+- active self-service users require email verification before login;
+- verification and reset tokens are purpose-specific, single-use PostgreSQL
+  digests with atomic confirmation and reset session-generation invalidation;
+- public operations are non-enumerating, rate-limited and default-disabled;
+- auth-owned Nodemailer delivery is best-effort, bounded and absent from
+  readiness, while local Mailpit is profile-gated;
+- focused unit, integration, real-container e2e, OpenAPI and operations
+  contract suites pass on this feature branch;
+- enable, local smoke, outage/recovery, disable, rollback and frontend fragment
+  procedures are in `docs/runbooks/self-service-account-lifecycle.md`.
+
+The coordinator-owned aggregate `pnpm check` and `pnpm oci:check` gates remain
+separate post-review evidence. Hosted SMTP/DNS/secrets and deployment remain
+unperformed boundaries.
+
+### Milestone 10: files and media
+
+**Status:** queued and independent from Milestone 9.
+
+**Goal:** give one named business module a complete upload, authorization,
+retrieval and deletion flow backed by S3-compatible object storage.
+
+**Required boundary:** the consuming module owns attachment/media semantics,
+allowed content, visibility and retention. A platform adapter may provide
+object put/get/delete or presigning, but the starter does not introduce a
+global `Attachment` aggregate or allow arbitrary buckets and keys from HTTP
+input.
+
+**Design decisions required before an implementation plan:**
+
+- the first real consumer and whether objects are public, private or mixed;
+- proxy upload versus presigned upload;
+- size/type validation, malware-scanning hook and quarantine policy;
+- database/object-store commit order, orphan detection and reconciliation.
+
+**Exit evidence:** provider-neutral port tests, MinIO or equivalent
+S3-compatible integration, authorization and content-policy e2e coverage,
+bounded cleanup/reconciliation proof, lifecycle/recovery documentation and
+fresh unchanged-core gates.
+
+### Direction-gated product tracks
+
+After Milestone 9, and independently of the queued files/media capability,
+select a track only when a real product supplies its ownership and failure
+model. Track rows are ordered discovery candidates, not pre-approved delivery
+sequences.
+
+| Track             | Candidate order                                                                                                 | Adoption trigger                                                                 | Boundary that must remain explicit                                                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public/operations | Public inquiries → transactional notifications → business audit                                                 | Anonymous visitors submit leads or service requests that operators must process  | An inquiry is durable truth; anti-abuse, assignment and statuses belong to the module. Do not build a dynamic form or workflow engine.                      |
+| SaaS/B2B          | Organizations/invitations → API keys/service accounts → subscription billing/entitlements → notifications/audit | Users collaborate inside workspaces and machines act on an organization's behalf | Organization membership is not automatic global multi-tenancy. Resource ownership and every organization-scoped permission remain explicit.                 |
+| Integrations      | API keys/service accounts → webhook management → import/export jobs → business audit                            | Customers, bots or external systems integrate with the API                       | Keys are hashed, scoped, expiring and revocable. Webhook delivery, inbox deduplication and job retry policies are separate reliability contracts.           |
+| Commerce          | One-time checkout → payment history/refunds/reconciliation → transactional notifications                        | A concrete order or invoice aggregate needs payment collection                   | The product owns orders and fulfillment. Provider webhooks are authoritative integration input; payment status does not become a generic business workflow. |
+
+Subscription billing is intentionally not folded into the commerce row. It
+adds recurring invoices, access entitlements, grace periods, cancellation and
+reconciliation behavior and therefore needs its own product design.
+
+### Cross-cutting promotion rules
+
+- **Notifications:** first ship narrow transactional delivery inside a named
+  consumer. Promote templates, delivery attempts, preferences or an in-app
+  inbox only after a second consumer proves the common contract.
+- **External identity:** add one OIDC/social provider, passkeys or MFA as a
+  separate auth extension after the account-lifecycle design. Do not redesign
+  all credentials in the registration milestone.
+- **API keys and service accounts:** choose user-owned or organization-owned
+  principals before implementation. Do not emulate browser sessions or reuse
+  session cookies for machine access.
+- **Business audit:** record explicit business actions and authorized reads. It
+  does not replace Pino access logs, traces or security audit events.
+- **Payments:** implement one-time payment collection and recurring
+  subscription billing as different capabilities. Select one provider and one
+  product aggregate before designing an adapter.
+- **Import/export:** require a concrete dataset, authorization model, file
+  format and partial-failure contract. Do not create a universal ETL system.
+
+### Deferred exploratory candidates
+
+These remain visible without receiving a milestone number or implied delivery
+commitment:
+
+| Candidate                                                  | Revisit when                                                                                       | Why it is deferred                                                                                             |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| OIDC/social login, passkeys and MFA                        | The account-lifecycle contract is stable and a concrete client needs another authentication method | Each method has distinct linking, recovery and threat-model decisions.                                         |
+| Collaboration: comments, mentions and entity subscriptions | Two products need the same collaboration flow around owned business entities                       | A generic comment model otherwise leaks authorization and moderation policy across modules.                    |
+| Search                                                     | A real catalog or knowledge module defines searchable fields, ranking and authorization            | Search indexing and result visibility cannot be designed independently of the owning module.                   |
+| Feature entitlements                                       | A subscription or organization product needs feature-level access beyond RBAC                      | Entitlements must follow a concrete billing or contract source of truth rather than become another role table. |
+
+### Execution readiness
+
+No later product capability in this roadmap is implementation-ready merely
+because it is listed. Every later candidate remains `NOT READY` until its
+adoption trigger, product contract, provider choices and failure model are
+resolved in a separate design. There is no automatic continuation from one
+milestone or track row to the next.
+
+### Platform adoption candidates
+
+These are not new product capabilities by themselves. They become relevant
+only inside an accepted product scenario.
+
+| Candidate                        | Adoption trigger                                                 | Boundary that must remain explicit                                                                                                                                                                                                                       |
+| -------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product durable jobs with BullMQ | A workflow needs retries, replay or work outside the API process | Adopt the completed platform foundation with a separate `REDIS_QUEUE_URL`, feature-owned queue/payload, BullMQ-owned connections, PostgreSQL outbox only where DB-to-queue durability is required, worker health/shutdown and an explicit rollout order. |
+| Public cache invalidation        | A frontend cache has a concrete tag/webhook contract             | Prefer a typed application event and signed HTTP adapter; TTL remains the fallback. Add an outbox/queue only when loss across process failure is unacceptable.                                                                                           |
+
+The Amazing EKB backend demonstrates why these choices remain
+requirement-driven. Its public-cache invalidation accepts in-process delivery
+because frontend TTL is a fallback, while import workflows require durable
+background processing. Those reliability contracts must not be collapsed into
+a global Redis/cache/event abstraction.
 
 Yandex/Telegram imports, catalog entities and frontend-specific cache tags stay
 in the product repository. Only reusable infrastructure boundaries may be
