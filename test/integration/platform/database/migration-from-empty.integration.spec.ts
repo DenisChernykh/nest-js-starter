@@ -36,6 +36,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
       { migration_name: '20260721090000_auth_core' },
       { migration_name: '20260728210000_approval_requests' },
       { migration_name: '20260806090000_self_service_account_lifecycle' },
+      { migration_name: '20260807120000_account_administration_core' },
     ])
     const tables = await pool.query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables
@@ -93,7 +94,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     const migrations = await pool.query<{ count: string }>(
       'SELECT count(*) FROM _prisma_migrations',
     )
-    expect(migrations.rows[0]?.count).toBe('4')
+    expect(migrations.rows[0]?.count).toBe('5')
   })
 
   it('backfills an existing user when upgrading from the pre-feature schema', async () => {
@@ -138,6 +139,16 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
         readFileSync(
           join(
             migrationRoot,
+            '20260807120000_account_administration_core',
+            'migration.sql',
+          ),
+          'utf8',
+        ),
+      )
+      await upgradePool.query(
+        readFileSync(
+          join(
+            migrationRoot,
             '20260806090000_self_service_account_lifecycle',
             'migration.sql',
           ),
@@ -149,9 +160,11 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
         status: string
         created_at: Date
         email_verified_at: Date | null
+        account_revision: number
+        retired_at: Date | null
         password_hash: string | null
       }>(
-        `SELECT u.status, u.created_at, u.email_verified_at, pc.password_hash
+        `SELECT u.status, u.created_at, u.email_verified_at, u.account_revision, u.retired_at, pc.password_hash
            FROM users u
            LEFT JOIN password_credentials pc ON pc.user_id = u.id
           WHERE u.id = $1`,
@@ -162,6 +175,8 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
           status: 'ACTIVE',
           created_at: createdAt,
           email_verified_at: createdAt,
+          account_revision: 0,
+          retired_at: null,
           password_hash: '$argon2id$v=19$m=19456,t=2,p=1$legacy',
         },
       ])

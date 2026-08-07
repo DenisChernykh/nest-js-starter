@@ -295,42 +295,55 @@ operator provisioning flows.
 The exact aggregate test counts, published digest and OCI evidence are recorded
 in the status snapshot above.
 
-### Milestone 10: files and media
+### Milestone 10: account administration
 
-**Status:** recommended next design and independent from Milestone 9.
+**Status:** PR 1 core is under review; PR 2 email workflows remains pending and
+depends on the core merge. Neither part is delivered on `stage` yet.
 
-**Goal:** give one named business module a complete upload, authorization,
-retrieval and deletion flow backed by S3-compatible object storage.
+**Goal:** let an authorized operator inspect and administer auth-owned accounts
+without adding a frontend, hard delete, dynamic role CRUD or product-specific
+profile fields.
 
-**Required boundary:** the consuming module owns attachment/media semantics,
-allowed content, visibility and retention. A platform adapter may provide
-object put/get/delete or presigning, but the starter does not introduce a
-global `Attachment` aggregate or allow arbitrary buckets and keys from HTTP
-input.
+**PR 1 — administration core:**
 
-The first design and implementation may use local, profile-gated MinIO plus
-S3-compatible integration tests. A paid hosted S3 provider is not required
-until a production adoption; provider credentials, access policy, TLS, backup
-and hosted recovery evidence stay environment-specific.
+- explicit `INVITED`, `ACTIVE`, `DISABLED` and `RETIRED` account states,
+  `retiredAt` and a revision-backed strong ETag;
+- default-disabled protected list/detail, status transition, role replacement,
+  retirement, logout-all and code-owned role-catalog operations under
+  `/v1/admin/auth`;
+- separate read, lifecycle-management and role-management permissions;
+- `If-Match` enforcement with 428 for missing, 400 for malformed and 412 for
+  stale validators, plus a case-insensitive UUID self-mutation prohibition;
+- transaction-local reauthorization of the acting administrator after ordered
+  row locks;
+- retirement that removes auth-owned credentials, roles and one-time tokens,
+  invalidates sessions and tombstones the email while preserving the user ID
+  and product-owned foreign keys.
 
-**Design decisions required before an implementation plan:**
+**PR 2 — invitations and recovery:**
 
-- the first real consumer and whether objects are public, private or mixed;
-- proxy upload versus presigned upload;
-- size/type validation, malware-scanning hook and quarantine policy;
-- database/object-store commit order, orphan detection and reconciliation.
+- hashed, expiring, rotating and single-use invitation tokens;
+- default-disabled email workflows requiring account administration, public
+  app URL, matching CORS origin, SMTP sender and production HTTPS;
+- protected create/resend/reset operations plus public invitation acceptance;
+- acceptance that sets the password, verifies email, activates the account,
+  consumes the token and creates no browser session;
+- persistence before best-effort SMTP delivery, returning only
+  `mailDelivery: delivered|failed` for actual delivery outcomes;
+- immutable active email, with the original address reusable after retirement.
 
-**Exit evidence:** provider-neutral port tests, MinIO or equivalent
-S3-compatible integration, authorization and content-policy e2e coverage,
-bounded cleanup/reconciliation proof, lifecycle/recovery documentation and
-fresh unchanged-core gates.
+**Exit evidence:** PR 1 requires focused unit tests, PostgreSQL/Redis
+concurrency and cleanup integration, real HTTP auth/CSRF/ETag flows, canonical
+OpenAPI, the core account-administration runbook, `pnpm check:quick`,
+`pnpm check` and `pnpm oci:check`. PR 2 adds invitation/reset/mail failure
+evidence. Delivery still requires both regular PR merges and fresh post-merge
+Stage CI, digest, Trivy and OCI-smoke evidence.
 
 ### Direction-gated product tracks
 
-After Milestone 9, and independently of the recommended files/media design,
-select a track only when a real product supplies its ownership and failure
-model. Track rows are ordered discovery candidates, not pre-approved delivery
-sequences.
+After Milestone 9, and independently of account administration, select a track
+only when a real product supplies its ownership and failure model. Track rows
+are ordered discovery candidates, not pre-approved delivery sequences.
 
 | Track             | Candidate order                                                                                                 | Adoption trigger                                                                 | Boundary that must remain explicit                                                                                                                          |
 | ----------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -338,6 +351,7 @@ sequences.
 | SaaS/B2B          | Organizations/invitations → API keys/service accounts → subscription billing/entitlements → notifications/audit | Users collaborate inside workspaces and machines act on an organization's behalf | Organization membership is not automatic global multi-tenancy. Resource ownership and every organization-scoped permission remain explicit.                 |
 | Integrations      | API keys/service accounts → webhook management → import/export jobs → business audit                            | Customers, bots or external systems integrate with the API                       | Keys are hashed, scoped, expiring and revocable. Webhook delivery, inbox deduplication and job retry policies are separate reliability contracts.           |
 | Commerce          | One-time checkout → payment history/refunds/reconciliation → transactional notifications                        | A concrete order or invoice aggregate needs payment collection                   | The product owns orders and fulfillment. Provider webhooks are authoritative integration input; payment status does not become a generic business workflow. |
+| Files/media       | One consumer upload → authorized retrieval/deletion → reconciliation                                            | A named module needs durable binary objects and defines their visibility         | The module owns media semantics, content policy and retention. An S3 adapter must not become a global attachment aggregate or accept arbitrary bucket keys. |
 
 Subscription billing is intentionally not folded into the commerce row. It
 adds recurring invoices, access entitlements, grace periods, cancellation and
@@ -376,13 +390,14 @@ commitment:
 
 ### Execution readiness
 
-Milestone 9 is delivered. Milestone 10 is the recommended next design, but it
-remains `NOT READY` for implementation until the first consumer, visibility,
-upload flow, content policy and storage failure model are resolved. Milestone 8
-clean-copy certification also remains pending and can be scheduled separately
-because it certifies the reusable core rather than adding a product capability.
-Every direction-gated candidate still requires its own adoption trigger,
-product contract, provider choices and failure model.
+Milestone 9 is delivered. Milestone 10 is under feature-branch implementation
+and remains undelivered until its two PRs, full gates and post-merge Stage image
+evidence complete. S3/object storage is direction-gated until a named consumer
+defines visibility, upload flow, content policy and storage failure handling.
+Milestone 8 clean-copy certification also remains pending and can be scheduled
+separately because it certifies the reusable core rather than adding a product
+capability. Every direction-gated candidate still requires its own adoption
+trigger, product contract, provider choices and failure model.
 
 ### Platform adoption candidates
 

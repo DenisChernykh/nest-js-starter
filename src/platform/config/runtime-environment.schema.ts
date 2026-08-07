@@ -194,6 +194,9 @@ const secretBytes = Joi.string()
 const selfServiceMode = Joi.string()
   .valid('disabled', 'open')
   .default('disabled')
+const accountAdministrationMode = Joi.string()
+  .valid('disabled', 'enabled')
+  .default('disabled')
 const selfServiceAppUrl = Joi.string()
   .trim()
   .empty('')
@@ -272,6 +275,7 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     AUTH_RATE_LIMIT_KEY_SECRET: secretBytes,
     AUTH_NETWORK_METADATA_SECRET: secretBytes,
     AUTH_SELF_SERVICE_MODE: selfServiceMode,
+    AUTH_ACCOUNT_ADMINISTRATION_MODE: accountAdministrationMode,
     AUTH_PUBLIC_APP_URL: selfServiceAppUrl,
     AUTH_SMTP_URL: selfServiceSmtpUrl,
     AUTH_MAIL_FROM: selfServiceMailFrom,

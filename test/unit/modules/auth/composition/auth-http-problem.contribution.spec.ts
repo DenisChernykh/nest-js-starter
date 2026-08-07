@@ -11,6 +11,9 @@ import {
   AUTH_HTTP_PROBLEM_CONTRIBUTION,
 } from '@/modules/auth/composition/auth-http-problem.contribution'
 import {
+  AUTH_ACCOUNT_ETAG_MALFORMED_PROBLEM,
+  AUTH_ACCOUNT_PRECONDITION_FAILED_PROBLEM,
+  AUTH_ACCOUNT_PRECONDITION_REQUIRED_PROBLEM,
   AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
   EMAIL_VERIFICATION_REQUIRED_PROBLEM,
 } from '@/modules/auth/presentation/auth-problem.definitions'
@@ -24,10 +27,13 @@ const registry = new HttpProblemRegistry([
 ])
 
 describe('AUTH_HTTP_PROBLEM_CONTRIBUTION', () => {
-  it('registers both auth-owned lifecycle problem definitions', () => {
+  it('registers auth-owned lifecycle and account-precondition problems', () => {
     expect(AUTH_HTTP_PROBLEM_CONTRIBUTION.definitions).toEqual([
       EMAIL_VERIFICATION_REQUIRED_PROBLEM,
       AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
+      AUTH_ACCOUNT_ETAG_MALFORMED_PROBLEM,
+      AUTH_ACCOUNT_PRECONDITION_REQUIRED_PROBLEM,
+      AUTH_ACCOUNT_PRECONDITION_FAILED_PROBLEM,
     ])
     expect(
       registry.map(new EmailVerificationRequiredError()).definition,

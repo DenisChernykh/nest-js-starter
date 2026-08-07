@@ -4,9 +4,17 @@ import {
   EmailVerificationRequiredError,
   AuthRateLimitedError,
 } from '../application/auth-errors'
+import {
+  AccountEtagMalformedError,
+  AccountEtagPreconditionFailedError,
+  AccountEtagPreconditionRequiredError,
+} from '../application/account-administration.service'
 import { AuthTokenInvalidOrExpiredError } from '../application/self-service-auth.policy'
 import {
   AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
+  AUTH_ACCOUNT_ETAG_MALFORMED_PROBLEM,
+  AUTH_ACCOUNT_PRECONDITION_FAILED_PROBLEM,
+  AUTH_ACCOUNT_PRECONDITION_REQUIRED_PROBLEM,
   EMAIL_VERIFICATION_REQUIRED_PROBLEM,
 } from '../presentation/auth-problem.definitions'
 import type {
@@ -33,6 +41,9 @@ export const AUTH_HTTP_PROBLEM_CONTRIBUTION: HttpProblemContribution =
     definitions: Object.freeze([
       EMAIL_VERIFICATION_REQUIRED_PROBLEM,
       AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
+      AUTH_ACCOUNT_ETAG_MALFORMED_PROBLEM,
+      AUTH_ACCOUNT_PRECONDITION_REQUIRED_PROBLEM,
+      AUTH_ACCOUNT_PRECONDITION_FAILED_PROBLEM,
     ]),
     map: mapAuthHttpProblem,
   })
@@ -43,6 +54,15 @@ function mapAuthHttpProblem(error: unknown): HttpProblemMapping | undefined {
   }
   if (error instanceof AuthTokenInvalidOrExpiredError) {
     return { code: AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM.code }
+  }
+  if (error instanceof AccountEtagMalformedError) {
+    return { code: AUTH_ACCOUNT_ETAG_MALFORMED_PROBLEM.code }
+  }
+  if (error instanceof AccountEtagPreconditionRequiredError) {
+    return { code: AUTH_ACCOUNT_PRECONDITION_REQUIRED_PROBLEM.code }
+  }
+  if (error instanceof AccountEtagPreconditionFailedError) {
+    return { code: AUTH_ACCOUNT_PRECONDITION_FAILED_PROBLEM.code }
   }
   if (!(error instanceof AuthError)) return undefined
   return {

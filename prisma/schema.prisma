@@ -11,8 +11,10 @@ datasource db {
 }
 
 enum UserStatus {
+  INVITED
   ACTIVE
   DISABLED
+  RETIRED
 }
 
 enum ApprovalRequestStatus {
@@ -26,10 +28,12 @@ model User {
   email                   String
   normalizedEmail         String              @unique @map("normalized_email")
   status                  UserStatus          @default(ACTIVE)
+  accountRevision         Int                 @default(0) @map("account_revision")
   sessionGeneration       BigInt              @default(0) @map("session_generation")
   createdAt               DateTime            @default(now()) @map("created_at")
   updatedAt               DateTime            @updatedAt @map("updated_at")
   emailVerifiedAt         DateTime?           @map("email_verified_at")
+  retiredAt               DateTime?           @map("retired_at")
   credential              PasswordCredential?
   roles                   UserRole[]
   emailVerificationToken  EmailVerificationToken?

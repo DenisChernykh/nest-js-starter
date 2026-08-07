@@ -48,6 +48,7 @@ export function createOpenApiDocument(
     .addServer('/', 'Current API origin.')
     .addTag('health', 'Process lifecycle and dependency health probes.')
     .addTag('auth', 'Hardened browser-session authentication endpoints.')
+    .addTag('admin auth', 'Protected account administration endpoints.')
     .addTag(
       'approval-requests',
       'Reference approval-request creation, visibility and decision workflow.',

@@ -9,7 +9,8 @@ The canonical production prefix is:
 
 ## Self-service account lifecycle boundary
 
-Production Compose passes `AUTH_SELF_SERVICE_MODE=disabled` by default and
+Production Compose passes `AUTH_SELF_SERVICE_MODE=disabled` and
+`AUTH_ACCOUNT_ADMINISTRATION_MODE=disabled` by default and
 does not include Mailpit, a queue worker or an SMTP readiness dependency. Open
 mode requires all of `AUTH_PUBLIC_APP_URL`, `AUTH_SMTP_URL` and `AUTH_MAIL_FROM`;
 the app origin must be HTTPS. SMTP credentials are server-side secret-manager

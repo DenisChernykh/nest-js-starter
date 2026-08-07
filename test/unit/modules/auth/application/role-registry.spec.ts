@@ -78,4 +78,32 @@ describe('RoleRegistry', () => {
     expect(Object.isFrozen(result)).toBe(true)
     expect('add' in result).toBe(false)
   })
+
+  it('lists every role granting a permission in stable order', () => {
+    const [manage, manageRoles, readDocs] = definePermissions([
+      'auth.accounts.manage',
+      'auth.accounts.roles.manage',
+      'system.docs.read',
+    ])
+    const registry = new RoleRegistry([
+      {
+        key: 'support.operator',
+        permissions: definePermissions(['auth.accounts.manage']),
+      },
+      {
+        key: 'system.admin',
+        permissions: definePermissions([
+          'auth.accounts.manage',
+          'auth.accounts.roles.manage',
+        ]),
+      },
+    ])
+
+    expect(registry.roleKeysGranting(manage!)).toEqual([
+      'support.operator',
+      'system.admin',
+    ])
+    expect(registry.roleKeysGranting(manageRoles!)).toEqual(['system.admin'])
+    expect(registry.roleKeysGranting(readDocs!)).toEqual([])
+  })
 })

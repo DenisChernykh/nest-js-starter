@@ -1,4 +1,6 @@
 export * from './auth-errors'
+export * from './account-administration.port'
+export * from './account-administration.service'
 export * from './auth.types'
 export * from './authenticate-session.use-case'
 export * from './change-password.use-case'
