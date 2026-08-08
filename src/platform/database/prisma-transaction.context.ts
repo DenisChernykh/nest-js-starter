@@ -21,6 +21,11 @@ interface TransactionOptions {
 export class PrismaTransactionContext {
   private readonly storage = new AsyncLocalStorage<ActivePrismaTransaction>()
 
+  /** Reports whether the current asynchronous call chain owns a transaction. */
+  public get active(): boolean {
+    return this.storage.getStore() !== undefined
+  }
+
   /** Invokes one operation with the scoped client or the supplied root client. */
   public withClient<T>(
     rootClient: PrismaClient,

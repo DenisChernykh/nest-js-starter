@@ -4,6 +4,7 @@ import Joi from 'joi'
 
 import type {
   ValidatedPostgresCommandEnvironment,
+  ValidatedOutboxRelayEnvironment,
   ValidatedQueueWorkerEnvironment,
   ValidatedRuntimeEnvironment,
 } from './runtime-config.types'
@@ -354,4 +355,17 @@ export const postgresCommandEnvironmentSchema =
     SERVICE_REVISION: serviceRevision,
     DATABASE_URL: databaseUrl,
     DATABASE_POOL_MAX: databasePoolMax,
+  })
+
+/** Validates only deployment inputs owned by a standalone outbox relay. */
+export const outboxRelayEnvironmentSchema =
+  Joi.object<ValidatedOutboxRelayEnvironment>({
+    NODE_ENV: runtimeMode,
+    LOG_LEVEL: logLevel,
+    OTEL_SERVICE_NAME: serviceName,
+    SERVICE_VERSION: serviceVersion,
+    SERVICE_REVISION: serviceRevision,
+    DATABASE_URL: databaseUrl,
+    DATABASE_POOL_MAX: databasePoolMax,
+    REDIS_QUEUE_URL: redisUrl.required(),
   })

@@ -38,6 +38,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
       { migration_name: '20260806090000_self_service_account_lifecycle' },
       { migration_name: '20260807120000_account_administration_core' },
       { migration_name: '20260807130000_account_email_workflows' },
+      { migration_name: '20260808120000_transactional_outbox_foundation' },
     ])
     const tables = await pool.query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables
@@ -49,6 +50,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
       { table_name: 'approval_requests' },
       { table_name: 'auth_security_state' },
       { table_name: 'email_verification_tokens' },
+      { table_name: 'outbox_messages' },
       { table_name: 'password_credentials' },
       { table_name: 'password_reset_tokens' },
       { table_name: 'user_roles' },
@@ -112,7 +114,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     const migrations = await pool.query<{ count: string }>(
       'SELECT count(*) FROM _prisma_migrations',
     )
-    expect(migrations.rows[0]?.count).toBe('6')
+    expect(migrations.rows[0]?.count).toBe('7')
   })
 
   it('backfills an existing user when upgrading from the pre-feature schema', async () => {

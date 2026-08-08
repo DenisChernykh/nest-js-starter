@@ -45,6 +45,7 @@ import { PrismaTransactionContext } from './prisma-transaction.context'
   ],
   exports: [
     PrismaClientProvider,
+    PrismaTransactionContext,
     DATABASE_LIFECYCLE,
     DATABASE_READINESS_PROBE,
     TRANSACTION_PORT,

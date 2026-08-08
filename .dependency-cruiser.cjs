@@ -32,7 +32,9 @@ module.exports = {
     {
       name: 'platform-non-database-must-not-import-database-drivers',
       severity: 'error',
-      from: { path: '(^|/)platform/(?!database(/|$))' },
+      from: {
+        path: '(^|/)platform/(?!database(/|$)|outbox/prisma-outbox\\.store\\.ts$)',
+      },
       to: {
         path: '(^|/)(node_modules/)?(@prisma/|pg(/|$))|(^|/)generated/prisma(/|$)',
       },

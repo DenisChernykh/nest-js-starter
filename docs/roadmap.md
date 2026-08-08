@@ -13,10 +13,10 @@ evidence machinery.
 ## Status snapshot
 
 The implementation baseline summarized by this roadmap is the remote `stage`
-branch at `138de8a71f892ded1653b5acfb277d0d8f0431f2` on 2026-08-07, after
-self-service account lifecycle PR #36 merged. The universal production
-foundation, the maintained `approval-requests` reference and Milestone 9 are
-present on that baseline.
+branch at `815309896299d48cb9d733b9db65c8a72a70910b` on 2026-08-08, after
+account email workflows PR #40 merged. The opinionated production constructor,
+the maintained `approval-requests` reference and delivered account lifecycle
+and administration are present on that baseline.
 
 - PR [#13](https://github.com/DenisChernykh/nest-js-starter/pull/13)
   simplified the runtime, tooling, test and OCI boundaries while preserving the
@@ -28,18 +28,31 @@ present on that baseline.
   recovery contract described by Milestone 7.
 - PR [#36](https://github.com/DenisChernykh/nest-js-starter/pull/36)
   delivered the self-service account lifecycle described by Milestone 9.
+- PR [#39](https://github.com/DenisChernykh/nest-js-starter/pull/39) and PR
+  [#40](https://github.com/DenisChernykh/nest-js-starter/pull/40) delivered
+  account administration, invitations and recovery email workflows.
 - The
-  [Stage image run for `138de8a`](https://github.com/DenisChernykh/nest-js-starter/actions/runs/31160138877)
-  completed successfully: `pnpm check` passed 89 unit suites/490 tests, 17
-  integration suites/79 tests and 29 e2e suites/101 tests.
-- The same run published
-  `ghcr.io/denischernykh/nest-js-starter@sha256:13fb6f6cc53663ace6402d8c0b02489e8b46f1e98ec8240b0ce32add3c946e2a`,
-  passed the Trivy High/Critical gate, pulled that immutable digest and passed
-  OCI smoke with revision `138de8a71f892ded1653b5acfb277d0d8f0431f2`.
+  [Stage image run for `8153098`](https://github.com/DenisChernykh/nest-js-starter/actions/runs/31247960751)
+  completed successfully after that merge. Its published-image, Trivy and OCI
+  evidence applies only to that revision, not to later feature branches.
 
 This snapshot records repository, CI and published-image evidence for the
 stated revision. Hosted SMTP, DNS, secrets, deployment and recovery-drill
 verification remain unperformed and must not be inferred from those results.
+
+## North star: opinionated production constructor
+
+The starter is not a minimal boilerplate and not a universal framework. It is
+one maintained, production-shaped constructor: deliberate defaults, exact
+runtime/dependency proofs, recovery contracts and optional kits that remain
+inert until composition adopts them.
+
+Product behavior still needs a named consumer and product-owned policy. A
+platform kit may exceptionally precede its first consumer only when it is
+inert by default, independent of business semantics, has a real production
+adapter and dependency proof, documents recovery, and does not add an API,
+daemon or topology to the default product. This exception does not authorize
+shared product abstractions, generic CRUD or a global service locator.
 
 ## Maintained vertical reference
 
@@ -297,8 +310,8 @@ in the status snapshot above.
 
 ### Milestone 10: account administration
 
-**Status:** PR 1 core is delivered on `stage`; PR 2 email workflows is in
-progress on a dependent feature branch and is not delivered yet.
+**Status:** delivered on `stage` by PR [#39](https://github.com/DenisChernykh/nest-js-starter/pull/39)
+and PR [#40](https://github.com/DenisChernykh/nest-js-starter/pull/40).
 
 **Goal:** let an authorized operator inspect and administer auth-owned accounts
 without adding a frontend, hard delete, dynamic role CRUD or product-specific
@@ -332,11 +345,9 @@ profile fields.
   `mailDelivery: delivered|failed` for actual delivery outcomes;
 - immutable active email, with the original address reusable after retirement.
 
-**Exit evidence:** focused unit tests, PostgreSQL/Redis concurrency and cleanup
-integration, real HTTP auth/CSRF/ETag/invitation/reset flows, canonical OpenAPI,
-the account-administration runbook, `pnpm check:quick`, `pnpm check` and
-`pnpm oci:check`. Delivery still requires both regular PR merges and fresh
-post-merge Stage CI, digest, Trivy and OCI-smoke evidence.
+**Exit evidence:** the merged baseline and the recorded Stage image run above
+cover the PR delivery evidence. Hosted SMTP, DNS, deployment and recovery-drill
+evidence remain separate from the repository proof.
 
 ### Direction-gated product tracks
 
@@ -389,9 +400,8 @@ commitment:
 
 ### Execution readiness
 
-Milestone 9 is delivered. Milestone 10 is under feature-branch implementation
-and remains undelivered until its two PRs, full gates and post-merge Stage image
-evidence complete. S3/object storage is direction-gated until a named consumer
+Milestones 9 and 10 are delivered on the recorded `stage` baseline. S3/object
+storage is direction-gated until a named consumer
 defines visibility, upload flow, content policy and storage failure handling.
 Milestone 8 clean-copy certification also remains pending and can be scheduled
 separately because it certifies the reusable core rather than adding a product
@@ -403,10 +413,10 @@ trigger, product contract, provider choices and failure model.
 These are not new product capabilities by themselves. They become relevant
 only inside an accepted product scenario.
 
-| Candidate                        | Adoption trigger                                                 | Boundary that must remain explicit                                                                                                                                                                                                                       |
-| -------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Product durable jobs with BullMQ | A workflow needs retries, replay or work outside the API process | Adopt the completed platform foundation with a separate `REDIS_QUEUE_URL`, feature-owned queue/payload, BullMQ-owned connections, PostgreSQL outbox only where DB-to-queue durability is required, worker health/shutdown and an explicit rollout order. |
-| Public cache invalidation        | A frontend cache has a concrete tag/webhook contract             | Prefer a typed application event and signed HTTP adapter; TTL remains the fallback. Add an outbox/queue only when loss across process failure is unacceptable.                                                                                           |
+| Candidate                        | Adoption trigger                                                 | Boundary that must remain explicit                                                                                                                                                                                                                                                                   |
+| -------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product durable jobs with BullMQ | A workflow needs retries, replay or work outside the API process | Adopt the completed platform foundation with a separate `REDIS_QUEUE_URL`, feature-owned queue/payload, BullMQ-owned connections, and the opt-in transactional outbox only where DB-to-queue durability is required. The feature still owns worker health, idempotency, processor and rollout order. |
+| Public cache invalidation        | A frontend cache has a concrete tag/webhook contract             | Prefer a typed application event and signed HTTP adapter; TTL remains the fallback. Add an outbox/queue only when loss across process failure is unacceptable.                                                                                                                                       |
 
 The Amazing EKB backend demonstrates why these choices remain
 requirement-driven. Its public-cache invalidation accepts in-process delivery
@@ -422,7 +432,8 @@ extracted, with product names and policies removed.
 
 An optional capability can be proposed only with:
 
-1. a named consumer and failure model;
+1. a named consumer and failure model, except an inert platform kit satisfying
+   the north-star exception above;
 2. ports owned by the consuming module, not a global service locator;
 3. exact configuration additions and an explicit persistence/availability
    model;

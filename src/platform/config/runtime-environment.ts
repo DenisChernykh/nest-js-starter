@@ -6,15 +6,18 @@ import {
   type DatabaseRuntimeConfig,
   type LoggingRuntimeConfig,
   type PostgresCommandRuntimeConfig,
+  type OutboxRelayRuntimeConfig,
   type QueueRuntimeConfig,
   type RuntimeConfigurationIssue,
   type ValidatedPostgresCommandEnvironment,
+  type ValidatedOutboxRelayEnvironment,
   type ValidatedQueueWorkerEnvironment,
   type ValidatedRuntimeEnvironment,
 } from './runtime-config.types'
 import { runtimeDefaults } from './runtime-defaults'
 import {
   postgresCommandEnvironmentSchema,
+  outboxRelayEnvironmentSchema,
   queueWorkerEnvironmentSchema,
   runtimeEnvironmentSchema,
 } from './runtime-environment.schema'
@@ -65,7 +68,8 @@ function buildDatabaseConfig(
 }
 
 function buildQueueRuntimeConfig(
-  environment: ValidatedQueueWorkerEnvironment,
+  environment:
+    ValidatedQueueWorkerEnvironment | ValidatedOutboxRelayEnvironment,
 ): QueueRuntimeConfig {
   return Object.freeze({
     redisUrl: environment.REDIS_QUEUE_URL,
@@ -214,5 +218,24 @@ export function buildPostgresCommandConfig(
     environment: environment.NODE_ENV,
     logging: buildLoggingConfig(environment),
     database: buildDatabaseConfig(environment),
+  })
+}
+
+/**
+ * Builds the minimal configuration projection for one outbox relay process.
+ *
+ * @param input - Untrusted process environment key/value record.
+ * @returns PostgreSQL, queue and service identity settings only.
+ * @throws RuntimeConfigurationError with redacted path/rule issues only.
+ */
+export function buildOutboxRelayRuntimeConfig(
+  input: Record<string, unknown>,
+): OutboxRelayRuntimeConfig {
+  const environment = validateSchema(outboxRelayEnvironmentSchema, input)
+  return Object.freeze({
+    environment: environment.NODE_ENV,
+    logging: buildLoggingConfig(environment),
+    database: buildDatabaseConfig(environment),
+    queue: buildQueueRuntimeConfig(environment),
   })
 }
