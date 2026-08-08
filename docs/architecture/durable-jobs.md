@@ -74,7 +74,9 @@ product that cannot tolerate a database-to-queue loss window can adopt the
 inert `platform/outbox` kit rather than assuming `Queue.add` makes the database
 commit atomic. Its single-destination, at-least-once and redrive/lease contract
 is documented in [transactional outbox](../runbooks/transactional-outbox.md);
-the adopting feature still owns its queue, processor, idempotency and business
+the step-by-step composition is documented in the
+[transactional outbox adoption guide](transactional-outbox-adoption.md). The
+adopting feature still owns its queue, processor, idempotency and business
 reconciliation.
 
 ## Verification and recovery

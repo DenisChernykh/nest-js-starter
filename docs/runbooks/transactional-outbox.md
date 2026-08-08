@@ -4,6 +4,10 @@
 and one consumer-owned BullMQ queue. It has no HTTP API, notification policy,
 product processor, default Compose service or product `main`.
 
+Start with the [transactional outbox adoption guide](../architecture/transactional-outbox-adoption.md)
+for feature-port, writer, relay and consumer composition. This runbook is the
+canonical delivery, recovery and operator contract after adoption.
+
 ## Adoption contract
 
 The feature writes one `OutboxMessageDraft` through `TransactionalOutboxWriter`
