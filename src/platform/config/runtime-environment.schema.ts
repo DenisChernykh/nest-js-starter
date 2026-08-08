@@ -197,6 +197,9 @@ const selfServiceMode = Joi.string()
 const accountAdministrationMode = Joi.string()
   .valid('disabled', 'enabled')
   .default('disabled')
+const accountEmailWorkflowsMode = Joi.string()
+  .valid('disabled', 'enabled')
+  .default('disabled')
 const selfServiceAppUrl = Joi.string()
   .trim()
   .empty('')
@@ -276,6 +279,7 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     AUTH_NETWORK_METADATA_SECRET: secretBytes,
     AUTH_SELF_SERVICE_MODE: selfServiceMode,
     AUTH_ACCOUNT_ADMINISTRATION_MODE: accountAdministrationMode,
+    AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE: accountEmailWorkflowsMode,
     AUTH_PUBLIC_APP_URL: selfServiceAppUrl,
     AUTH_SMTP_URL: selfServiceSmtpUrl,
     AUTH_MAIL_FROM: selfServiceMailFrom,
@@ -306,12 +310,20 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     (value.AUTH_PUBLIC_APP_URL !== undefined &&
       value.AUTH_SMTP_URL !== undefined &&
       value.AUTH_MAIL_FROM !== undefined)
+  const accountEmailWorkflowsAreComplete =
+    value.AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE === 'disabled' ||
+    (value.AUTH_ACCOUNT_ADMINISTRATION_MODE === 'enabled' &&
+      value.AUTH_PUBLIC_APP_URL !== undefined &&
+      value.AUTH_SMTP_URL !== undefined &&
+      value.AUTH_MAIL_FROM !== undefined)
   const selfServiceAppOriginIsAllowed =
-    value.AUTH_SELF_SERVICE_MODE === 'disabled' ||
+    (value.AUTH_SELF_SERVICE_MODE === 'disabled' &&
+      value.AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE === 'disabled') ||
     (value.AUTH_PUBLIC_APP_URL !== undefined &&
       value.CORS_ORIGINS.includes(value.AUTH_PUBLIC_APP_URL))
   const productionSelfServiceIsSafe =
-    value.AUTH_SELF_SERVICE_MODE !== 'open' ||
+    (value.AUTH_SELF_SERVICE_MODE !== 'open' &&
+      value.AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE !== 'enabled') ||
     value.NODE_ENV !== 'production' ||
     value.AUTH_PUBLIC_APP_URL?.startsWith('https://') === true
 
@@ -319,6 +331,7 @@ export const runtimeEnvironmentSchema = Joi.object<ValidatedRuntimeEnvironment>(
     productionIsSafe &&
     queueEndpointIsDistinct &&
     selfServiceIsComplete &&
+    accountEmailWorkflowsAreComplete &&
     selfServiceAppOriginIsAllowed &&
     productionSelfServiceIsSafe
     ? value

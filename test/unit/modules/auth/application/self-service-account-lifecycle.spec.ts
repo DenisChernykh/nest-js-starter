@@ -45,6 +45,7 @@ function mail(
   delivery: AuthMailDeliveryPort = {
     sendEmailVerification: jest.fn(() => Promise.resolve({ delivered: true })),
     sendPasswordReset: jest.fn(() => Promise.resolve({ delivered: true })),
+    sendAccountInvitation: jest.fn(() => Promise.resolve({ delivered: true })),
   },
 ): AuthMailDeliveryPort {
   return delivery
@@ -111,6 +112,7 @@ describe('self-service account lifecycle use cases', () => {
         Promise.reject(new AuthMailDeliveryError()),
       ),
       sendPasswordReset: jest.fn(),
+      sendAccountInvitation: jest.fn(),
     })
     const registerSelfServiceUser = jest.fn(
       (
@@ -241,13 +243,15 @@ describe('self-service account lifecycle use cases', () => {
   it('does not hash a malformed reset token and invalidates Redis sessions after success', async () => {
     const password = passwords()
     const revokeAll = jest.fn(() => Promise.resolve(1))
-    const isPasswordResetTokenEligible = jest.fn(() => Promise.resolve(true))
+    const getEligiblePasswordResetTokenSource = jest.fn(() =>
+      Promise.resolve<'self-service'>('self-service'),
+    )
     const confirmPasswordReset = jest.fn(() =>
       Promise.resolve({ userId: 'user-1', email: 'user@example.com' }),
     )
     const target = new ConfirmPasswordResetUseCase(
       {
-        isPasswordResetTokenEligible,
+        getEligiblePasswordResetTokenSource,
         confirmPasswordReset,
       } as unknown as AuthPersistencePort,
       password,
@@ -281,11 +285,13 @@ describe('self-service account lifecycle use cases', () => {
     'does not hash a canonical %s reset token when eligibility is false',
     async (state) => {
       const password = passwords()
-      const isPasswordResetTokenEligible = jest.fn(() => Promise.resolve(false))
+      const getEligiblePasswordResetTokenSource = jest.fn(() =>
+        Promise.resolve(undefined),
+      )
       const confirmPasswordReset = jest.fn()
       const target = new ConfirmPasswordResetUseCase(
         {
-          isPasswordResetTokenEligible,
+          getEligiblePasswordResetTokenSource,
           confirmPasswordReset,
         } as unknown as AuthPersistencePort,
         password,
@@ -301,7 +307,9 @@ describe('self-service account lifecycle use cases', () => {
           now,
         }),
       ).rejects.toMatchObject({ code: 'AUTH_STATE_CONFLICT' })
-      expect(isPasswordResetTokenEligible.mock.calls).toEqual([['digest', now]])
+      expect(getEligiblePasswordResetTokenSource.mock.calls).toEqual([
+        ['digest', now],
+      ])
       expect(password.hash.mock.calls).toHaveLength(0)
       expect(confirmPasswordReset).not.toHaveBeenCalled()
     },
@@ -314,7 +322,9 @@ describe('self-service account lifecycle use cases', () => {
     }
     const target = new ConfirmPasswordResetUseCase(
       {
-        isPasswordResetTokenEligible: jest.fn(() => Promise.resolve(true)),
+        getEligiblePasswordResetTokenSource: jest.fn(() =>
+          Promise.resolve<'self-service'>('self-service'),
+        ),
         confirmPasswordReset: jest.fn(() =>
           Promise.resolve({ userId: 'user-1', email: 'user@example.com' }),
         ),
@@ -348,5 +358,72 @@ describe('self-service account lifecycle use cases', () => {
         reasonCode: 'CLEANUP_INCOMPLETE',
       }),
     ])
+  })
+
+  it('rejects an administrator reset token when only self-service is enabled', async () => {
+    const password = passwords()
+    const confirmPasswordReset = jest.fn()
+    const target = new ConfirmPasswordResetUseCase(
+      {
+        getEligiblePasswordResetTokenSource: jest.fn(() =>
+          Promise.resolve<'administrator'>('administrator'),
+        ),
+        confirmPasswordReset,
+      } as unknown as AuthPersistencePort,
+      password,
+      codec(),
+      policy,
+      { revokeAll: jest.fn() } as unknown as SessionStorePort,
+    )
+
+    await expect(
+      target.execute({
+        token: 'valid-token',
+        newPassword: 'new password',
+        now,
+      }),
+    ).rejects.toMatchObject({ code: 'AUTH_STATE_CONFLICT' })
+    expect(password.hash.mock.calls).toHaveLength(0)
+    expect(confirmPasswordReset).not.toHaveBeenCalled()
+  })
+
+  it('accepts only administrator reset tokens when only account email workflows are enabled', async () => {
+    const administratorOnlyPolicy = new SelfServiceAuthPolicy({
+      mode: 'disabled',
+      emailWorkflowsEnabled: true,
+      verificationTtlMs: 86_400_000,
+      passwordResetTtlMs: 1_800_000,
+    })
+    const confirmPasswordReset = jest.fn(() =>
+      Promise.resolve({ userId: 'user-1', email: 'user@example.com' }),
+    )
+    const target = new ConfirmPasswordResetUseCase(
+      {
+        getEligiblePasswordResetTokenSource: jest.fn(() =>
+          Promise.resolve<'administrator'>('administrator'),
+        ),
+        confirmPasswordReset,
+      } as unknown as AuthPersistencePort,
+      passwords(),
+      codec(),
+      administratorOnlyPolicy,
+      {
+        revokeAll: jest.fn(() => Promise.resolve(1)),
+      } as unknown as SessionStorePort,
+    )
+
+    await expect(
+      target.execute({
+        token: 'valid-token',
+        newPassword: 'new password',
+        now,
+      }),
+    ).resolves.toEqual({ cleanupComplete: true })
+    expect(confirmPasswordReset).toHaveBeenCalledWith({
+      tokenDigest: 'digest',
+      source: 'administrator',
+      now,
+      passwordHash: 'password-hash',
+    })
   })
 })

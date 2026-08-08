@@ -193,6 +193,40 @@ describe('PrismaAuthRepository', () => {
     })
   })
 
+  it('reauthorizes invitation administrators inside the creation transaction', async () => {
+    const actor = await provider.withClient((client) =>
+      client.user.create({
+        data: {
+          email: 'revoked-invite-actor@example.com',
+          normalizedEmail: 'revoked-invite-actor@example.com',
+          roles: { create: { roleKey: 'unrelated.role' } },
+        },
+      }),
+    )
+
+    await expect(
+      repository.createInvitation({
+        actorId: actor.id,
+        actorAuthorization: {
+          requiredRoleGroups: [['system.admin']],
+        },
+        email: 'must-not-exist@example.com',
+        normalizedEmail: 'must-not-exist@example.com',
+        roleKeys: [],
+        tokenDigest: Buffer.alloc(32, 30).toString('base64url'),
+        expiresAt: new Date('2026-08-08T00:00:00.000Z'),
+        createdAt: new Date('2026-08-07T00:00:00.000Z'),
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationDeniedError)
+    await expect(
+      provider.withClient((client) =>
+        client.user.count({
+          where: { normalizedEmail: 'must-not-exist@example.com' },
+        }),
+      ),
+    ).resolves.toBe(0)
+  })
+
   it('does not activate an invited account through the status endpoint', async () => {
     const [actor, target] = await provider.withClient((client) =>
       Promise.all([
@@ -274,6 +308,195 @@ describe('PrismaAuthRepository', () => {
     })
   })
 
+  it('accepts one invitation token exactly once under concurrency', async () => {
+    const tokenDigest = Buffer.alloc(32, 31).toString('base64url')
+    const invited = await provider.withClient((client) =>
+      client.user.create({
+        data: {
+          email: 'single-use-invite@example.com',
+          normalizedEmail: 'single-use-invite@example.com',
+          status: 'INVITED',
+          invitationToken: {
+            create: {
+              tokenDigest,
+              expiresAt: new Date('2026-08-08T00:00:00.000Z'),
+              createdAt: new Date('2026-08-07T00:00:00.000Z'),
+            },
+          },
+        },
+      }),
+    )
+
+    const results = await Promise.all([
+      repository.acceptInvitation({
+        tokenDigest,
+        passwordHash: 'first-hash',
+        now: new Date('2026-08-07T12:00:00.000Z'),
+      }),
+      repository.acceptInvitation({
+        tokenDigest,
+        passwordHash: 'second-hash',
+        now: new Date('2026-08-07T12:00:00.000Z'),
+      }),
+    ])
+
+    expect(results.sort()).toEqual([false, true])
+    await provider.withClient(async (client) => {
+      const persisted = await client.user.findUniqueOrThrow({
+        where: { id: invited.id },
+        include: { credential: true, invitationToken: true },
+      })
+      expect(persisted.status).toBe('ACTIVE')
+      expect(persisted.emailVerifiedAt).not.toBeNull()
+      expect(['first-hash', 'second-hash']).toContain(
+        persisted.credential?.passwordHash,
+      )
+      expect(persisted.invitationToken).toBeNull()
+    })
+  })
+
+  it('rotates invitation tokens and rejects both replaced and expired values', async () => {
+    const oldDigest = Buffer.alloc(32, 43).toString('base64url')
+    const newDigest = Buffer.alloc(32, 44).toString('base64url')
+    const [actor, invited, expired] = await provider.withClient((client) =>
+      Promise.all([
+        client.user.create({
+          data: {
+            email: 'resend-actor@example.com',
+            normalizedEmail: 'resend-actor@example.com',
+            roles: { create: { roleKey: 'system.admin' } },
+          },
+        }),
+        client.user.create({
+          data: {
+            email: 'resend-invited@example.com',
+            normalizedEmail: 'resend-invited@example.com',
+            status: 'INVITED',
+            invitationToken: {
+              create: {
+                tokenDigest: oldDigest,
+                expiresAt: new Date('2026-08-08T00:00:00.000Z'),
+                createdAt: new Date('2026-08-07T00:00:00.000Z'),
+              },
+            },
+          },
+        }),
+        client.user.create({
+          data: {
+            email: 'expired-invited@example.com',
+            normalizedEmail: 'expired-invited@example.com',
+            status: 'INVITED',
+            invitationToken: {
+              create: {
+                tokenDigest: Buffer.alloc(32, 45).toString('base64url'),
+                expiresAt: new Date('2026-08-07T11:59:59.000Z'),
+                createdAt: new Date('2026-08-06T00:00:00.000Z'),
+              },
+            },
+          },
+        }),
+      ]),
+    )
+    const now = new Date('2026-08-07T12:00:00.000Z')
+
+    await expect(
+      repository.resendInvitation({
+        actorId: actor.id,
+        accountId: invited.id,
+        actorAuthorization: { requiredRoleGroups: [['system.admin']] },
+        token: {
+          tokenDigest: newDigest,
+          expiresAt: new Date('2026-08-08T12:00:00.000Z'),
+          createdAt: now,
+        },
+        now,
+      }),
+    ).resolves.toEqual({ userId: invited.id, email: invited.email })
+    await expect(
+      repository.isInvitationTokenEligible(oldDigest, now),
+    ).resolves.toBe(false)
+    await expect(
+      repository.isInvitationTokenEligible(newDigest, now),
+    ).resolves.toBe(true)
+    await expect(
+      repository.acceptInvitation({
+        tokenDigest: oldDigest,
+        passwordHash: 'replaced-token-hash',
+        now,
+      }),
+    ).resolves.toBe(false)
+    await expect(
+      repository.acceptInvitation({
+        tokenDigest: Buffer.alloc(32, 45).toString('base64url'),
+        passwordHash: 'expired-token-hash',
+        now,
+      }),
+    ).resolves.toBe(false)
+    await expect(repository.getAccount(expired.id)).resolves.toMatchObject({
+      state: 'invited',
+    })
+  })
+
+  it('isolates administrator password-reset tokens from self-service confirmation', async () => {
+    const [actor, target] = await provider.withClient((client) =>
+      Promise.all([
+        client.user.create({
+          data: {
+            email: 'reset-actor@example.com',
+            normalizedEmail: 'reset-actor@example.com',
+            roles: { create: { roleKey: 'system.admin' } },
+          },
+        }),
+        client.user.create({
+          data: {
+            email: 'admin-reset-target@example.com',
+            normalizedEmail: 'admin-reset-target@example.com',
+            emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+            credential: { create: { passwordHash: 'old-hash' } },
+          },
+        }),
+      ]),
+    )
+    const tokenDigest = Buffer.alloc(32, 42).toString('base64url')
+    const now = new Date('2026-08-07T12:00:00.000Z')
+
+    await expect(
+      repository.rotateAdministratorPasswordReset({
+        actorId: actor.id,
+        accountId: target.id,
+        actorAuthorization: { requiredRoleGroups: [['system.admin']] },
+        token: {
+          tokenDigest,
+          expiresAt: new Date('2026-08-07T12:30:00.000Z'),
+          createdAt: now,
+        },
+        now,
+      }),
+    ).resolves.toEqual({ userId: target.id, email: target.email })
+    await expect(
+      repository.getEligiblePasswordResetTokenSource(tokenDigest, now),
+    ).resolves.toBe('administrator')
+    await expect(
+      repository.confirmPasswordReset({
+        tokenDigest,
+        source: 'self-service',
+        passwordHash: 'wrong-boundary',
+        now,
+      }),
+    ).resolves.toBeUndefined()
+    await expect(
+      repository.confirmPasswordReset({
+        tokenDigest,
+        source: 'administrator',
+        passwordHash: 'new-hash',
+        now,
+      }),
+    ).resolves.toEqual({ userId: target.id, email: target.email })
+    await expect(
+      repository.getEligiblePasswordResetTokenSource(tokenDigest, now),
+    ).resolves.toBeUndefined()
+  })
+
   it('advances the strong account revision for every mutable detail field', async () => {
     const tokenDigest = Buffer.alloc(32, 41).toString('base64url')
     const user = await provider.withClient((client) =>
@@ -345,6 +568,13 @@ describe('PrismaAuthRepository', () => {
               createdAt: new Date('2026-08-07T00:00:00.000Z'),
             },
           },
+          invitationToken: {
+            create: {
+              tokenDigest: Buffer.alloc(32, 34).toString('base64url'),
+              expiresAt: new Date('2026-08-08T00:00:00.000Z'),
+              createdAt: new Date('2026-08-07T00:00:00.000Z'),
+            },
+          },
         },
       })
       const claimableTombstone = `retired+${target.id}@invalid.local`
@@ -383,6 +613,7 @@ describe('PrismaAuthRepository', () => {
           roles: true,
           emailVerificationToken: true,
           passwordResetToken: true,
+          invitationToken: true,
           createdApprovalRequests: true,
         },
       })
@@ -395,6 +626,7 @@ describe('PrismaAuthRepository', () => {
         roles: [],
         emailVerificationToken: null,
         passwordResetToken: null,
+        invitationToken: null,
       })
       expect(retired.retiredAt).not.toBeNull()
       expect(retired.createdApprovalRequests).toHaveLength(1)
@@ -635,11 +867,13 @@ describe('PrismaAuthRepository', () => {
     const results = await Promise.all([
       repository.confirmPasswordReset({
         tokenDigest: resetToken.tokenDigest,
+        source: 'self-service',
         now: new Date('2026-08-06T02:00:00.000Z'),
         passwordHash: 'new-hash',
       }),
       repository.confirmPasswordReset({
         tokenDigest: resetToken.tokenDigest,
+        source: 'self-service',
         now: new Date('2026-08-06T02:00:00.000Z'),
         passwordHash: 'losing-hash',
       }),
@@ -749,11 +983,11 @@ describe('PrismaAuthRepository', () => {
     })
 
     await expect(
-      repository.isPasswordResetTokenEligible(
+      repository.getEligiblePasswordResetTokenSource(
         Buffer.alloc(32, 10).toString('base64url'),
         now,
       ),
-    ).resolves.toBe(false)
+    ).resolves.toBeUndefined()
     for (const digest of [
       digests.expired,
       digests.disabled,
@@ -761,12 +995,12 @@ describe('PrismaAuthRepository', () => {
       digests.noCredential,
     ]) {
       await expect(
-        repository.isPasswordResetTokenEligible(digest, now),
-      ).resolves.toBe(false)
+        repository.getEligiblePasswordResetTokenSource(digest, now),
+      ).resolves.toBeUndefined()
     }
     await expect(
-      repository.isPasswordResetTokenEligible(digests.eligible, now),
-    ).resolves.toBe(true)
+      repository.getEligiblePasswordResetTokenSource(digests.eligible, now),
+    ).resolves.toBe('self-service')
   })
 
   it('serializes disable versus password-reset confirmation with a user lock', async () => {
@@ -796,6 +1030,7 @@ describe('PrismaAuthRepository', () => {
       ])
       const confirmation = repository.confirmPasswordReset({
         tokenDigest,
+        source: 'self-service',
         now: new Date('2026-08-06T12:00:00.000Z'),
         passwordHash: 'new',
       })

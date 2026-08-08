@@ -105,14 +105,22 @@ export interface AuthRuntimeConfig {
   readonly loginWindowMs: number
   readonly selfService: AuthSelfServiceRuntimeConfig
   readonly accountAdministration: AuthAccountAdministrationRuntimeConfig
+  readonly accountEmailWorkflows: AuthAccountEmailWorkflowsRuntimeConfig
 }
 
 export type AuthSelfServiceMode = 'disabled' | 'open'
 
 export type AuthAccountAdministrationMode = 'disabled' | 'enabled'
 
+export type AuthAccountEmailWorkflowsMode = 'disabled' | 'enabled'
+
 export interface AuthAccountAdministrationRuntimeConfig {
   readonly mode: AuthAccountAdministrationMode
+}
+
+export interface AuthAccountEmailWorkflowsRuntimeConfig {
+  readonly mode: AuthAccountEmailWorkflowsMode
+  readonly invitationTtlMs: number
 }
 
 export interface AuthSelfServiceRuntimeConfig {
@@ -237,6 +245,7 @@ export interface ValidatedRuntimeEnvironment {
   readonly AUTH_NETWORK_METADATA_SECRET: Uint8Array
   readonly AUTH_SELF_SERVICE_MODE: AuthSelfServiceMode
   readonly AUTH_ACCOUNT_ADMINISTRATION_MODE: AuthAccountAdministrationMode
+  readonly AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE: AuthAccountEmailWorkflowsMode
   readonly AUTH_PUBLIC_APP_URL?: string
   readonly AUTH_SMTP_URL?: string
   readonly AUTH_MAIL_FROM?: string

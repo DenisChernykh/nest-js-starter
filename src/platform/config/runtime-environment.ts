@@ -162,6 +162,10 @@ export function buildApiRuntimeConfig(
       accountAdministration: Object.freeze({
         mode: environment.AUTH_ACCOUNT_ADMINISTRATION_MODE,
       }),
+      accountEmailWorkflows: Object.freeze({
+        mode: environment.AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE,
+        ...runtimeDefaults.auth.accountEmailWorkflows,
+      }),
     }),
   })
 }

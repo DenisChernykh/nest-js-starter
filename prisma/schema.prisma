@@ -17,6 +17,11 @@ enum UserStatus {
   RETIRED
 }
 
+enum PasswordResetTokenSource {
+  SELF_SERVICE
+  ADMINISTRATOR
+}
+
 enum ApprovalRequestStatus {
   PENDING
   APPROVED
@@ -38,6 +43,7 @@ model User {
   roles                   UserRole[]
   emailVerificationToken  EmailVerificationToken?
   passwordResetToken      PasswordResetToken?
+  invitationToken         AccountInvitationToken?
   createdApprovalRequests ApprovalRequest[]   @relation("ApprovalRequestCreator")
   decidedApprovalRequests ApprovalRequest[]   @relation("ApprovalRequestDecider")
 
@@ -85,9 +91,20 @@ model PasswordResetToken {
   tokenDigest String   @unique @map("token_digest") @db.VarChar(43)
   expiresAt   DateTime @map("expires_at")
   createdAt   DateTime @map("created_at")
+  source      PasswordResetTokenSource @default(SELF_SERVICE)
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("password_reset_tokens")
+}
+
+model AccountInvitationToken {
+  userId      String   @id @map("user_id") @db.Uuid
+  tokenDigest String   @unique @map("token_digest") @db.VarChar(43)
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @map("created_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("account_invitation_tokens")
 }
 
 model UserRole {

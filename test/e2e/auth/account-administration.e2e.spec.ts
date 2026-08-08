@@ -10,28 +10,89 @@ interface LoginResult {
   readonly csrfToken: string
 }
 
+interface MailpitMessageSummary {
+  readonly ID: string
+  readonly Subject: string
+}
+
+interface MailpitMessageList {
+  readonly messages: readonly MailpitMessageSummary[]
+}
+
 describe('account administration HTTP contract', () => {
   let runtime: AuthE2eRuntime
   let disabledRuntime: AuthE2eRuntime
+  let coreOnlyRuntime: AuthE2eRuntime
+  let failedMailRuntime: AuthE2eRuntime
   let apiUrl: string
   let disabledApiUrl: string
+  let coreOnlyApiUrl: string
+  let failedMailApiUrl: string
 
   beforeAll(async () => {
-    ;[runtime, disabledRuntime] = await Promise.all([
-      createAuthTestRuntime(1, {
-        AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
-      }),
-      createAuthTestRuntime(1),
-    ])
+    ;[runtime, disabledRuntime, coreOnlyRuntime, failedMailRuntime] =
+      await Promise.all([
+        createAuthTestRuntime(1, {
+          AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
+          AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE: 'enabled',
+        }),
+        createAuthTestRuntime(1),
+        createAuthTestRuntime(1, {
+          AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
+        }),
+        createAuthTestRuntime(
+          1,
+          {
+            AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
+            AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE: 'enabled',
+          },
+          { smtpFailure: true },
+        ),
+      ])
     apiUrl = runtime.instances[0]?.baseUrl ?? ''
     disabledApiUrl = disabledRuntime.instances[0]?.baseUrl ?? ''
+    coreOnlyApiUrl = coreOnlyRuntime.instances[0]?.baseUrl ?? ''
+    failedMailApiUrl = failedMailRuntime.instances[0]?.baseUrl ?? ''
   })
 
   afterAll(async () => {
-    await Promise.all([runtime?.stop(), disabledRuntime?.stop()])
+    await Promise.all([
+      runtime?.stop(),
+      disabledRuntime?.stop(),
+      coreOnlyRuntime?.stop(),
+      failedMailRuntime?.stop(),
+    ])
   })
 
-  it('hides account administration when its mode is disabled', async () => {
+  it('keeps account administration available while email workflows stay disabled', async () => {
+    const email = `core-only-admin-${Date.now()}@example.com`
+    await coreOnlyRuntime.createUser(email)
+    const session = await login(coreOnlyApiUrl, email)
+
+    expect(
+      (
+        await fetch(`${coreOnlyApiUrl}/v1/admin/auth/accounts`, {
+          headers: { cookie: session.cookie },
+        })
+      ).status,
+    ).toBe(200)
+    const invitation = await adminMutation(
+      coreOnlyApiUrl,
+      '/v1/admin/auth/account-invitations',
+      'POST',
+      session,
+      { email: 'disabled-workflow@example.com', roleKeys: [] },
+    )
+    expect(invitation.status).toBe(404)
+    const acceptance = await postJson(
+      coreOnlyApiUrl,
+      '/v1/auth/account-invitations/accept',
+      { token: 'A'.repeat(43), password: 'valid invited password' },
+    )
+    expect(acceptance.status).toBe(404)
+  })
+
+  it('hides both capabilities when their modes are disabled', async () => {
     const email = `disabled-admin-${Date.now()}@example.com`
     await disabledRuntime.createUser(email)
     const session = await login(disabledApiUrl, email)
@@ -41,6 +102,13 @@ describe('account administration HTTP contract', () => {
       { headers: { cookie: session.cookie } },
     )
     expect(protectedResponse.status).toBe(404)
+
+    const publicResponse = await postJson(
+      disabledApiUrl,
+      '/v1/auth/account-invitations/accept',
+      { token: 'A'.repeat(43), password: 'valid invited password' },
+    )
+    expect(publicResponse.status).toBe(404)
   })
 
   it('enforces auth, CSRF, strong ETags, self-lockout and Redis cleanup', async () => {
@@ -59,6 +127,22 @@ describe('account administration HTTP contract', () => {
     expect(detail.status).toBe(200)
     const etag = detail.headers.get('etag')
     expect(etag).toBe(`"account-${targetId}-0"`)
+
+    const unsupportedMediaType = await fetch(
+      `${apiUrl}/v1/admin/auth/accounts/${targetId}/status`,
+      {
+        method: 'PUT',
+        headers: {
+          cookie: admin.cookie,
+          origin: apiUrl,
+          'content-type': 'text/plain',
+          'x-csrf-token': admin.csrfToken,
+          'if-match': etag ?? '',
+        },
+        body: JSON.stringify({ status: 'disabled' }),
+      },
+    )
+    expect(unsupportedMediaType.status).toBe(415)
 
     const withoutCsrf = await fetch(
       `${apiUrl}/v1/admin/auth/accounts/${targetId}/status`,
@@ -228,6 +312,142 @@ describe('account administration HTTP contract', () => {
       credentials: 0,
     })
   })
+
+  it('invites, accepts without a session and completes an admin reset', async () => {
+    const adminEmail = `workflow-admin-${Date.now()}@example.com`
+    const invitedEmail = `invited-${Date.now()}@example.com`
+    await runtime.createUser(adminEmail)
+    const admin = await login(apiUrl, adminEmail)
+
+    const invitation = await adminMutation(
+      apiUrl,
+      '/v1/admin/auth/account-invitations',
+      'POST',
+      admin,
+      { email: invitedEmail, roleKeys: [] },
+    )
+    expect(invitation.status).toBe(200)
+    expect(await invitation.json()).toEqual({ mailDelivery: 'delivered' })
+
+    const invitationMessage = await waitForMessage(
+      runtime,
+      'Приглашение в аккаунт',
+    )
+    const invitationToken = await readTokenFromMessage(
+      runtime,
+      invitationMessage,
+      '/auth/accept-invitation',
+    )
+    const beforeAcceptance = await runtime.pool.query<{
+      id: string
+      status: string
+      credential_count: string
+    }>(
+      `SELECT u.id, u.status, COUNT(pc.user_id)::text AS credential_count
+         FROM users u
+         LEFT JOIN password_credentials pc ON pc.user_id = u.id
+        WHERE u.normalized_email = $1
+        GROUP BY u.id`,
+      [invitedEmail],
+    )
+    expect(beforeAcceptance.rows[0]).toMatchObject({
+      status: 'INVITED',
+      credential_count: '0',
+    })
+
+    const initialPassword = 'valid invited password'
+    const acceptance = await postJson(
+      apiUrl,
+      '/v1/auth/account-invitations/accept',
+      { token: invitationToken, password: initialPassword },
+    )
+    expect(acceptance.status).toBe(204)
+    expect(acceptance.headers.get('set-cookie')).toBeNull()
+    const repeated = await postJson(
+      apiUrl,
+      '/v1/auth/account-invitations/accept',
+      { token: invitationToken, password: initialPassword },
+    )
+    expect(repeated.status).toBe(429)
+    expect(await repeated.json()).toMatchObject({ code: 'RATE_LIMIT_EXCEEDED' })
+
+    const invitedSession = await login(apiUrl, invitedEmail, initialPassword)
+    const accountId = beforeAcceptance.rows[0]?.id
+    if (accountId === undefined)
+      throw new Error('Invited account was not found')
+    const resetRequest = await adminMutation(
+      apiUrl,
+      `/v1/admin/auth/accounts/${accountId}/password-reset`,
+      'POST',
+      admin,
+    )
+    expect(resetRequest.status).toBe(200)
+    expect(await resetRequest.json()).toEqual({ mailDelivery: 'delivered' })
+
+    const resetMessage = await waitForMessage(runtime, 'Сброс пароля')
+    const resetToken = await readTokenFromMessage(
+      runtime,
+      resetMessage,
+      '/auth/reset-password',
+    )
+    const newPassword = 'new invited password'
+    const reset = await postJson(apiUrl, '/v1/auth/password-reset/confirm', {
+      token: resetToken,
+      newPassword,
+    })
+    expect(reset.status).toBe(204)
+    expect(
+      (
+        await fetch(`${apiUrl}/v1/auth/me`, {
+          headers: { cookie: invitedSession.cookie },
+        })
+      ).status,
+    ).toBe(401)
+    await expect(
+      login(apiUrl, invitedEmail, newPassword),
+    ).resolves.toBeDefined()
+
+    const duplicate = await adminMutation(
+      apiUrl,
+      '/v1/admin/auth/account-invitations',
+      'POST',
+      admin,
+      { email: invitedEmail.toUpperCase(), roleKeys: [] },
+    )
+    expect(duplicate.status).toBe(409)
+  })
+
+  it('commits invitations before reporting an SMTP failure', async () => {
+    const adminEmail = `mail-failure-admin-${Date.now()}@example.com`
+    const invitedEmail = `mail-failure-${Date.now()}@example.com`
+    await failedMailRuntime.createUser(adminEmail)
+    const admin = await login(failedMailApiUrl, adminEmail)
+
+    const invitation = await adminMutation(
+      failedMailApiUrl,
+      '/v1/admin/auth/account-invitations',
+      'POST',
+      admin,
+      { email: invitedEmail, roleKeys: [] },
+    )
+    expect(invitation.status).toBe(200)
+    expect(await invitation.json()).toEqual({ mailDelivery: 'failed' })
+    const persisted = await failedMailRuntime.pool.query<{
+      status: string
+      token_count: string
+    }>(
+      `SELECT u.status, COUNT(ait.user_id)::text AS token_count
+         FROM users u
+         LEFT JOIN account_invitation_tokens ait ON ait.user_id = u.id
+        WHERE u.normalized_email = $1
+        GROUP BY u.id`,
+      [invitedEmail],
+    )
+    expect(persisted.rows[0]).toEqual({
+      status: 'INVITED',
+      token_count: '1',
+    })
+  })
 })
 
 async function login(
@@ -297,4 +517,50 @@ async function expectUserSessionIndex(
   } finally {
     client.destroy()
   }
+}
+
+async function waitForMessage(
+  runtime: AuthE2eRuntime,
+  subject: string,
+): Promise<MailpitMessageSummary> {
+  const mailpit = runtime.mailpit
+  if (mailpit === undefined) throw new Error('Mailpit is not running')
+  const apiUrl = `http://${mailpit.getHost()}:${mailpit.getMappedPort(8025)}`
+  const deadline = Date.now() + 8_000
+  while (Date.now() < deadline) {
+    const response = await fetch(`${apiUrl}/api/v1/messages?start=0&limit=50`)
+    if (response.ok) {
+      const list = (await response.json()) as MailpitMessageList
+      const message = list.messages.find((item) => item.Subject === subject)
+      if (message !== undefined) return message
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  throw new Error(`Mailpit message not observed: ${subject}`)
+}
+
+async function readTokenFromMessage(
+  runtime: AuthE2eRuntime,
+  message: MailpitMessageSummary,
+  path: string,
+): Promise<string> {
+  const mailpit = runtime.mailpit
+  if (mailpit === undefined) throw new Error('Mailpit is not running')
+  const apiUrl = `http://${mailpit.getHost()}:${mailpit.getMappedPort(8025)}`
+  const response = await fetch(
+    `${apiUrl}/api/v1/message/${encodeURIComponent(message.ID)}/raw`,
+  )
+  if (!response.ok) throw new Error('Mailpit raw message unavailable')
+  const raw = decodeQuotedPrintable(await response.text())
+  const match = raw.match(new RegExp(`${path}#token=([A-Za-z0-9_-]{43})`, 'u'))
+  if (match?.[1] === undefined) throw new Error('Mail token not captured')
+  return match[1]
+}
+
+function decodeQuotedPrintable(value: string): string {
+  return value
+    .replaceAll(/=\r?\n/gu, '')
+    .replaceAll(/=([0-9A-F]{2})/gu, (_match, hex: string) =>
+      String.fromCharCode(Number.parseInt(hex, 16)),
+    )
 }

@@ -97,7 +97,9 @@ export async function createAuthTestRuntime(
   let mailpit: StartedMailpitContainer | undefined
   try {
     mailpit =
-      overrides.AUTH_SELF_SERVICE_MODE === 'open' && !options.smtpFailure
+      (overrides.AUTH_SELF_SERVICE_MODE === 'open' ||
+        overrides.AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE === 'enabled') &&
+      !options.smtpFailure
         ? await startMailpitContainer()
         : undefined
   } catch (error: unknown) {

@@ -7,6 +7,9 @@ import {
   type AccountAdministrationPort,
 } from '../application/account-administration.port'
 import { AccountAdministrationService } from '../application/account-administration.service'
+import { ACCOUNT_EMAIL_WORKFLOWS } from '../application/account-email-workflows.port'
+import { AccountEmailWorkflowsPolicy } from '../application/account-email-workflows.policy'
+import { AccountEmailWorkflowsService } from '../application/account-email-workflows.service'
 import {
   AUTH_MAIL_DELIVERY,
   type AuthMailDeliveryPort,
@@ -52,6 +55,8 @@ import { RedisPublicAuthRateLimiter } from '../infrastructure/redis-public-auth-
 import { RedisSessionStore } from '../infrastructure/redis-session.store'
 import { AuthCookieAdapter } from '../presentation/auth-cookie.adapter'
 import { AdminAccountController } from '../presentation/admin-account.controller'
+import { AdminAccountEmailWorkflowsController } from '../presentation/admin-account-email-workflows.controller'
+import { AccountEmailWorkflowsController } from '../presentation/account-email-workflows.controller'
 import { PublicAuthResponseDelay } from '../presentation/public-auth-response-delay'
 import {
   AUTH_LOGIN_METADATA_FACTORY,
@@ -95,6 +100,8 @@ export interface AuthModuleOptions {
     AuthController,
     SelfServiceAuthController,
     AdminAccountController,
+    AdminAccountEmailWorkflowsController,
+    AccountEmailWorkflowsController,
   ],
   providers: [
     AuthRequestContext,
@@ -156,6 +163,7 @@ export interface AuthModuleOptions {
     },
     { provide: AUTH_PERSISTENCE, useExisting: PrismaAuthRepository },
     { provide: ACCOUNT_ADMINISTRATION, useExisting: PrismaAuthRepository },
+    { provide: ACCOUNT_EMAIL_WORKFLOWS, useExisting: PrismaAuthRepository },
     { provide: PASSWORD_HASHER, useExisting: Argon2PasswordHasher },
     { provide: LOGIN_RATE_LIMITER, useExisting: RedisLoginRateLimiter },
     { provide: SESSION_STORE, useExisting: RedisSessionStore },
@@ -164,7 +172,11 @@ export interface AuthModuleOptions {
       provide: SelfServiceAuthPolicy,
       inject: [RuntimeConfigService],
       useFactory: (config: RuntimeConfigService): SelfServiceAuthPolicy =>
-        new SelfServiceAuthPolicy(config.auth.selfService),
+        new SelfServiceAuthPolicy({
+          ...config.auth.selfService,
+          emailWorkflowsEnabled:
+            config.auth.accountEmailWorkflows.mode === 'enabled',
+        }),
     },
     {
       provide: AccountAdministrationService,
@@ -192,6 +204,18 @@ export interface AuthModuleOptions {
           cleanupObserver,
           audit,
         ),
+    },
+    {
+      provide: AccountEmailWorkflowsPolicy,
+      inject: [RuntimeConfigService],
+      useFactory: (config: RuntimeConfigService): AccountEmailWorkflowsPolicy =>
+        new AccountEmailWorkflowsPolicy({
+          ...config.auth.accountEmailWorkflows,
+          passwordResetTtlMs: config.auth.selfService.passwordResetTtlMs,
+          ...(config.auth.selfService.publicAppUrl === undefined
+            ? {}
+            : { publicAppUrl: config.auth.selfService.publicAppUrl }),
+        }),
     },
     {
       provide: PUBLIC_AUTH_RATE_LIMITER,
@@ -226,10 +250,14 @@ export interface AuthModuleOptions {
       inject: [RuntimeConfigService],
       useFactory: (config: RuntimeConfigService): AuthMailDeliveryPort => {
         const selfService = config.auth.selfService
-        if (selfService.mode !== 'open') {
+        if (
+          selfService.mode !== 'open' &&
+          config.auth.accountEmailWorkflows.mode !== 'enabled'
+        ) {
           return {
             sendEmailVerification: () => Promise.resolve({ delivered: false }),
             sendPasswordReset: () => Promise.resolve({ delivered: false }),
+            sendAccountInvitation: () => Promise.resolve({ delivered: false }),
           }
         }
         return new NodemailerAuthMailAdapter({
@@ -279,6 +307,7 @@ export interface AuthModuleOptions {
     ConfirmEmailVerificationUseCase,
     RequestPasswordResetUseCase,
     ConfirmPasswordResetUseCase,
+    AccountEmailWorkflowsService,
     {
       provide: PublicAuthResponseDelay,
       inject: [RuntimeConfigService],

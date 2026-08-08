@@ -114,7 +114,7 @@ describe('auth application Nest dependency injection', () => {
       rotateEmailVerificationToken: jest.fn(),
       confirmEmailVerification: jest.fn(),
       rotatePasswordResetToken: jest.fn(),
-      isPasswordResetTokenEligible: jest.fn(),
+      getEligiblePasswordResetTokenSource: jest.fn(),
       confirmPasswordReset: jest.fn(),
     }
     const passwords: PasswordHasherPort = {
@@ -172,6 +172,7 @@ describe('auth application Nest dependency injection', () => {
           useValue: {
             sendEmailVerification: jest.fn(),
             sendPasswordReset: jest.fn(),
+            sendAccountInvitation: jest.fn(),
           } as AuthMailDeliveryPort,
         },
         {
