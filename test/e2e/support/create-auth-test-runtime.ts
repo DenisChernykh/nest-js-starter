@@ -59,7 +59,40 @@ export interface AuthTestRuntimeOptions {
   readonly smtpFailure?: boolean
 }
 
+export interface AuthApiStartupDiagnostic {
+  readonly baseUrl: string
+  readonly exitCode: number | null
+  readonly signalCode: NodeJS.Signals | null
+  readonly output: () => string
+}
+
 const smtpFailureUrl = 'smtp://127.0.0.1:1'
+const authApiStartupTimeoutMs = 20_000
+const startupOutputTailLength = 4_096
+
+export function createAuthApiStartupError(
+  instances: readonly AuthApiStartupDiagnostic[],
+  cause: unknown,
+): Error {
+  const diagnostics = instances
+    .map((instance, index) => {
+      const output = instance.output()
+      const outputTail = output.slice(-startupOutputTailLength)
+      return [
+        `instance=${index}`,
+        `baseUrl=${instance.baseUrl}`,
+        `exitCode=${instance.exitCode ?? 'running'}`,
+        `signal=${instance.signalCode ?? 'none'}`,
+        `outputTail=${outputTail.length === 0 ? '<empty>' : outputTail}`,
+      ].join(' ')
+    })
+    .join('\n')
+  const error = new Error(`Auth test API startup failed\n${diagnostics}`, {
+    cause,
+  })
+  error.name = 'AuthTestApiStartupError'
+  return error
+}
 
 function authEnvironment(
   databaseUrl: string,
@@ -164,10 +197,19 @@ export async function createAuthTestRuntime(
           } catch {
             return false
           }
-        }, 8_000),
+        }, authApiStartupTimeoutMs),
       ),
     )
   } catch (error: unknown) {
+    const startupError = createAuthApiStartupError(
+      instances.map(({ baseUrl, child, output }) => ({
+        baseUrl,
+        exitCode: child.exitCode,
+        signalCode: child.signalCode,
+        output,
+      })),
+      error,
+    )
     for (const { child } of instances) {
       if (child.exitCode === null) child.kill('SIGKILL')
     }
@@ -176,7 +218,7 @@ export async function createAuthTestRuntime(
       redis.stop(),
       mailpit?.stop() ?? Promise.resolve(),
     ])
-    throw error
+    throw startupError
   }
   const pool = new Pool({ connectionString: databaseUrl })
   pool.on('error', () => undefined)

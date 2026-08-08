@@ -4,6 +4,7 @@ import {
   createAuthTestRuntime,
   type AuthE2eRuntime,
 } from '@test/e2e/support/create-auth-test-runtime'
+import { startRuntimeGroup } from '@test/e2e/support/start-runtime-group'
 
 interface LoginResult {
   readonly cookie: string
@@ -31,24 +32,27 @@ describe('account administration HTTP contract', () => {
 
   beforeAll(async () => {
     ;[runtime, disabledRuntime, coreOnlyRuntime, failedMailRuntime] =
-      await Promise.all([
-        createAuthTestRuntime(1, {
-          AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
-          AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE: 'enabled',
-        }),
-        createAuthTestRuntime(1),
-        createAuthTestRuntime(1, {
-          AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
-        }),
-        createAuthTestRuntime(
-          1,
-          {
+      await startRuntimeGroup([
+        () =>
+          createAuthTestRuntime(1, {
             AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
             AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE: 'enabled',
-          },
-          { smtpFailure: true },
-        ),
-      ])
+          }),
+        () => createAuthTestRuntime(1),
+        () =>
+          createAuthTestRuntime(1, {
+            AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
+          }),
+        () =>
+          createAuthTestRuntime(
+            1,
+            {
+              AUTH_ACCOUNT_ADMINISTRATION_MODE: 'enabled',
+              AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE: 'enabled',
+            },
+            { smtpFailure: true },
+          ),
+      ] as const)
     apiUrl = runtime.instances[0]?.baseUrl ?? ''
     disabledApiUrl = disabledRuntime.instances[0]?.baseUrl ?? ''
     coreOnlyApiUrl = coreOnlyRuntime.instances[0]?.baseUrl ?? ''
