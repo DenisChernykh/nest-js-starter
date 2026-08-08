@@ -38,6 +38,7 @@ describe('runtime environment', () => {
         TRUST_PROXY_CIDRS: [],
         REDIS_KEY_PREFIX: 'nest-js-starter',
         AUTH_SELF_SERVICE_MODE: 'disabled',
+        AUTH_ACCOUNT_ADMINISTRATION_MODE: 'disabled',
       }),
     )
     expect(validate()).not.toHaveProperty('REDIS_CACHE_URL')

@@ -15,6 +15,7 @@ export type AuthAuditAction =
   | 'email_verification_confirm'
   | 'password_reset_request'
   | 'password_reset_confirm'
+  | 'account_retire'
 
 /** Reviewed result classes shared by all auth audit actions. */
 export type AuthAuditOutcome = 'success' | 'denied' | 'partial' | 'conflict'

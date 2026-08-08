@@ -35,6 +35,12 @@ app origin and SMTP/from values. For local testing, start the opt-in Mailpit
 profile and follow the [self-service lifecycle runbook](docs/runbooks/self-service-account-lifecycle.md);
 SMTP is not an API readiness dependency.
 
+Account administration is also disabled by default. Enable
+`AUTH_ACCOUNT_ADMINISTRATION_MODE=enabled` to expose the protected account
+catalogue and lifecycle operations. Operational enablement, lifecycle
+transitions and retirement are documented in the
+[account administration runbook](docs/runbooks/account-administration.md).
+
 BullMQ is intentionally opt-in. The default API receives no `REDIS_QUEUE_URL`
 and registers no queue. A product that adopts durable jobs starts the separate
 local dependency explicitly:

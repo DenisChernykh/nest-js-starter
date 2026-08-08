@@ -91,6 +91,65 @@ describe('offline OpenAPI generation', () => {
     }
   })
 
+  it('documents the account-administration core request contract', async () => {
+    const document = JSON.parse(await generateOpenApiArtifact()) as {
+      readonly paths: Readonly<
+        Record<
+          string,
+          Readonly<
+            Record<
+              string,
+              {
+                readonly parameters?: readonly {
+                  readonly name?: string
+                  readonly in?: string
+                }[]
+                readonly requestBody?: unknown
+                readonly responses?: Readonly<Record<string, unknown>>
+              }
+            >
+          >
+        >
+      >
+    }
+    const list = document.paths['/v1/admin/auth/accounts']?.['get']
+    const status =
+      document.paths['/v1/admin/auth/accounts/{accountId}/status']?.['put']
+    const roles =
+      document.paths['/v1/admin/auth/accounts/{accountId}/roles']?.['put']
+    const retire =
+      document.paths['/v1/admin/auth/accounts/{accountId}']?.['delete']
+    const logoutAll =
+      document.paths['/v1/admin/auth/accounts/{accountId}/sessions']?.['delete']
+
+    expect(list?.parameters?.map(({ name }) => name).sort()).toEqual(
+      ['page', 'pageSize', 'search', 'state'].sort(),
+    )
+    for (const operation of [status, roles]) {
+      expect(operation?.parameters).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'accountId', in: 'path' }),
+          expect.objectContaining({ name: 'If-Match', in: 'header' }),
+        ]),
+      )
+      expect(operation?.requestBody).toBeDefined()
+      expect(Object.keys(operation?.responses ?? {})).toEqual(
+        expect.arrayContaining(['200', '400', '412', '415', '428']),
+      )
+    }
+    expect(retire?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'If-Match', in: 'header' }),
+      ]),
+    )
+    expect(Object.keys(retire?.responses ?? {})).toEqual(
+      expect.arrayContaining(['204', '400', '412', '415', '428']),
+    )
+    expect(Object.keys(logoutAll?.responses ?? {})).toEqual(
+      expect.arrayContaining(['204', '415']),
+    )
+  })
+
   it('rejects a CLI invocation without an explicit output path', () => {
     expect(() => parseOpenApiWriterArguments([])).toThrow(
       'OpenAPI output path is required',
