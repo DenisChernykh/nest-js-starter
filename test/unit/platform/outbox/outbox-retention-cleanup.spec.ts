@@ -8,14 +8,12 @@ describe('OutboxRetentionCleanup', () => {
       OutboxStorePort,
       'cleanupPublished'
     >
-    const cleanup = new OutboxRetentionCleanup(store as OutboxStorePort, {
-      clock: () => new Date('2026-08-08T00:00:00.000Z'),
-    })
+    const cleanup = new OutboxRetentionCleanup(store as OutboxStorePort)
 
     await expect(cleanup.runOnce()).resolves.toBe(3)
 
     expect(cleanupPublished).toHaveBeenCalledWith({
-      before: new Date('2026-08-01T00:00:00.000Z'),
+      retentionMs: 7 * 24 * 60 * 60 * 1_000,
       limit: 500,
     })
   })

@@ -142,15 +142,17 @@ model OutboxMessage {
   correlationId String?             @map("correlation_id") @db.VarChar(200)
   occurredAt    DateTime            @map("occurred_at")
   payload       Json
+  payloadSizeBytes Int              @map("payload_size_bytes")
   status        OutboxMessageStatus @default(PENDING)
   attemptCount  Int                 @default(0) @map("attempt_count")
-  nextAttemptAt DateTime            @map("next_attempt_at")
+  nextAttemptAt DateTime            @default(now()) @map("next_attempt_at")
   claimToken    String?             @map("claim_token") @db.Uuid
   claimedBy     String?             @map("claimed_by") @db.VarChar(160)
   claimedUntil  DateTime?           @map("claimed_until")
   publishedAt   DateTime?           @map("published_at")
   blockedAt     DateTime?           @map("blocked_at")
   lastErrorCode String?             @map("last_error_code") @db.VarChar(100)
+  redrivePublished Boolean          @default(false) @map("redrive_published")
   createdAt     DateTime            @default(now()) @map("created_at")
   updatedAt     DateTime            @updatedAt @map("updated_at")
 

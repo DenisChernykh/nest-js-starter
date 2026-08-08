@@ -6,19 +6,16 @@ export const outboxRetentionDefaults = Object.freeze({
 })
 
 export class OutboxRetentionCleanup {
-  private readonly clock: () => Date
   private readonly publishedRetentionMs: number
   private readonly cleanupBatchSize: number
 
   public constructor(
     private readonly store: OutboxStorePort,
     options: {
-      readonly clock?: () => Date
       readonly publishedRetentionMs?: number
       readonly cleanupBatchSize?: number
     } = {},
   ) {
-    this.clock = options.clock ?? (() => new Date())
     this.publishedRetentionMs =
       options.publishedRetentionMs ??
       outboxRetentionDefaults.publishedRetentionMs
@@ -28,7 +25,7 @@ export class OutboxRetentionCleanup {
 
   public runOnce(): Promise<number> {
     return this.store.cleanupPublished({
-      before: new Date(this.clock().getTime() - this.publishedRetentionMs),
+      retentionMs: this.publishedRetentionMs,
       limit: this.cleanupBatchSize,
     })
   }

@@ -1,5 +1,11 @@
-import { BullModule, getQueueToken } from '@nestjs/bullmq'
+import {
+  BullModule,
+  getQueueToken,
+  type RegisterQueueOptions,
+} from '@nestjs/bullmq'
 import { Module, type DynamicModule } from '@nestjs/common'
+import type { JobsOptions } from 'bullmq'
+import type { DatabaseRuntimeConfig } from '@/platform/config/runtime-config.types'
 
 import {
   BullMqOutboxPublisher,
@@ -19,6 +25,17 @@ export interface BullMqOutboxRelayOptions {
   readonly destination: string
   readonly queueName: string
   readonly ownerId?: string
+  readonly queueOptions?: BullMqOutboxQueueOptions
+  readonly databaseConfig?: DatabaseRuntimeConfig
+}
+
+export interface BullMqOutboxQueueOptions {
+  readonly defaultJobOptions?: {
+    readonly attempts?: JobsOptions['attempts']
+    readonly backoff?: JobsOptions['backoff']
+    readonly removeOnComplete?: JobsOptions['removeOnComplete']
+    readonly removeOnFail?: JobsOptions['removeOnFail']
+  }
 }
 
 const OUTBOX_RELAY_OPTIONS = Symbol('OUTBOX_RELAY_OPTIONS')
@@ -32,8 +49,8 @@ export class OutboxRelayModule {
     return {
       module: OutboxRelayModule,
       imports: [
-        OutboxModule.forWriter(),
-        BullModule.registerQueue({ name: options.queueName }),
+        OutboxModule.forRelay(options.databaseConfig),
+        BullModule.registerQueue(createQueueRegistration(options)),
       ],
       providers: [
         {
@@ -75,5 +92,32 @@ export class OutboxRelayModule {
       ],
       exports: [OUTBOX_RELAY, OUTBOX_RELAY_RUNNER, OUTBOX_RETENTION_CLEANUP],
     }
+  }
+}
+
+function createQueueRegistration(
+  options: BullMqOutboxRelayOptions,
+): RegisterQueueOptions {
+  const policy = options.queueOptions?.defaultJobOptions
+  return {
+    name: options.queueName,
+    ...(policy === undefined
+      ? {}
+      : {
+          defaultJobOptions: {
+            ...(policy.attempts === undefined
+              ? {}
+              : { attempts: policy.attempts }),
+            ...(policy.backoff === undefined
+              ? {}
+              : { backoff: policy.backoff }),
+            ...(policy.removeOnComplete === undefined
+              ? {}
+              : { removeOnComplete: policy.removeOnComplete }),
+            ...(policy.removeOnFail === undefined
+              ? {}
+              : { removeOnFail: policy.removeOnFail }),
+          },
+        }),
   }
 }

@@ -23,6 +23,7 @@ interface ClaimedOutboxRow {
   readonly payload: JsonObject
   readonly attemptCount: number
   readonly claimToken: string
+  readonly redrivePublished: boolean
 }
 
 interface DiagnosticRow {
@@ -39,6 +40,13 @@ export class OutboxRedriveConfirmationRequiredError extends Error {
       'Redriving a published outbox message requires duplicate confirmation',
     )
     this.name = 'OutboxRedriveConfirmationRequiredError'
+  }
+}
+
+export class OutboxRedriveConflictError extends Error {
+  public constructor() {
+    super('Outbox message was not found in the expected redrive state')
+    this.name = 'OutboxRedriveConflictError'
   }
 }
 
@@ -87,7 +95,8 @@ export class PrismaOutboxStore implements OutboxStorePort {
                   message.occurred_at AS "occurredAt",
                   message.payload,
                   message.attempt_count AS "attemptCount",
-                  message.claim_token::text AS "claimToken"
+                  message.claim_token::text AS "claimToken",
+                  message.redrive_published AS "redrivePublished"
       `)
       return rows.map((row) => this.toClaimedMessage(row))
     })
@@ -96,24 +105,22 @@ export class PrismaOutboxStore implements OutboxStorePort {
   public async markPublished(input: {
     readonly id: string
     readonly claimToken: string
-    readonly publishedAt: Date
   }): Promise<void> {
     await this.provider.withClient((client) =>
-      client.outboxMessage.updateMany({
-        where: {
-          id: input.id,
-          status: 'CLAIMED',
-          claimToken: input.claimToken,
-        },
-        data: {
-          status: 'PUBLISHED',
-          publishedAt: input.publishedAt,
-          claimedUntil: null,
-          claimToken: null,
-          claimedBy: null,
-          lastErrorCode: null,
-        },
-      }),
+      client.$executeRaw(Prisma.sql`
+        UPDATE outbox_messages
+           SET status = 'PUBLISHED',
+               published_at = CURRENT_TIMESTAMP,
+               claimed_until = NULL,
+               claim_token = NULL,
+               claimed_by = NULL,
+               last_error_code = NULL,
+               redrive_published = false,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id = ${input.id}::uuid
+           AND status = 'CLAIMED'
+           AND claim_token = ${input.claimToken}::uuid
+      `),
     )
   }
 
@@ -121,25 +128,23 @@ export class PrismaOutboxStore implements OutboxStorePort {
     readonly id: string
     readonly claimToken: string
     readonly errorCode: string
-    readonly nextAttemptAt: Date
+    readonly retryDelayMs: number
   }): Promise<void> {
     await this.provider.withClient((client) =>
-      client.outboxMessage.updateMany({
-        where: {
-          id: input.id,
-          status: 'CLAIMED',
-          claimToken: input.claimToken,
-        },
-        data: {
-          status: 'PENDING',
-          attemptCount: { increment: 1 },
-          nextAttemptAt: input.nextAttemptAt,
-          claimedUntil: null,
-          claimToken: null,
-          claimedBy: null,
-          lastErrorCode: input.errorCode,
-        },
-      }),
+      client.$executeRaw(Prisma.sql`
+        UPDATE outbox_messages
+           SET status = 'PENDING',
+               attempt_count = attempt_count + 1,
+               next_attempt_at = CURRENT_TIMESTAMP + (${input.retryDelayMs} * INTERVAL '1 millisecond'),
+               claimed_until = NULL,
+               claim_token = NULL,
+               claimed_by = NULL,
+               last_error_code = ${input.errorCode},
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id = ${input.id}::uuid
+           AND status = 'CLAIMED'
+           AND claim_token = ${input.claimToken}::uuid
+      `),
     )
   }
 
@@ -147,29 +152,27 @@ export class PrismaOutboxStore implements OutboxStorePort {
     readonly id: string
     readonly claimToken: string
     readonly errorCode: string
-    readonly blockedAt: Date
   }): Promise<void> {
     await this.provider.withClient((client) =>
-      client.outboxMessage.updateMany({
-        where: {
-          id: input.id,
-          status: 'CLAIMED',
-          claimToken: input.claimToken,
-        },
-        data: {
-          status: 'BLOCKED',
-          blockedAt: input.blockedAt,
-          claimedUntil: null,
-          claimToken: null,
-          claimedBy: null,
-          lastErrorCode: input.errorCode,
-        },
-      }),
+      client.$executeRaw(Prisma.sql`
+        UPDATE outbox_messages
+           SET status = 'BLOCKED',
+               blocked_at = CURRENT_TIMESTAMP,
+               claimed_until = NULL,
+               claim_token = NULL,
+               claimed_by = NULL,
+               last_error_code = ${input.errorCode},
+               redrive_published = false,
+               updated_at = CURRENT_TIMESTAMP
+         WHERE id = ${input.id}::uuid
+           AND status = 'CLAIMED'
+           AND claim_token = ${input.claimToken}::uuid
+      `),
     )
   }
 
   public async cleanupPublished(input: {
-    readonly before: Date
+    readonly retentionMs: number
     readonly limit: number
   }): Promise<number> {
     const rows = await this.withRootTransaction((client) =>
@@ -178,7 +181,7 @@ export class PrismaOutboxStore implements OutboxStorePort {
           SELECT id
             FROM outbox_messages
            WHERE status = 'PUBLISHED'
-             AND published_at < ${input.before}
+             AND published_at < CURRENT_TIMESTAMP - (${input.retentionMs} * INTERVAL '1 millisecond')
            ORDER BY published_at ASC, id ASC
            LIMIT ${input.limit}
            FOR UPDATE SKIP LOCKED
@@ -199,7 +202,7 @@ export class PrismaOutboxStore implements OutboxStorePort {
                count(*) FILTER (WHERE status = 'PENDING') AS "pendingCount",
                count(*) FILTER (WHERE status = 'CLAIMED') AS "claimedCount",
                count(*) FILTER (WHERE status = 'BLOCKED') AS "blockedCount",
-               min(next_attempt_at) FILTER (WHERE status = 'PENDING') AS "oldestPendingAt"
+               min(created_at) FILTER (WHERE status = 'PENDING') AS "oldestPendingAt"
           FROM outbox_messages
          WHERE status IN ('PENDING', 'CLAIMED', 'BLOCKED')
          GROUP BY destination
@@ -221,26 +224,38 @@ export class PrismaOutboxStore implements OutboxStorePort {
     readonly id: string
     readonly expectedStatus: 'BLOCKED' | 'PUBLISHED'
     readonly allowDuplicate: boolean
-    readonly nextAttemptAt: Date
   }): Promise<void> {
     if (input.expectedStatus === 'PUBLISHED' && !input.allowDuplicate) {
       throw new OutboxRedriveConfirmationRequiredError()
     }
-    await this.provider.withClient((client) =>
-      client.outboxMessage.updateMany({
-        where: { id: input.id, status: input.expectedStatus },
-        data: {
-          status: 'PENDING',
-          nextAttemptAt: input.nextAttemptAt,
-          claimedUntil: null,
-          claimToken: null,
-          claimedBy: null,
-          publishedAt: null,
-          blockedAt: null,
-          lastErrorCode: null,
-        },
-      }),
+    const changed = await this.provider.withClient((client) =>
+      input.expectedStatus === 'PUBLISHED'
+        ? client.$executeRaw(Prisma.sql`
+            UPDATE outbox_messages
+               SET status = 'PENDING',
+                   next_attempt_at = CURRENT_TIMESTAMP,
+                   published_at = NULL,
+                   last_error_code = NULL,
+                   redrive_published = true,
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE id = ${input.id}::uuid
+               AND status = 'PUBLISHED'
+          `)
+        : client.$executeRaw(Prisma.sql`
+            UPDATE outbox_messages
+               SET status = 'PENDING',
+                   next_attempt_at = CURRENT_TIMESTAMP,
+                   blocked_at = NULL,
+                   last_error_code = NULL,
+                   redrive_published = false,
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE id = ${input.id}::uuid
+               AND status = 'BLOCKED'
+          `),
     )
+    if (changed !== 1) {
+      throw new OutboxRedriveConflictError()
+    }
   }
 
   private async withRootTransaction<T>(
@@ -266,6 +281,7 @@ export class PrismaOutboxStore implements OutboxStorePort {
       payload: row.payload,
       attemptCount: row.attemptCount,
       claimToken: row.claimToken,
+      redrivePublished: row.redrivePublished,
     })
   }
 }

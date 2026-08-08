@@ -1,4 +1,4 @@
-import type { JsonObject } from './outbox.contracts'
+import type { JsonObject, OutboxMessageEnvelope } from './outbox.contracts'
 
 export interface ClaimedOutboxMessage {
   readonly id: string
@@ -11,6 +11,7 @@ export interface ClaimedOutboxMessage {
   readonly payload: JsonObject
   readonly attemptCount: number
   readonly claimToken: string
+  readonly redrivePublished: boolean
 }
 
 export interface OutboxStorePort {
@@ -23,22 +24,20 @@ export interface OutboxStorePort {
   markPublished(input: {
     readonly id: string
     readonly claimToken: string
-    readonly publishedAt: Date
   }): Promise<void>
   scheduleRetry(input: {
     readonly id: string
     readonly claimToken: string
     readonly errorCode: string
-    readonly nextAttemptAt: Date
+    readonly retryDelayMs: number
   }): Promise<void>
   block(input: {
     readonly id: string
     readonly claimToken: string
     readonly errorCode: string
-    readonly blockedAt: Date
   }): Promise<void>
   cleanupPublished(input: {
-    readonly before: Date
+    readonly retentionMs: number
     readonly limit: number
   }): Promise<number>
   diagnostics(): Promise<readonly OutboxBacklogDiagnostic[]>
@@ -46,12 +45,14 @@ export interface OutboxStorePort {
     readonly id: string
     readonly expectedStatus: 'BLOCKED' | 'PUBLISHED'
     readonly allowDuplicate: boolean
-    readonly nextAttemptAt: Date
   }): Promise<void>
 }
 
 export interface OutboxPublisherPort {
-  publish(message: ClaimedOutboxMessage): Promise<void>
+  publish(
+    message: OutboxMessageEnvelope,
+    options: { readonly redrivePublished: boolean },
+  ): Promise<void>
 }
 
 export interface OutboxBacklogDiagnostic {

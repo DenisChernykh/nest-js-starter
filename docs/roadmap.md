@@ -113,11 +113,13 @@ worker. Local queue Redis is available only through the explicit `queues`
 Compose profile.
 
 Product adoption remains deferred. A product still must add its feature-owned
-queue and payload, producer adapter, worker composition and processor, durable
-authoritative state, idempotency policy and operational evidence. An outbox,
-scheduling, dashboards and queue deployment topology are likewise deferred.
-The adoption and recovery contracts are `docs/architecture/durable-jobs.md` and
-`docs/runbooks/queue-redis-loss.md`.
+queue and allowlisted payload schema, producer composition, worker and
+processor, durable authoritative state, idempotency policy and operational
+evidence. The opt-in transactional outbox foundation is available where
+DB-to-queue durability is required; scheduling, dashboards and queue deployment
+topology remain deferred. The adoption and recovery contracts are
+`docs/architecture/durable-jobs.md`, `docs/runbooks/queue-redis-loss.md` and
+`docs/runbooks/transactional-outbox.md`.
 
 ## Roadmap rules
 

@@ -82,6 +82,43 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
         'INSERT INTO auth_security_state (id, updated_at) VALUES (2, CURRENT_TIMESTAMP)',
       ),
     ).rejects.toThrow()
+    await expect(
+      pool.query(
+        `INSERT INTO outbox_messages (
+           id, destination, type, version, occurred_at, payload,
+           payload_size_bytes, status, next_attempt_at, updated_at
+         ) VALUES (
+           gen_random_uuid(), 'notifications', 'test.event', 1,
+           CURRENT_TIMESTAMP, '{}'::jsonb, 2, 'CLAIMED',
+           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+         )`,
+      ),
+    ).rejects.toThrow()
+    await expect(
+      pool.query(
+        `INSERT INTO outbox_messages (
+           id, destination, type, version, occurred_at, payload,
+           payload_size_bytes, status, next_attempt_at, blocked_at,
+           last_error_code, updated_at
+         ) VALUES (
+           gen_random_uuid(), 'notifications', 'test.event', 1,
+           CURRENT_TIMESTAMP, '{}'::jsonb, 2, 'BLOCKED',
+           CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 'contains secret',
+           CURRENT_TIMESTAMP
+         )`,
+      ),
+    ).rejects.toThrow()
+    await expect(
+      pool.query(
+        `INSERT INTO outbox_messages (
+           id, destination, type, version, occurred_at, payload,
+           payload_size_bytes, updated_at
+         ) VALUES (
+           gen_random_uuid(), 'notifications', 'test.event', 1,
+           CURRENT_TIMESTAMP, '{}'::jsonb, 65537, CURRENT_TIMESTAMP
+         )`,
+      ),
+    ).rejects.toThrow()
     const creator = await pool.query<{ id: string }>(
       `INSERT INTO users (email, normalized_email, updated_at)
        VALUES ('creator@example.com', 'creator@example.com', CURRENT_TIMESTAMP)

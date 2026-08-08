@@ -6,6 +6,10 @@ import { PrismaClientProvider } from '@/platform/database/prisma-client.provider
 import { PrismaTransactionContext } from '@/platform/database/prisma-transaction.context'
 import { PrismaTransactionAdapter } from '@/platform/database/prisma-transaction.adapter'
 import { PrismaOutboxStore } from '@/platform/outbox/prisma-outbox.store'
+import {
+  OUTBOX_MAX_VERSION,
+  outboxPayloadSizeBytes,
+} from '@/platform/outbox/outbox.contracts'
 import { TransactionalOutboxWriter } from '@/platform/outbox/transactional-outbox.writer'
 import { startPostgresContainer } from '@test/integration/support/postgres-container'
 import { runPrismaCommand } from '@test/integration/support/run-prisma-command'
@@ -69,6 +73,7 @@ describe('PrismaOutboxStore', () => {
           occurredAt: new Date('2026-08-08T00:00:00.000Z'),
           nextAttemptAt: new Date('2026-08-08T00:00:00.000Z'),
           payload: { inquiryId: id },
+          payloadSizeBytes: outboxPayloadSizeBytes({ inquiryId: id }),
         },
       }),
     )
@@ -113,6 +118,48 @@ describe('PrismaOutboxStore', () => {
     await expect(
       provider.withClient((client) => client.outboxMessage.count()),
     ).resolves.toBe(1)
+  })
+
+  it('persists a compact payload below 64 KiB even when jsonb text is larger', async () => {
+    const payload = Object.fromEntries(
+      Array.from({ length: 5_127 }, (_, index) => [`k${index}`, '']),
+    )
+    expect(Buffer.byteLength(JSON.stringify(payload), 'utf8')).toBeLessThan(
+      64 * 1_024,
+    )
+
+    await expect(
+      transaction.run(() =>
+        writer.append({
+          destination: 'notifications',
+          type: 'payload.boundary',
+          version: 1,
+          occurredAt: new Date('2026-08-08T00:00:00.000Z'),
+          payload,
+        }),
+      ),
+    ).resolves.toBeDefined()
+  })
+
+  it('persists the maximum version supported by PostgreSQL INTEGER', async () => {
+    const envelope = await transaction.run(() =>
+      writer.append({
+        destination: 'notifications',
+        type: 'version.boundary',
+        version: OUTBOX_MAX_VERSION,
+        occurredAt: new Date('2026-08-08T00:00:00.000Z'),
+        payload: {},
+      }),
+    )
+
+    await expect(
+      provider.withClient((client) =>
+        client.outboxMessage.findUniqueOrThrow({
+          where: { id: envelope.messageId },
+          select: { version: true },
+        }),
+      ),
+    ).resolves.toEqual({ version: OUTBOX_MAX_VERSION })
   })
 
   it('rolls an outbox append back with its owning transaction', async () => {
@@ -163,7 +210,6 @@ describe('PrismaOutboxStore', () => {
     await first.markPublished({
       id,
       claimToken: original.claimToken,
-      publishedAt: new Date(),
     })
     expect(
       (
@@ -176,7 +222,6 @@ describe('PrismaOutboxStore', () => {
     await second.markPublished({
       id,
       claimToken: reclaimed.claimToken,
-      publishedAt: new Date(),
     })
     expect(
       (
@@ -190,9 +235,38 @@ describe('PrismaOutboxStore', () => {
         id,
         expectedStatus: 'PUBLISHED',
         allowDuplicate: false,
-        nextAttemptAt: new Date(),
       }),
     ).rejects.toThrow('duplicate confirmation')
+    await second.redrive({
+      id,
+      expectedStatus: 'PUBLISHED',
+      allowDuplicate: true,
+    })
+    await expect(
+      provider.withClient((client) =>
+        client.outboxMessage.findUniqueOrThrow({ where: { id } }),
+      ),
+    ).resolves.toMatchObject({
+      status: 'PENDING',
+      redrivePublished: true,
+    })
+    const [publishedRedriveClaim] = await second.claim({
+      destination: 'notifications',
+      ownerId: 'second',
+      leaseMs: 30_000,
+      limit: 1,
+    })
+    expect(publishedRedriveClaim).toMatchObject({
+      id,
+      redrivePublished: true,
+    })
+    await expect(
+      second.redrive({
+        id,
+        expectedStatus: 'PUBLISHED',
+        allowDuplicate: true,
+      }),
+    ).rejects.toThrow('expected redrive state')
   })
 
   it('retries, blocks, redrives and cleans up without exposing payloads', async () => {
@@ -209,7 +283,7 @@ describe('PrismaOutboxStore', () => {
       id,
       claimToken: firstClaim.claimToken,
       errorCode: 'REDIS_DOWN',
-      nextAttemptAt: new Date(0),
+      retryDelayMs: 0,
     })
     const [retryClaim] = await first.claim({
       destination: 'notifications',
@@ -222,7 +296,6 @@ describe('PrismaOutboxStore', () => {
       id,
       claimToken: retryClaim.claimToken,
       errorCode: 'DESTINATION_DISABLED',
-      blockedAt: new Date(),
     })
 
     await expect(first.diagnostics()).resolves.toEqual([
@@ -235,7 +308,6 @@ describe('PrismaOutboxStore', () => {
       id,
       expectedStatus: 'BLOCKED',
       allowDuplicate: false,
-      nextAttemptAt: new Date(0),
     })
     const [redriven] = await first.claim({
       destination: 'notifications',
@@ -247,16 +319,47 @@ describe('PrismaOutboxStore', () => {
     await first.markPublished({
       id,
       claimToken: redriven.claimToken,
-      publishedAt: new Date(0),
     })
 
     await expect(
-      first.cleanupPublished({ before: new Date(1), limit: 500 }),
+      first.cleanupPublished({ retentionMs: 0, limit: 500 }),
     ).resolves.toBe(1)
     await expect(
       provider.withClient((client) =>
         client.outboxMessage.findUnique({ where: { id } }),
       ),
     ).resolves.toBeNull()
+  })
+
+  it('reports backlog age from message creation rather than retry schedule', async () => {
+    const olderId = '550e8400-e29b-41d4-a716-446655440014'
+    const newerId = '550e8400-e29b-41d4-a716-446655440015'
+    await seed(olderId)
+    await seed(newerId)
+    await provider.withClient((client) =>
+      client.$transaction([
+        client.outboxMessage.update({
+          where: { id: olderId },
+          data: {
+            createdAt: new Date('2026-08-01T00:00:00.000Z'),
+            nextAttemptAt: new Date('2026-08-20T00:00:00.000Z'),
+          },
+        }),
+        client.outboxMessage.update({
+          where: { id: newerId },
+          data: {
+            createdAt: new Date('2026-08-02T00:00:00.000Z'),
+            nextAttemptAt: new Date('2026-08-03T00:00:00.000Z'),
+          },
+        }),
+      ]),
+    )
+
+    await expect(first.diagnostics()).resolves.toEqual([
+      expect.objectContaining({
+        destination: 'notifications',
+        oldestPendingAt: new Date('2026-08-01T00:00:00.000Z'),
+      }),
+    ])
   })
 })

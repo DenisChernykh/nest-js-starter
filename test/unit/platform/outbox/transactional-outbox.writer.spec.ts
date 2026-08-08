@@ -43,7 +43,6 @@ function createHarness(transactional: boolean): Harness {
       provider,
       context,
       () => '550e8400-e29b-41d4-a716-446655440000',
-      () => new Date('2026-08-08T01:00:00.000Z'),
     ),
     run: <T>(operation: () => Promise<T>): Promise<T> =>
       transactional
@@ -65,10 +64,10 @@ describe('TransactionalOutboxWriter', () => {
     const { create, createCalls, run, writer } = createHarness(true)
 
     await expect(run(() => writer.append(draft))).resolves.toMatchObject({
-      id: '550e8400-e29b-41d4-a716-446655440000',
+      messageId: '550e8400-e29b-41d4-a716-446655440000',
       destination: 'notifications',
       type: 'inquiry.submitted',
-      status: 'PENDING',
+      occurredAt: '2026-08-08T00:00:00.000Z',
     })
     expect(create).toHaveBeenCalledTimes(1)
     expect(createCalls[0]).toMatchObject({
@@ -80,10 +79,14 @@ describe('TransactionalOutboxWriter', () => {
         status: 'PENDING',
         attemptCount: 0,
         occurredAt: new Date('2026-08-08T00:00:00.000Z'),
-        nextAttemptAt: new Date('2026-08-08T01:00:00.000Z'),
         payload: { inquiryId: 'inquiry-123' },
+        payloadSizeBytes: Buffer.byteLength(
+          JSON.stringify({ inquiryId: 'inquiry-123' }),
+          'utf8',
+        ),
       },
     })
+    expect(createCalls[0]).not.toHaveProperty('data.nextAttemptAt')
   })
 
   it('rejects appends outside an active transaction', async () => {

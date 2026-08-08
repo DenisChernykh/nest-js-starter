@@ -12,9 +12,13 @@ import {
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import { PrismaTransactionContext } from '@/platform/database/prisma-transaction.context'
 import { BullMqOutboxPublisher } from '@/platform/outbox/bullmq-outbox.publisher'
+import {
+  createOutboxMessageEnvelope,
+  outboxPayloadSizeBytes,
+  type OutboxMessageEnvelope,
+} from '@/platform/outbox/outbox.contracts'
 import { PrismaOutboxStore } from '@/platform/outbox/prisma-outbox.store'
 import { OutboxRelay } from '@/platform/outbox/outbox-relay'
-import type { ClaimedOutboxMessage } from '@/platform/outbox/outbox.ports'
 import { BullmqConnectionModule } from '@/platform/queue/bullmq-connection.module'
 import { startPostgresContainer } from '@test/integration/support/postgres-container'
 import { startRedisContainer } from '@test/integration/support/redis-container'
@@ -67,6 +71,9 @@ describe('transactional outbox relay recovery', () => {
           occurredAt: new Date('2026-08-08T00:00:00.000Z'),
           nextAttemptAt: new Date(0),
           payload: { inquiryId: 'inquiry-123' },
+          payloadSizeBytes: outboxPayloadSizeBytes({
+            inquiryId: 'inquiry-123',
+          }),
         },
       }),
     )
@@ -80,7 +87,7 @@ describe('transactional outbox relay recovery', () => {
       ],
     }).compile()
     await application.init()
-    const queue = application.get<Queue<ClaimedOutboxMessage>>(
+    const queue = application.get<Queue<OutboxMessageEnvelope>>(
       getQueueToken(queueName),
     )
     const store = new PrismaOutboxStore(
@@ -97,7 +104,10 @@ describe('transactional outbox relay recovery', () => {
     if (crashedClaim === undefined)
       throw new Error('outbox message was not claimed')
 
-    await publisher.publish(crashedClaim)
+    await publisher.publish(
+      createOutboxMessageEnvelope(crashedClaim.id, crashedClaim),
+      { redrivePublished: crashedClaim.redrivePublished },
+    )
     await provider.withClient((client) =>
       client.outboxMessage.update({
         where: { id: messageId },
@@ -118,7 +128,7 @@ describe('transactional outbox relay recovery', () => {
     ).resolves.toMatchObject({ status: 'PUBLISHED' })
     await expect(queue.getJob(messageId)).resolves.toMatchObject({
       id: messageId,
-      data: { id: messageId },
+      data: { messageId },
     })
   })
 })

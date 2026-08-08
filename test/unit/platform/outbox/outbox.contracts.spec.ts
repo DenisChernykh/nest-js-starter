@@ -29,8 +29,18 @@ describe('outbox message drafts', () => {
     expect(Object.isFrozen(result)).toBe(true)
   })
 
+  it('does not reject non-secret business fields merely containing token text', () => {
+    expect(() =>
+      validateOutboxMessageDraft({
+        ...validDraft(),
+        payload: { tokenizedAssetId: 'asset-123' },
+      }),
+    ).not.toThrow()
+  })
+
   it.each([
     ['a non-positive version', { version: 0 }],
+    ['a version above PostgreSQL INTEGER', { version: 2_147_483_648 }],
     ['an array payload', { payload: ['inquiry-123'] }],
     ['a null payload', { payload: null }],
     ['an oversized payload', { payload: { body: 'x'.repeat(65_537) } }],

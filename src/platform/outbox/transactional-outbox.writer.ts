@@ -5,16 +5,11 @@ import { PrismaClientProvider } from '@/platform/database/prisma-client.provider
 import { PrismaTransactionContext } from '@/platform/database/prisma-transaction.context'
 
 import {
-  type OutboxMessageDraft,
+  createOutboxMessageEnvelope,
+  outboxPayloadSizeBytes,
+  type OutboxMessageEnvelope,
   validateOutboxMessageDraft,
 } from './outbox.contracts'
-
-export interface OutboxMessage extends OutboxMessageDraft {
-  readonly id: string
-  readonly status: 'PENDING'
-  readonly attemptCount: number
-  readonly nextAttemptAt: Date
-}
 
 export class OutboxTransactionRequiredError extends Error {
   public constructor() {
@@ -29,16 +24,14 @@ export class TransactionalOutboxWriter {
     private readonly provider: PrismaClientProvider,
     private readonly transactions: PrismaTransactionContext,
     private readonly createId: () => string = randomUUID,
-    private readonly clock: () => Date = () => new Date(),
   ) {}
 
-  public async append(input: unknown): Promise<OutboxMessage> {
+  public async append(input: unknown): Promise<OutboxMessageEnvelope> {
     if (!this.transactions.active) {
       throw new OutboxTransactionRequiredError()
     }
     const draft = validateOutboxMessageDraft(input)
     const id = this.createId()
-    const nextAttemptAt = this.clock()
     await this.provider.withClient((client) =>
       client.outboxMessage.create({
         data: {
@@ -54,18 +47,12 @@ export class TransactionalOutboxWriter {
             : { correlationId: draft.correlationId }),
           occurredAt: draft.occurredAt,
           payload: draft.payload,
+          payloadSizeBytes: outboxPayloadSizeBytes(draft.payload),
           status: 'PENDING',
           attemptCount: 0,
-          nextAttemptAt,
         },
       }),
     )
-    return Object.freeze({
-      id,
-      ...draft,
-      status: 'PENDING' as const,
-      attemptCount: 0,
-      nextAttemptAt,
-    })
+    return createOutboxMessageEnvelope(id, draft)
   }
 }

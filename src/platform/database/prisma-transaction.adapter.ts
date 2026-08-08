@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import type { DatabaseRuntimeConfig } from '@/platform/config/runtime-config.types'
 import type { TransactionPort } from '@/shared/application/transaction.port'
 
 import { PrismaClientProvider } from './prisma-client.provider'
 import { PrismaTransactionContext } from './prisma-transaction.context'
+import { DATABASE_RUNTIME_CONFIG } from './database.tokens'
 
 /** Implements the framework-free application transaction boundary with Prisma. */
 @Injectable()
@@ -15,7 +15,7 @@ export class PrismaTransactionAdapter implements TransactionPort {
     private readonly provider: PrismaClientProvider,
     @Inject(PrismaTransactionContext)
     private readonly context: PrismaTransactionContext,
-    @Inject(RuntimeConfigService)
+    @Inject(DATABASE_RUNTIME_CONFIG)
     private readonly config: { readonly database: DatabaseRuntimeConfig },
   ) {}
 

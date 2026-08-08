@@ -1,4 +1,5 @@
 export const OUTBOX_MAX_PAYLOAD_BYTES = 64 * 1024
+export const OUTBOX_MAX_VERSION = 2_147_483_647
 
 type JsonPrimitive = boolean | number | string | null
 
@@ -16,6 +17,37 @@ export interface OutboxMessageDraft {
   readonly correlationId?: string
   readonly occurredAt: Date
   readonly payload: JsonObject
+}
+
+export interface OutboxMessageEnvelope {
+  readonly messageId: string
+  readonly destination: string
+  readonly type: string
+  readonly version: number
+  readonly partitionKey?: string
+  readonly correlationId?: string
+  readonly occurredAt: string
+  readonly payload: JsonObject
+}
+
+export function createOutboxMessageEnvelope(
+  messageId: string,
+  message: OutboxMessageDraft,
+): Readonly<OutboxMessageEnvelope> {
+  return Object.freeze({
+    messageId,
+    destination: message.destination,
+    type: message.type,
+    version: message.version,
+    ...(message.partitionKey === undefined
+      ? {}
+      : { partitionKey: message.partitionKey }),
+    ...(message.correlationId === undefined
+      ? {}
+      : { correlationId: message.correlationId }),
+    occurredAt: message.occurredAt.toISOString(),
+    payload: cloneJsonObject(message.payload),
+  })
 }
 
 export class OutboxMessageValidationError extends Error {
@@ -42,9 +74,12 @@ export function validateOutboxMessageDraft(
   if (
     typeof version !== 'number' ||
     !Number.isSafeInteger(version) ||
-    version < 1
+    version < 1 ||
+    version > OUTBOX_MAX_VERSION
   ) {
-    throw new OutboxMessageValidationError('version must be a positive integer')
+    throw new OutboxMessageValidationError(
+      `version must be an integer between 1 and ${OUTBOX_MAX_VERSION}`,
+    )
   }
 
   const occurredAt = value['occurredAt']
@@ -53,10 +88,7 @@ export function validateOutboxMessageDraft(
   }
 
   const payload = validatePayload(value['payload'])
-  if (
-    Buffer.byteLength(JSON.stringify(payload), 'utf8') >
-    OUTBOX_MAX_PAYLOAD_BYTES
-  ) {
+  if (outboxPayloadSizeBytes(payload) > OUTBOX_MAX_PAYLOAD_BYTES) {
     throw new OutboxMessageValidationError('payload exceeds 64 KiB')
   }
 
@@ -80,6 +112,10 @@ export function validateOutboxMessageDraft(
     occurredAt: new Date(occurredAt.getTime()),
     payload,
   })
+}
+
+export function outboxPayloadSizeBytes(payload: JsonObject): number {
+  return Buffer.byteLength(JSON.stringify(payload), 'utf8')
 }
 
 function validateRequiredString(
@@ -155,9 +191,9 @@ function validateJsonContainer(
   }
   ancestry.add(value)
   for (const [key, child] of Object.entries(value)) {
-    if (credentialKey.test(key)) {
+    if (isCredentialKey(key)) {
       throw new OutboxMessageValidationError(
-        'payload must not contain credentials',
+        'payload contains a credential-shaped key',
       )
     }
     validateJsonValue(child, ancestry)
@@ -165,8 +201,31 @@ function validateJsonContainer(
   ancestry.delete(value)
 }
 
-const credentialKey =
-  /(?:password|secret|token|credential|authorization|cookie|api[_-]?key)/iu
+const credentialSegments = new Set([
+  'authorization',
+  'bearer',
+  'cookie',
+  'credential',
+  'password',
+  'secret',
+  'token',
+])
+
+function isCredentialKey(key: string): boolean {
+  const segments = key
+    .replaceAll(/([a-z\d])([A-Z])/g, '$1 $2')
+    .split(/[^A-Za-z\d]+/u)
+    .filter((segment) => segment.length > 0)
+    .map((segment) => segment.toLowerCase())
+  return (
+    segments.some((segment) => credentialSegments.has(segment)) ||
+    segments.some(
+      (segment, index) =>
+        (segment === 'api' || segment === 'private') &&
+        segments[index + 1] === 'key',
+    )
+  )
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!isRecord(value)) return false

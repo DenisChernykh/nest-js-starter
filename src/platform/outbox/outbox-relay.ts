@@ -1,4 +1,5 @@
 import type { OutboxPublisherPort, OutboxStorePort } from './outbox.ports'
+import { createOutboxMessageEnvelope } from './outbox.contracts'
 
 export const outboxRelayDefaults = Object.freeze({
   batchSize: 50,
@@ -6,6 +7,7 @@ export const outboxRelayDefaults = Object.freeze({
   retryBaseMs: 1_000,
   retryMaxMs: 300_000,
 })
+export const OUTBOX_CLAIM_OWNER_MAX_LENGTH = 160
 
 export class OutboxTransientPublishError extends Error {
   public constructor(public readonly code: string) {
@@ -24,7 +26,6 @@ export class OutboxTerminalPublishError extends Error {
 export interface OutboxRelayOptions {
   readonly destination: string
   readonly ownerId: string
-  readonly clock?: () => Date
   readonly random?: () => number
   readonly batchSize?: number
   readonly leaseMs?: number
@@ -33,7 +34,6 @@ export interface OutboxRelayOptions {
 }
 
 export class OutboxRelay {
-  private readonly clock: () => Date
   private readonly random: () => number
   private readonly batchSize: number
   private readonly leaseMs: number
@@ -45,7 +45,13 @@ export class OutboxRelay {
     private readonly publisher: OutboxPublisherPort,
     private readonly options: OutboxRelayOptions,
   ) {
-    this.clock = options.clock ?? (() => new Date())
+    if (
+      options.ownerId.length === 0 ||
+      options.ownerId.length > OUTBOX_CLAIM_OWNER_MAX_LENGTH ||
+      options.ownerId.trim() !== options.ownerId
+    ) {
+      throw new Error('ownerId must contain between 1 and 160 characters')
+    }
     this.random = options.random ?? Math.random
     this.batchSize = options.batchSize ?? outboxRelayDefaults.batchSize
     this.leaseMs = options.leaseMs ?? outboxRelayDefaults.leaseMs
@@ -68,35 +74,36 @@ export class OutboxRelay {
   private async publishClaimed(
     message: Awaited<ReturnType<OutboxStorePort['claim']>>[number],
   ): Promise<void> {
-    const now = this.clock()
     try {
-      await this.publisher.publish(message)
+      await this.publisher.publish(
+        createOutboxMessageEnvelope(message.id, message),
+        { redrivePublished: message.redrivePublished },
+      )
       await this.store.markPublished({
         id: message.id,
         claimToken: message.claimToken,
-        publishedAt: now,
       })
     } catch (error: unknown) {
       if (error instanceof OutboxTerminalPublishError) {
         await this.store.block({
           id: message.id,
           claimToken: message.claimToken,
-          errorCode: error.code,
-          blockedAt: now,
+          errorCode: safeErrorCode(
+            error.code,
+            'OUTBOX_TERMINAL_PUBLISH_FAILED',
+          ),
         })
         return
       }
       const errorCode =
         error instanceof OutboxTransientPublishError
-          ? error.code
+          ? safeErrorCode(error.code, 'OUTBOX_PUBLISH_FAILED')
           : 'OUTBOX_PUBLISH_FAILED'
       await this.store.scheduleRetry({
         id: message.id,
         claimToken: message.claimToken,
         errorCode,
-        nextAttemptAt: new Date(
-          now.getTime() + this.retryDelayMs(message.attemptCount),
-        ),
+        retryDelayMs: this.retryDelayMs(message.attemptCount),
       })
     }
   }
@@ -108,4 +115,8 @@ export class OutboxRelay {
     )
     return Math.floor(cap * this.random())
   }
+}
+
+function safeErrorCode(value: string, fallback: string): string {
+  return /^[A-Z][A-Z0-9_]{0,99}$/u.test(value) ? value : fallback
 }
