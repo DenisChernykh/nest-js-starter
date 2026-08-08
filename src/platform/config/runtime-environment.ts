@@ -221,13 +221,6 @@ export function buildPostgresCommandConfig(
   })
 }
 
-/**
- * Builds the minimal configuration projection for one outbox relay process.
- *
- * @param input - Untrusted process environment key/value record.
- * @returns PostgreSQL, queue and service identity settings only.
- * @throws RuntimeConfigurationError with redacted path/rule issues only.
- */
 export function buildOutboxRelayRuntimeConfig(
   input: Record<string, unknown>,
 ): OutboxRelayRuntimeConfig {

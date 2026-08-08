@@ -40,15 +40,18 @@ export class OutboxRelayRunner implements OutboxRelayRunnerPort {
   }
 
   private async waitForCycleWithinGrace(cycle: Promise<void>): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined
     const bounded = await Promise.race([
       cycle.then(
         () => true,
         () => true,
       ),
       new Promise<boolean>((resolve) => {
-        setTimeout(() => resolve(false), this.shutdownGraceMs)
+        timer = setTimeout(() => resolve(false), this.shutdownGraceMs)
       }),
-    ])
+    ]).finally(() => {
+      if (timer !== undefined) clearTimeout(timer)
+    })
     if (!bounded) {
       void cycle.catch(() => undefined)
     }

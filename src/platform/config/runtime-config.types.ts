@@ -163,7 +163,6 @@ export interface PostgresCommandRuntimeConfig {
   readonly database: DatabaseRuntimeConfig
 }
 
-/** Minimal relay projection without HTTP, auth or auth-Redis configuration. */
 export interface OutboxRelayRuntimeConfig {
   readonly environment: RuntimeEnvironment
   readonly logging: LoggingRuntimeConfig
@@ -275,7 +274,6 @@ export interface ValidatedPostgresCommandEnvironment {
   readonly DATABASE_POOL_MAX: number
 }
 
-/** Normalized environment keys accepted by an outbox relay process. */
 export interface ValidatedOutboxRelayEnvironment extends ValidatedPostgresCommandEnvironment {
   readonly REDIS_QUEUE_URL: string
 }

@@ -357,7 +357,6 @@ export const postgresCommandEnvironmentSchema =
     DATABASE_POOL_MAX: databasePoolMax,
   })
 
-/** Validates only deployment inputs owned by a standalone outbox relay. */
 export const outboxRelayEnvironmentSchema =
   Joi.object<ValidatedOutboxRelayEnvironment>({
     NODE_ENV: runtimeMode,
