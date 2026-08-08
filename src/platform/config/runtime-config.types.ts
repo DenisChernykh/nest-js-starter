@@ -163,6 +163,13 @@ export interface PostgresCommandRuntimeConfig {
   readonly database: DatabaseRuntimeConfig
 }
 
+export interface OutboxRelayRuntimeConfig {
+  readonly environment: RuntimeEnvironment
+  readonly logging: LoggingRuntimeConfig
+  readonly database: DatabaseRuntimeConfig
+  readonly queue: QueueRuntimeConfig
+}
+
 /** Injection token for one prevalidated immutable API runtime config. */
 export const APPLICATION_RUNTIME_CONFIG = Symbol('APPLICATION_RUNTIME_CONFIG')
 
@@ -265,4 +272,8 @@ export interface ValidatedPostgresCommandEnvironment {
   readonly SERVICE_REVISION: string
   readonly DATABASE_URL: string
   readonly DATABASE_POOL_MAX: number
+}
+
+export interface ValidatedOutboxRelayEnvironment extends ValidatedPostgresCommandEnvironment {
+  readonly REDIS_QUEUE_URL: string
 }

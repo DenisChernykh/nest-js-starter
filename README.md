@@ -139,6 +139,7 @@ one-shot migrator and gates API startup on its successful exit.
 - `docs/architecture/module-boundaries.md` — five module layers and allowed dependencies;
 - `docs/architecture/runtime-lifecycle.md` — startup, readiness and shutdown;
 - `docs/architecture/durable-jobs.md` — one opt-in BullMQ adoption path;
+- `docs/architecture/transactional-outbox-adoption.md` — atomic database-to-queue adoption, relay and idempotent consumer boundaries;
 - `docs/architecture/openapi-contracts.md` — committed wire contract;
 - `src/platform/queue/README.md` — platform-only queue connection boundary;
 - `docs/runbooks/auth-redis-loss.md` and `docs/runbooks/queue-redis-loss.md` — separate Redis recovery contracts;
@@ -146,6 +147,8 @@ one-shot migrator and gates API startup on its successful exit.
 - `docs/runbooks/production.env.example` — symbolic production input names;
 - `docs/runbooks/self-service-account-lifecycle.md` — enable, local smoke,
   outage/recovery, disable, rollback and frontend fragment handling;
+- `docs/runbooks/transactional-outbox.md` — outbox delivery semantics,
+  diagnostics, redrive, retention and incident recovery;
 - `docs/runbooks/` — local PostgreSQL, Redis loss, telemetry, Compose deployment and image publication.
 
 The core grows only from a concrete consumer and failure model. The BullMQ

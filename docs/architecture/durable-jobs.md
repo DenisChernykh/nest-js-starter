@@ -70,9 +70,14 @@ workflow:
 
 BullMQ delivery state is not product history. A queue may redeliver work after
 worker or Redis recovery, so successful handling must be safe to repeat. A
-product that cannot tolerate a database-to-queue loss window must design and
-operate an outbox rather than assuming `Queue.add` makes the database commit
-atomic.
+product that cannot tolerate a database-to-queue loss window can adopt the
+inert `platform/outbox` kit rather than assuming `Queue.add` makes the database
+commit atomic. Its single-destination, at-least-once and redrive/lease contract
+is documented in [transactional outbox](../runbooks/transactional-outbox.md);
+the step-by-step composition is documented in the
+[transactional outbox adoption guide](transactional-outbox-adoption.md). The
+adopting feature still owns its queue, processor, idempotency and business
+reconciliation.
 
 ## Verification and recovery
 

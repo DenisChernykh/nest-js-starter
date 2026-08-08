@@ -28,24 +28,31 @@ enum ApprovalRequestStatus {
   REJECTED
 }
 
+enum OutboxMessageStatus {
+  PENDING
+  CLAIMED
+  PUBLISHED
+  BLOCKED
+}
+
 model User {
-  id                      String              @id @default(uuid()) @db.Uuid
+  id                      String                  @id @default(uuid()) @db.Uuid
   email                   String
-  normalizedEmail         String              @unique @map("normalized_email")
-  status                  UserStatus          @default(ACTIVE)
-  accountRevision         Int                 @default(0) @map("account_revision")
-  sessionGeneration       BigInt              @default(0) @map("session_generation")
-  createdAt               DateTime            @default(now()) @map("created_at")
-  updatedAt               DateTime            @updatedAt @map("updated_at")
-  emailVerifiedAt         DateTime?           @map("email_verified_at")
-  retiredAt               DateTime?           @map("retired_at")
+  normalizedEmail         String                  @unique @map("normalized_email")
+  status                  UserStatus              @default(ACTIVE)
+  accountRevision         Int                     @default(0) @map("account_revision")
+  sessionGeneration       BigInt                  @default(0) @map("session_generation")
+  createdAt               DateTime                @default(now()) @map("created_at")
+  updatedAt               DateTime                @updatedAt @map("updated_at")
+  emailVerifiedAt         DateTime?               @map("email_verified_at")
+  retiredAt               DateTime?               @map("retired_at")
   credential              PasswordCredential?
   roles                   UserRole[]
   emailVerificationToken  EmailVerificationToken?
   passwordResetToken      PasswordResetToken?
   invitationToken         AccountInvitationToken?
-  createdApprovalRequests ApprovalRequest[]   @relation("ApprovalRequestCreator")
-  decidedApprovalRequests ApprovalRequest[]   @relation("ApprovalRequestDecider")
+  createdApprovalRequests ApprovalRequest[]       @relation("ApprovalRequestCreator")
+  decidedApprovalRequests ApprovalRequest[]       @relation("ApprovalRequestDecider")
 
   @@map("users")
 }
@@ -87,12 +94,12 @@ model EmailVerificationToken {
 }
 
 model PasswordResetToken {
-  userId      String   @id @map("user_id") @db.Uuid
-  tokenDigest String   @unique @map("token_digest") @db.VarChar(43)
-  expiresAt   DateTime @map("expires_at")
-  createdAt   DateTime @map("created_at")
+  userId      String                   @id @map("user_id") @db.Uuid
+  tokenDigest String                   @unique @map("token_digest") @db.VarChar(43)
+  expiresAt   DateTime                 @map("expires_at")
+  createdAt   DateTime                 @map("created_at")
   source      PasswordResetTokenSource @default(SELF_SERVICE)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("password_reset_tokens")
 }
@@ -124,4 +131,32 @@ model AuthSecurityState {
   updatedAt                 DateTime  @updatedAt @map("updated_at")
 
   @@map("auth_security_state")
+}
+
+model OutboxMessage {
+  id            String              @id @db.Uuid
+  destination   String              @db.VarChar(100)
+  type          String              @db.VarChar(120)
+  version       Int
+  partitionKey  String?             @map("partition_key") @db.VarChar(200)
+  correlationId String?             @map("correlation_id") @db.VarChar(200)
+  occurredAt    DateTime            @map("occurred_at")
+  payload       Json
+  payloadSizeBytes Int              @map("payload_size_bytes")
+  status        OutboxMessageStatus @default(PENDING)
+  attemptCount  Int                 @default(0) @map("attempt_count")
+  nextAttemptAt DateTime            @default(now()) @map("next_attempt_at")
+  claimToken    String?             @map("claim_token") @db.Uuid
+  claimedBy     String?             @map("claimed_by") @db.VarChar(160)
+  claimedUntil  DateTime?           @map("claimed_until")
+  publishedAt   DateTime?           @map("published_at")
+  blockedAt     DateTime?           @map("blocked_at")
+  lastErrorCode String?             @map("last_error_code") @db.VarChar(100)
+  redrivePublished Boolean          @default(false) @map("redrive_published")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+
+  @@index([destination, status, nextAttemptAt, claimedUntil])
+  @@index([status, publishedAt])
+  @@map("outbox_messages")
 }

@@ -1,10 +1,15 @@
-import { Module } from '@nestjs/common'
+import { Module, type DynamicModule } from '@nestjs/common'
 
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { TRANSACTION_PORT } from '@/shared/application/transaction.port'
+import type { DatabaseRuntimeConfig } from '@/platform/config/runtime-config.types'
 
-import { DATABASE_LIFECYCLE, DATABASE_READINESS_PROBE } from './database.tokens'
+import {
+  DATABASE_LIFECYCLE,
+  DATABASE_READINESS_PROBE,
+  DATABASE_RUNTIME_CONFIG,
+} from './database.tokens'
 import { PostgresReadinessProbe } from './postgres-readiness.probe'
 import { PrismaClientProvider } from './prisma-client.provider'
 import { PrismaDatabaseLifecycle } from './prisma-database.lifecycle'
@@ -17,16 +22,24 @@ import { PrismaTransactionContext } from './prisma-transaction.context'
 @Module({
   imports: [RuntimeConfigModule],
   providers: [
+    {
+      provide: DATABASE_RUNTIME_CONFIG,
+      inject: [RuntimeConfigService],
+      useFactory: (
+        config: RuntimeConfigService,
+      ): { readonly database: DatabaseRuntimeConfig } =>
+        Object.freeze({ database: config.database }),
+    },
     PrismaClientProvider,
     PrismaDatabaseLifecycle,
     PrismaTransactionContext,
     PrismaTransactionAdapter,
     {
       provide: PostgresReadinessProbe,
-      inject: [PrismaClientProvider, RuntimeConfigService],
+      inject: [PrismaClientProvider, DATABASE_RUNTIME_CONFIG],
       useFactory: (
         provider: PrismaClientProvider,
-        config: RuntimeConfigService,
+        config: { readonly database: DatabaseRuntimeConfig },
       ): PostgresReadinessProbe =>
         new PostgresReadinessProbe(provider, config.database.healthTimeoutMs),
     },
@@ -45,9 +58,22 @@ import { PrismaTransactionContext } from './prisma-transaction.context'
   ],
   exports: [
     PrismaClientProvider,
+    PrismaTransactionContext,
     DATABASE_LIFECYCLE,
     DATABASE_READINESS_PROBE,
     TRANSACTION_PORT,
   ],
 })
-export class DatabaseModule {}
+export class DatabaseModule {
+  public static forRoot(config: DatabaseRuntimeConfig): DynamicModule {
+    return {
+      module: DatabaseModule,
+      providers: [
+        {
+          provide: DATABASE_RUNTIME_CONFIG,
+          useValue: Object.freeze({ database: config }),
+        },
+      ],
+    }
+  }
+}

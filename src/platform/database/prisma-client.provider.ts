@@ -5,11 +5,11 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
 
 import { PrismaClient, type Prisma } from '@/generated/prisma/client'
-import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import type { DatabaseRuntimeConfig } from '@/platform/config/runtime-config.types'
 
 import { runBoundedPostgresQuery } from './bounded-postgres-query'
 import { DatabaseUnavailableError } from './database.contracts'
+import { DATABASE_RUNTIME_CONFIG } from './database.tokens'
 import { PrismaTransactionContext } from './prisma-transaction.context'
 
 type DatabaseState = 'idle' | 'connecting' | 'connected' | 'closing' | 'closed'
@@ -104,7 +104,7 @@ export class PrismaClientProvider {
   }
 
   public constructor(
-    @Inject(RuntimeConfigService)
+    @Inject(DATABASE_RUNTIME_CONFIG)
     config: { readonly database: DatabaseRuntimeConfig },
     @Inject(PrismaTransactionContext)
     @Optional()
