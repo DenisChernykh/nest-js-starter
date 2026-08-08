@@ -49,6 +49,9 @@ describe('runtimeDefaults', () => {
         requestWindowMs: 3_600_000,
         resendCooldownMs: 60_000,
       },
+      accountEmailWorkflows: {
+        invitationTtlMs: 86_400_000,
+      },
     })
     expect(runtimeDefaults.observability).toEqual({
       exporterTimeoutMs: 1_000,

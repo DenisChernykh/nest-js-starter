@@ -1,5 +1,8 @@
 export type PublicAuthOperation =
-  'register' | 'email-verification-resend' | 'password-reset-request'
+  | 'register'
+  | 'email-verification-resend'
+  | 'password-reset-request'
+  | 'invitation-accept'
 
 export interface PublicAuthRateLimiterPort {
   consume(input: {

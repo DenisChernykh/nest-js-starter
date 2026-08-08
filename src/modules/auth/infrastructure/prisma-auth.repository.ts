@@ -10,6 +10,7 @@ import type {
   AccountAdministrationState,
   AdminAccount,
 } from '../application/account-administration.port'
+import type { AccountEmailWorkflowsPort } from '../application/account-email-workflows.port'
 import {
   AccountEtagPreconditionFailedError,
   AccountSelfMutationForbiddenError,
@@ -26,6 +27,7 @@ import type {
   InitialAdminResult,
   UserProvisioningInput,
   ConfirmPasswordResetInput,
+  PasswordResetTokenSource,
   SelfServiceDeliveryTarget,
   SelfServiceRegistrationInput,
   SelfServiceRegistrationResult,
@@ -54,7 +56,10 @@ type AdminAccountRow = Prisma.UserGetPayload<{
 /** Prisma adapter for durable identity, credential and security-state data. */
 @Injectable()
 export class PrismaAuthRepository
-  implements AuthPersistencePort, AccountAdministrationPort
+  implements
+    AuthPersistencePort,
+    AccountAdministrationPort,
+    AccountEmailWorkflowsPort
 {
   public constructor(
     @Inject(PrismaClientProvider)
@@ -371,23 +376,24 @@ export class PrismaAuthRepository
         }
         await client.passwordResetToken.upsert({
           where: { userId: user.id },
-          create: { userId: user.id, ...token },
-          update: token,
+          create: { userId: user.id, ...token, source: 'SELF_SERVICE' },
+          update: { ...token, source: 'SELF_SERVICE' },
         })
         return { userId: user.id, email: user.email }
       }),
     )
   }
 
-  public async isPasswordResetTokenEligible(
+  public async getEligiblePasswordResetTokenSource(
     tokenDigest: string,
     now: Date,
-  ): Promise<boolean> {
+  ): Promise<'self-service' | 'administrator' | undefined> {
     const token = await this.provider.withClient((client) =>
       client.passwordResetToken.findUnique({
         where: { tokenDigest },
         select: {
           expiresAt: true,
+          source: true,
           user: {
             select: {
               status: true,
@@ -398,13 +404,15 @@ export class PrismaAuthRepository
         },
       }),
     )
-    return (
-      token !== null &&
-      token.expiresAt > now &&
-      token.user.status === 'ACTIVE' &&
-      token.user.emailVerifiedAt !== null &&
-      token.user.credential !== null
+    if (
+      token === null ||
+      token.expiresAt <= now ||
+      token.user.status !== 'ACTIVE' ||
+      token.user.emailVerifiedAt === null ||
+      token.user.credential === null
     )
+      return undefined
+    return token.source === 'SELF_SERVICE' ? 'self-service' : 'administrator'
   }
 
   public async confirmPasswordReset(
@@ -414,15 +422,20 @@ export class PrismaAuthRepository
       this.provider.withClient(async (client) => {
         const tokenOwner = await client.passwordResetToken.findUnique({
           where: { tokenDigest: input.tokenDigest },
-          select: { userId: true },
+          select: { userId: true, source: true },
         })
-        if (tokenOwner === null) return undefined
+        if (
+          tokenOwner === null ||
+          tokenOwner.source !== passwordResetSourceToPrisma(input.source)
+        )
+          return undefined
         await lockUser(client, tokenOwner.userId)
         const token = await client.passwordResetToken.findUnique({
           where: { tokenDigest: input.tokenDigest },
           select: {
             userId: true,
             expiresAt: true,
+            source: true,
             user: {
               select: {
                 id: true,
@@ -436,6 +449,7 @@ export class PrismaAuthRepository
         })
         if (
           token === null ||
+          token.source !== passwordResetSourceToPrisma(input.source) ||
           token.expiresAt <= input.now ||
           token.user.status !== 'ACTIVE' ||
           token.user.emailVerifiedAt === null ||
@@ -448,6 +462,7 @@ export class PrismaAuthRepository
             userId: token.userId,
             tokenDigest: input.tokenDigest,
             expiresAt: { gt: input.now },
+            source: passwordResetSourceToPrisma(input.source),
           },
         })
         if (claimed.count !== 1) return undefined
@@ -562,6 +577,9 @@ export class PrismaAuthRepository
           await client.emailVerificationToken.deleteMany({
             where: { userId: input.accountId },
           })
+          await client.accountInvitationToken.deleteMany({
+            where: { userId: input.accountId },
+          })
         }
         return mapAdminAccount(updated)
       }),
@@ -637,6 +655,9 @@ export class PrismaAuthRepository
         await client.passwordResetToken.deleteMany({
           where: { userId: input.accountId },
         })
+        await client.accountInvitationToken.deleteMany({
+          where: { userId: input.accountId },
+        })
         const tombstone = `retired:${input.accountId}`
         await client.user.update({
           where: { id: input.accountId },
@@ -680,6 +701,205 @@ export class PrismaAuthRepository
       }),
     )
   }
+
+  public async createInvitation(
+    input: {
+      readonly email: string
+      readonly normalizedEmail: string
+      readonly roleKeys: readonly string[]
+      readonly actorId: string
+      readonly actorAuthorization: AccountActorAuthorization
+    } & SelfServiceTokenInput,
+  ): Promise<SelfServiceDeliveryTarget | undefined> {
+    try {
+      return await this.transaction.run(() =>
+        this.provider.withClient(async (client) => {
+          await lockUser(client, input.actorId)
+          await assertActorAuthorized(
+            client,
+            input.actorId,
+            input.actorAuthorization,
+          )
+          const user = await client.user.create({
+            data: {
+              email: input.email,
+              normalizedEmail: input.normalizedEmail,
+              status: 'INVITED',
+              roles: { create: input.roleKeys.map((roleKey) => ({ roleKey })) },
+              invitationToken: {
+                create: {
+                  tokenDigest: input.tokenDigest,
+                  expiresAt: input.expiresAt,
+                  createdAt: input.createdAt,
+                },
+              },
+            },
+            select: { id: true, email: true },
+          })
+          return { userId: user.id, email: user.email }
+        }),
+      )
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      )
+        return undefined
+      throw error
+    }
+  }
+
+  public async resendInvitation(input: {
+    readonly actorId: string
+    readonly accountId: string
+    readonly actorAuthorization: AccountActorAuthorization
+    readonly token: SelfServiceTokenInput
+    readonly now: Date
+  }): Promise<SelfServiceDeliveryTarget | undefined> {
+    if (input.token.expiresAt <= input.now) return undefined
+    assertDistinctAccountIds(input.actorId, input.accountId)
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        await lockUsers(client, [input.actorId, input.accountId])
+        await assertActorAuthorized(
+          client,
+          input.actorId,
+          input.actorAuthorization,
+        )
+        const user = await client.user.findUnique({
+          where: { id: input.accountId },
+          select: { id: true, email: true, status: true },
+        })
+        if (user === null || user.status !== 'INVITED') return undefined
+        await client.accountInvitationToken.upsert({
+          where: { userId: input.accountId },
+          create: { userId: input.accountId, ...input.token },
+          update: input.token,
+        })
+        return { userId: user.id, email: user.email }
+      }),
+    )
+  }
+
+  public async rotateAdministratorPasswordReset(input: {
+    readonly actorId: string
+    readonly accountId: string
+    readonly actorAuthorization: AccountActorAuthorization
+    readonly token: SelfServiceTokenInput
+    readonly now: Date
+  }): Promise<SelfServiceDeliveryTarget | undefined> {
+    if (input.token.expiresAt <= input.now) return undefined
+    assertDistinctAccountIds(input.actorId, input.accountId)
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        await lockUsers(client, [input.actorId, input.accountId])
+        await assertActorAuthorized(
+          client,
+          input.actorId,
+          input.actorAuthorization,
+        )
+        const user = await client.user.findUnique({
+          where: { id: input.accountId },
+          select: {
+            id: true,
+            email: true,
+            status: true,
+            emailVerifiedAt: true,
+            credential: { select: { userId: true } },
+          },
+        })
+        if (
+          user === null ||
+          user.status !== 'ACTIVE' ||
+          user.emailVerifiedAt === null ||
+          user.credential === null
+        )
+          return undefined
+        await client.passwordResetToken.upsert({
+          where: { userId: input.accountId },
+          create: {
+            userId: input.accountId,
+            ...input.token,
+            source: 'ADMINISTRATOR',
+          },
+          update: { ...input.token, source: 'ADMINISTRATOR' },
+        })
+        return { userId: user.id, email: user.email }
+      }),
+    )
+  }
+
+  public async acceptInvitation(input: {
+    readonly tokenDigest: string
+    readonly passwordHash: string
+    readonly now: Date
+  }): Promise<boolean> {
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        const owner = await client.accountInvitationToken.findUnique({
+          where: { tokenDigest: input.tokenDigest },
+          select: { userId: true },
+        })
+        if (owner === null) return false
+        await lockUser(client, owner.userId)
+        const token = await client.accountInvitationToken.findUnique({
+          where: { tokenDigest: input.tokenDigest },
+          select: {
+            userId: true,
+            expiresAt: true,
+            user: { select: { status: true } },
+          },
+        })
+        if (
+          token === null ||
+          token.expiresAt <= input.now ||
+          token.user.status !== 'INVITED'
+        )
+          return false
+        const claimed = await client.accountInvitationToken.deleteMany({
+          where: {
+            userId: token.userId,
+            tokenDigest: input.tokenDigest,
+            expiresAt: { gt: input.now },
+          },
+        })
+        if (claimed.count !== 1) return false
+        await client.user.update({
+          where: { id: token.userId },
+          data: {
+            status: 'ACTIVE',
+            emailVerifiedAt: input.now,
+            credential: { create: { passwordHash: input.passwordHash } },
+            accountRevision: { increment: 1 },
+          },
+        })
+        return true
+      }),
+    )
+  }
+
+  public async isInvitationTokenEligible(
+    tokenDigest: string,
+    now: Date,
+  ): Promise<boolean> {
+    const token = await this.provider.withClient((client) =>
+      client.accountInvitationToken.findUnique({
+        where: { tokenDigest },
+        select: {
+          expiresAt: true,
+          user: {
+            select: { status: true, credential: { select: { userId: true } } },
+          },
+        },
+      }),
+    )
+    return (
+      token !== null &&
+      token.expiresAt > now &&
+      token.user.status === 'INVITED' &&
+      token.user.credential === null
+    )
+  }
 }
 
 function mapAdminAccount(row: AdminAccountRow): AdminAccount {
@@ -700,6 +920,12 @@ function accountStateToPrisma(
   state: AccountAdministrationState,
 ): 'INVITED' | 'ACTIVE' | 'DISABLED' | 'RETIRED' {
   return state.toUpperCase() as 'INVITED' | 'ACTIVE' | 'DISABLED' | 'RETIRED'
+}
+
+function passwordResetSourceToPrisma(
+  source: PasswordResetTokenSource,
+): 'SELF_SERVICE' | 'ADMINISTRATOR' {
+  return source === 'self-service' ? 'SELF_SERVICE' : 'ADMINISTRATOR'
 }
 
 function assertAccountRevision(actual: number, expected: number): void {

@@ -91,7 +91,7 @@ describe('offline OpenAPI generation', () => {
     }
   })
 
-  it('documents the account-administration core request contract', async () => {
+  it('documents the complete account-administration request contract', async () => {
     const document = JSON.parse(await generateOpenApiArtifact()) as {
       readonly paths: Readonly<
         Record<
@@ -121,6 +121,10 @@ describe('offline OpenAPI generation', () => {
       document.paths['/v1/admin/auth/accounts/{accountId}']?.['delete']
     const logoutAll =
       document.paths['/v1/admin/auth/accounts/{accountId}/sessions']?.['delete']
+    const invite =
+      document.paths['/v1/admin/auth/account-invitations']?.['post']
+    const accept =
+      document.paths['/v1/auth/account-invitations/accept']?.['post']
 
     expect(list?.parameters?.map(({ name }) => name).sort()).toEqual(
       ['page', 'pageSize', 'search', 'state'].sort(),
@@ -148,6 +152,8 @@ describe('offline OpenAPI generation', () => {
     expect(Object.keys(logoutAll?.responses ?? {})).toEqual(
       expect.arrayContaining(['204', '415']),
     )
+    expect(invite?.requestBody).toBeDefined()
+    expect(accept?.requestBody).toBeDefined()
   })
 
   it('rejects a CLI invocation without an explicit output path', () => {

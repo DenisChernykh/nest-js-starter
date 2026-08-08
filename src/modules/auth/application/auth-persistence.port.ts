@@ -6,6 +6,7 @@ import type {
   UserProvisioningInput,
   CreateUserResult,
   ConfirmPasswordResetInput,
+  PasswordResetTokenSource,
   SelfServiceDeliveryTarget,
   SelfServiceRegistrationInput,
   SelfServiceRegistrationResult,
@@ -54,7 +55,10 @@ export interface AuthPersistencePort {
     token: SelfServiceTokenInput,
     now: Date,
   ): Promise<SelfServiceDeliveryTarget | undefined>
-  isPasswordResetTokenEligible(tokenDigest: string, now: Date): Promise<boolean>
+  getEligiblePasswordResetTokenSource(
+    tokenDigest: string,
+    now: Date,
+  ): Promise<PasswordResetTokenSource | undefined>
   confirmPasswordReset(
     input: ConfirmPasswordResetInput,
   ): Promise<SelfServiceDeliveryTarget | undefined>

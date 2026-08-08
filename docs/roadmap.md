@@ -297,8 +297,8 @@ in the status snapshot above.
 
 ### Milestone 10: account administration
 
-**Status:** PR 1 core is under review; PR 2 email workflows remains pending and
-depends on the core merge. Neither part is delivered on `stage` yet.
+**Status:** PR 1 core is delivered on `stage`; PR 2 email workflows is in
+progress on a dependent feature branch and is not delivered yet.
 
 **Goal:** let an authorized operator inspect and administer auth-owned accounts
 without adding a frontend, hard delete, dynamic role CRUD or product-specific
@@ -332,12 +332,11 @@ profile fields.
   `mailDelivery: delivered|failed` for actual delivery outcomes;
 - immutable active email, with the original address reusable after retirement.
 
-**Exit evidence:** PR 1 requires focused unit tests, PostgreSQL/Redis
-concurrency and cleanup integration, real HTTP auth/CSRF/ETag flows, canonical
-OpenAPI, the core account-administration runbook, `pnpm check:quick`,
-`pnpm check` and `pnpm oci:check`. PR 2 adds invitation/reset/mail failure
-evidence. Delivery still requires both regular PR merges and fresh post-merge
-Stage CI, digest, Trivy and OCI-smoke evidence.
+**Exit evidence:** focused unit tests, PostgreSQL/Redis concurrency and cleanup
+integration, real HTTP auth/CSRF/ETag/invitation/reset flows, canonical OpenAPI,
+the account-administration runbook, `pnpm check:quick`, `pnpm check` and
+`pnpm oci:check`. Delivery still requires both regular PR merges and fresh
+post-merge Stage CI, digest, Trivy and OCI-smoke evidence.
 
 ### Direction-gated product tracks
 

@@ -37,8 +37,11 @@ SMTP is not an API readiness dependency.
 
 Account administration is also disabled by default. Enable
 `AUTH_ACCOUNT_ADMINISTRATION_MODE=enabled` to expose the protected account
-catalogue and lifecycle operations. Operational enablement, lifecycle
-transitions and retirement are documented in the
+catalogue and lifecycle operations. To enable invitations and administrator
+password recovery as well, set `AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE=enabled`
+alongside a valid app origin, CORS origin and SMTP/from values.
+Operational enablement, lifecycle transitions, retirement and SMTP-failure
+handling are documented in the
 [account administration runbook](docs/runbooks/account-administration.md).
 
 BullMQ is intentionally opt-in. The default API receives no `REDIS_QUEUE_URL`

@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
+  IsEmail,
   IsIn,
   IsInt,
   IsOptional,
@@ -12,6 +13,7 @@ import {
   Max,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 
@@ -67,6 +69,37 @@ export class ReplaceAccountRolesRequestDto {
   @IsString({ each: true })
   @Matches(/^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/u, { each: true })
   public roleKeys!: string[]
+}
+
+export class CreateAccountInvitationRequestDto extends ReplaceAccountRolesRequestDto {
+  @ApiProperty({ type: String, format: 'email', maxLength: 254 })
+  @IsEmail()
+  @MaxLength(254)
+  public email!: string
+}
+
+export class AcceptAccountInvitationRequestDto {
+  @ApiProperty({ type: String, minLength: 43, maxLength: 43 })
+  @IsString()
+  @Matches(/^[A-Za-z0-9_-]{43}$/u)
+  @MaxLength(1024)
+  public token!: string
+
+  @ApiProperty({
+    type: String,
+    format: 'password',
+    minLength: 12,
+    maxLength: 1024,
+  })
+  @IsString()
+  @MinLength(12)
+  @MaxLength(1024)
+  public password!: string
+}
+
+export class AccountMailDeliveryResponseDto {
+  @ApiProperty({ enum: ['delivered', 'failed'] })
+  public readonly mailDelivery!: 'delivered' | 'failed'
 }
 
 export class AdminAccountResponseDto {

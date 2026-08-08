@@ -37,6 +37,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
       { migration_name: '20260728210000_approval_requests' },
       { migration_name: '20260806090000_self_service_account_lifecycle' },
       { migration_name: '20260807120000_account_administration_core' },
+      { migration_name: '20260807130000_account_email_workflows' },
     ])
     const tables = await pool.query<{ table_name: string }>(
       `SELECT table_name FROM information_schema.tables
@@ -44,6 +45,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
        ORDER BY table_name`,
     )
     expect(tables.rows).toEqual([
+      { table_name: 'account_invitation_tokens' },
       { table_name: 'approval_requests' },
       { table_name: 'auth_security_state' },
       { table_name: 'email_verification_tokens' },
@@ -51,6 +53,22 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
       { table_name: 'password_reset_tokens' },
       { table_name: 'user_roles' },
       { table_name: 'users' },
+    ])
+    const resetTokenColumns = await pool.query<{
+      column_name: string
+      column_default: string | null
+    }>(
+      `SELECT column_name, column_default
+         FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'password_reset_tokens'
+          AND column_name = 'source'`,
+    )
+    expect(resetTokenColumns.rows).toEqual([
+      {
+        column_name: 'source',
+        column_default: '\'SELF_SERVICE\'::"PasswordResetTokenSource"',
+      },
     ])
     const securityState = await pool.query<{
       id: number
@@ -94,7 +112,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
     const migrations = await pool.query<{ count: string }>(
       'SELECT count(*) FROM _prisma_migrations',
     )
-    expect(migrations.rows[0]?.count).toBe('5')
+    expect(migrations.rows[0]?.count).toBe('6')
   })
 
   it('backfills an existing user when upgrading from the pre-feature schema', async () => {
@@ -139,6 +157,16 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
         readFileSync(
           join(
             migrationRoot,
+            '20260806090000_self_service_account_lifecycle',
+            'migration.sql',
+          ),
+          'utf8',
+        ),
+      )
+      await upgradePool.query(
+        readFileSync(
+          join(
+            migrationRoot,
             '20260807120000_account_administration_core',
             'migration.sql',
           ),
@@ -149,7 +177,7 @@ describe('Prisma migration from an empty PostgreSQL database', () => {
         readFileSync(
           join(
             migrationRoot,
-            '20260806090000_self_service_account_lifecycle',
+            '20260807130000_account_email_workflows',
             'migration.sql',
           ),
           'utf8',

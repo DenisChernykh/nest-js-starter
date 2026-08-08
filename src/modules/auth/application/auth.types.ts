@@ -117,8 +117,11 @@ export interface SelfServiceDeliveryTarget {
   readonly email: string
 }
 
+export type PasswordResetTokenSource = 'self-service' | 'administrator'
+
 export interface ConfirmPasswordResetInput {
   readonly tokenDigest: string
+  readonly source: PasswordResetTokenSource
   readonly now: Date
   readonly passwordHash: string
 }
