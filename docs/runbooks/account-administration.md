@@ -46,10 +46,11 @@ An administrator cannot mutate their own account through these operations.
 
 Ordinary status changes are limited to `ACTIVE ↔ DISABLED`. Invitation
 acceptance is the only path from `INVITED` to `ACTIVE`; retirement is terminal.
-Disabling, retirement, logout-all and password reset increment durable session
-state and best-effort delete Redis sessions. A durable mutation remains
-effective if Redis cleanup fails; inspect the cleanup-incomplete security event
-and repeat logout-all after Redis recovery.
+Disabling, retirement, logout-all and successful password-reset confirmation
+increment durable session state and best-effort delete Redis sessions. Merely
+requesting or sending a reset does not invalidate sessions. A durable mutation
+remains effective if Redis cleanup fails; inspect the cleanup-incomplete
+security event and repeat logout-all after Redis recovery.
 
 ## Invitations and recovery
 
@@ -85,9 +86,12 @@ request; use disablement when temporary access removal is intended.
 Set `AUTH_ACCOUNT_EMAIL_WORKFLOWS_MODE=disabled` first to stop new invitations,
 resends, administrator reset requests and public invitation acceptance. Already
 persisted tokens remain inert while the mode is disabled. Then set
-`AUTH_ACCOUNT_ADMINISTRATION_MODE=disabled` to hide protected administration
-operations. Existing login, cookie, CSRF, self-service and CLI provisioning
-contracts remain available according to their own modes.
+`AUTH_ACCOUNT_ADMINISTRATION_MODE=disabled` to mode-gate protected
+administration operations: after the static authentication and permission
+guards, the disabled policy returns the safe `NOT_FOUND` response. Controllers
+and their OpenAPI operations remain statically registered. Existing login,
+cookie, CSRF, self-service and CLI provisioning contracts remain available
+according to their own modes.
 
 For an SMTP outage, restore SMTP without rolling back PostgreSQL and resend the
 affected invitation or reset. For Redis loss, follow

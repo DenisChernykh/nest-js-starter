@@ -70,5 +70,6 @@ secret-provider | pnpm auth:create-admin -- --email admin@example.com
 
 После успеха запустите API с его полной production-конфигурацией и проверьте
 обычный `POST /v1/auth/login`. Удалять или сбрасывать bootstrap-флаг вручную
-нельзя; создание следующих учётных записей относится к отдельному account
-administration capability.
+нельзя. Для последующего operator provisioning доступна независимая CLI-команда
+`pnpm auth:create-user`; защищённое HTTP account administration и invitations
+остаются отдельными opt-in capabilities.

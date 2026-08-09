@@ -53,8 +53,12 @@ order are independent from the API's auth Redis lifecycle.
 The API composition root uses `requireQueueRuntimeConfig` after the complete
 API configuration has been validated. A standalone worker uses
 `buildQueueWorkerRuntimeConfig` or `createQueueWorkerRuntimeConfig` instead;
-its only required deployment input is `REDIS_QUEUE_URL`, so it does not need
-`DATABASE_URL`, `REDIS_AUTH_URL` or auth secrets.
+this minimal BullMQ projection requires only `REDIS_QUEUE_URL` and does not
+implicitly pull in `DATABASE_URL`, `REDIS_AUTH_URL` or auth secrets. A real
+adopted worker may additionally require PostgreSQL, provider credentials or
+other product settings for its feature use case and authoritative state. Its
+composition root must validate that complete worker-owned configuration before
+creating the application context.
 
 ## Decisions the adopting product must make
 

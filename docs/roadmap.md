@@ -10,13 +10,19 @@ foundation must stay useful without requiring a generator, a starter manifest,
 a recipe engine, speculative Redis capabilities, custom runtime metrics or OCI
 evidence machinery.
 
+[`docs/capability-catalog.md`](capability-catalog.md) records the wider space of
+available and candidate capabilities, their consumers, failure models and
+dependencies. An entry in that catalog is not a roadmap commitment; this
+document remains the source of truth for selected delivery order and evidence.
+
 ## Status snapshot
 
 The implementation baseline summarized by this roadmap is the remote `stage`
-branch at `815309896299d48cb9d733b9db65c8a72a70910b` on 2026-08-08, after
-account email workflows PR #40 merged. The opinionated production constructor,
-the maintained `approval-requests` reference and delivered account lifecycle
-and administration are present on that baseline.
+branch at `c88dcf5ec4b6ae8a8849abbf23744d335eaed377` on 2026-08-08, after the
+transactional outbox foundation PR #41 merged. The opinionated production
+constructor, the maintained `approval-requests` reference, delivered account
+lifecycle and administration, and the opt-in outbox kit are present on that
+baseline.
 
 - PR [#13](https://github.com/DenisChernykh/nest-js-starter/pull/13)
   simplified the runtime, tooling, test and OCI boundaries while preserving the
@@ -31,14 +37,16 @@ and administration are present on that baseline.
 - PR [#39](https://github.com/DenisChernykh/nest-js-starter/pull/39) and PR
   [#40](https://github.com/DenisChernykh/nest-js-starter/pull/40) delivered
   account administration, invitations and recovery email workflows.
+- PR [#41](https://github.com/DenisChernykh/nest-js-starter/pull/41) delivered
+  the opt-in transactional PostgreSQL outbox and BullMQ relay foundation.
 - The
-  [Stage image run for `8153098`](https://github.com/DenisChernykh/nest-js-starter/actions/runs/31247960751)
-  completed successfully after that merge. Its published-image, Trivy and OCI
-  evidence applies only to that revision, not to later feature branches.
+  [Stage image run for `c88dcf5`](https://github.com/DenisChernykh/nest-js-starter/actions/runs/31265993618)
+  completed successfully after the outbox merge. Its published-image, Trivy,
+  immutable-pull and OCI smoke evidence applies to that exact revision.
 
-This snapshot records repository, CI and published-image evidence for the
-stated revision. Hosted SMTP, DNS, secrets, deployment and recovery-drill
-verification remain unperformed and must not be inferred from those results.
+This snapshot records repository, CI and published-image evidence for
+`c88dcf5`. Hosted SMTP, DNS, secrets, deployment and recovery-drill verification
+remain unperformed and must not be inferred from those results.
 
 ## North star: opinionated production constructor
 
@@ -194,7 +202,9 @@ application core.
 
 ## Milestone 8: clean-copy certification
 
-**Status:** pending. No Git-free clean-copy certification run is recorded.
+**Status:** pending and currently blocked. No Git-free clean-copy certification
+run is recorded, and `pnpm check` still runs a deployment-docs unit suite that
+uses `git grep` and `git show` against historical repository state.
 
 **Goal:** prove that the core is reusable after the historical generator,
 manifest, golden fixtures and custom certification engine have been removed.
@@ -203,6 +213,8 @@ manifest, golden fixtures and custom certification engine have been removed.
 
 - a customization checklist covering service identity, origins, secrets,
   database/Redis URLs, image coordinates and initial admin creation;
+- Git-independent deployment-docs contract assertions that preserve the
+  semantic safety checks without reading a historical commit;
 - a Git-free smoke procedure that uses existing package scripts instead of a
   new doctor framework;
 - a documentation audit linking every supported runtime, security, OpenAPI,
@@ -307,8 +319,8 @@ operator provisioning flows.
 - enable, local smoke, outage/recovery, disable, rollback and frontend fragment
   procedures are in `docs/runbooks/self-service-account-lifecycle.md`.
 
-The exact aggregate test counts, published digest and OCI evidence are recorded
-in the status snapshot above.
+The status snapshot above links the revision-specific CI and image run; volatile
+aggregate counts and digest values are not duplicated in this roadmap.
 
 ### Milestone 10: account administration
 

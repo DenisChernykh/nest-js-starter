@@ -1,19 +1,20 @@
 # Runtime configuration
 
-`RuntimeConfigModule` validates the environment while the Nest composition root
-is created. Invalid input stops startup before external resources are opened.
+`createApiRuntimeConfig()` validates and normalizes the API process environment
+before Nest is created or external resources are opened. `RuntimeConfigModule`
+binds that complete prevalidated immutable configuration.
 
-Application code consumes only the typed `environment`, `http` and `database`
-groups exposed by `RuntimeConfigService`. Startup logging uses `safeSummary`,
-which intentionally omits `DATABASE_URL` and every raw secret value.
+Composition code consumes the typed `environment`, `logging`, `observability`,
+`docs`, `http`, `database`, `redis` and `auth` groups exposed by
+`RuntimeConfigService`. `safeSummary` is an available non-secret diagnostic
+projection; the current API bootstrap does not emit it.
 
 `PUBLIC_API_URL` and every CORS entry are exact origins. Paths, credentials,
 queries, fragments and wildcard origins are rejected. `TRUST_PROXY_CIDRS` is an
 explicit IP/CIDR allowlist; production rejects an empty list and HTTP origins.
 
-Capabilities introduced by later starter slices add configuration keys only
-when their behavior is enabled. This slice intentionally has no auth, Redis,
-logging, observability or API documentation settings.
+Standalone PostgreSQL commands, queue workers and the outbox relay use narrower
+process-specific configuration projections.
 
 `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_PORT` in
 `.env.example` belong only to local Compose. Runtime validation ignores them;

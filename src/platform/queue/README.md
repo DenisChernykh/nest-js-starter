@@ -10,8 +10,11 @@ worker executable.
   composition root asks for queue configuration. The default API never asks for
   it.
 - `buildQueueWorkerRuntimeConfig` and `createQueueWorkerRuntimeConfig` validate
-  the minimal standalone-worker environment; a worker needs only
-  `REDIS_QUEUE_URL`, not database, auth Redis or auth-secret settings.
+  the minimal BullMQ projection for a standalone worker. That projection needs
+  only `REDIS_QUEUE_URL` and does not implicitly require database, auth Redis or
+  auth-secret settings. A real adopted worker may also need database, provider
+  or other product configuration; its composition root must validate that
+  complete worker-owned environment separately.
 - `BullmqConnectionModule.forProducer` and `.forWorker` create exactly one
   root BullMQ connection with their respective retry policies. Neither method
   registers a queue or declares a processor.
