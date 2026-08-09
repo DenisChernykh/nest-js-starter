@@ -1,8 +1,9 @@
 # nest-js-starter
 
 Reusable NestJS production foundation with PostgreSQL, one auth Redis
-connection, an opt-in BullMQ connection foundation, cookie-based auth/RBAC,
-RFC 9457 errors, protected Swagger and trace-only OpenTelemetry.
+connection, opt-in BullMQ/outbox foundations, a process-local periodic
+maintenance Kit, cookie-based auth/RBAC, RFC 9457 errors, protected Swagger and
+trace-only OpenTelemetry.
 
 ## Local workflow
 
@@ -141,6 +142,7 @@ one-shot migrator and gates API startup on its successful exit.
 - `docs/architecture/runtime-lifecycle.md` — startup, readiness and shutdown;
 - `docs/architecture/durable-jobs.md` — one opt-in BullMQ adoption path;
 - `docs/architecture/transactional-outbox-adoption.md` — atomic database-to-queue adoption, relay and idempotent consumer boundaries;
+- `docs/architecture/periodic-maintenance.md` — process-local maintenance sequencing, shutdown and recovery boundaries;
 - `docs/architecture/openapi-contracts.md` — committed wire contract;
 - `src/platform/queue/README.md` — platform-only queue connection boundary;
 - `docs/runbooks/auth-redis-loss.md` and `docs/runbooks/queue-redis-loss.md` — separate Redis recovery contracts;
@@ -153,9 +155,10 @@ one-shot migrator and gates API startup on its successful exit.
 - `docs/runbooks/` — local PostgreSQL, Redis loss, telemetry, Compose deployment and image publication.
 
 The core grows only from a concrete consumer and failure model. The BullMQ
-platform boundary is available for a product adoption, but it does not supply a
-product queue, worker, payload or retry policy. Object storage and frontend
-cache invalidation remain independent candidates; none justify a generator,
+platform boundary does not supply a product queue, worker, payload or retry
+policy. The periodic maintenance Kit does not supply durable scheduling,
+retries or distributed ownership. Object storage and frontend cache
+invalidation remain independent candidates; none justify a generator,
 manifest, recipe engine or global Redis/cache service.
 
 Feature branches start from `stage`, use Conventional Commits and merge to

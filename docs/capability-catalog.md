@@ -108,6 +108,7 @@ Reference — default-disabled или production-wired.
 | Account invitations и administrator-triggered recovery                                                                       | Available | Reference | Отдельный default-disabled auth vertical; требует включённого account administration          |
 | BullMQ connection, readiness и worker lifecycle                                                                              | Available | Kit       | Нет product queue, payload, processor или worker executable                                   |
 | Transactional PostgreSQL outbox и BullMQ relay                                                                               | Available | Kit       | Нет product event catalog, consumer или exactly-once гарантии                                 |
+| Bounded non-overlapping periodic maintenance runner                                                                          | Available | Kit       | Process-local lifecycle; нет durable schedule, retries или distributed lock                   |
 | Production Compose, Caddy handoff, rollback и database-role preparation                                                      | Available | Core      | Ручной operations path; hosted environment остаётся внешним                                   |
 | PostgreSQL backup и isolated restore procedure                                                                               | Available | Core      | Repository владеет безопасным operations contract; его исполнение environment-owned           |
 | `approval-requests`                                                                                                          | Available | Reference | Production-wired вертикаль, а не generic CRUD; удаление затрагивает root composition и Prisma |
@@ -115,7 +116,8 @@ Reference — default-disabled или production-wired.
 Основные реализованные контракты описаны в
 [`foundation-scope.md`](architecture/foundation-scope.md),
 [`durable-jobs.md`](architecture/durable-jobs.md),
-[`transactional-outbox-adoption.md`](architecture/transactional-outbox-adoption.md)
+[`transactional-outbox-adoption.md`](architecture/transactional-outbox-adoption.md),
+[`periodic-maintenance.md`](architecture/periodic-maintenance.md)
 и [`src/modules/README.md`](../src/modules/README.md).
 
 ## Карта категорий
@@ -1396,35 +1398,38 @@ shared persistence/recovery contract. Import/export operations remain category
 ### `REL-03`. Bounded non-overlapping periodic maintenance runner
 
 - **Entry kind:** Capability.
-- **Catalog status:** Validated candidate.
-- **What already exists:** `OutboxRelayRunner` already has sequential polling,
-  abortable wait and bounded active-cycle shutdown. Similar product-local loops
-  exist in Gift Bot maintenance and Amazing EKB dispatch/lease recovery.
-- **What could be added:** tiny process-local runner around injected
-  `runOnce(signal)`: optional run-on-start, fixed delay, no overlap, abortable
-  idle wait, stop admission, bounded drain and safe typed cycle observer.
+- **Catalog status:** Available on this feature branch; not yet delivered to
+  `stage`.
+- **What already exists:** framework-free `PeriodicMaintenanceRunner` around an
+  injected task with optional run-on-start, fixed delay, no overlap, abortable
+  idle wait, stop admission, bounded drain and a safe typed observer.
+- **What could be added:** only explicit product adoption around module-owned
+  work; the Kit itself needs no scheduler, retry or persistence expansion.
 - **Named consumer:** current `OutboxRelayRunner`, Gift Bot
   due-draw/sync/notification maintenance and Amazing EKB import dispatch/lease
   recovery. Outbox retention is only a prospective manual adopter; it is not a
   scheduled runtime today.
 - **Failure model:** overlapping ticks duplicate work, drift/missed deadline,
-  shutdown admits a new cycle, rejected promise silently disables future ticks
-  and multi-replica processes mistake an in-memory flag for distributed lock.
+  shutdown admits a new cycle, an unobserved rejection silently disables future
+  ticks and multi-replica processes mistake an in-memory flag for distributed
+  lock.
 - **Form:** Kit.
-- **Required dependencies:** Core lifecycle, clock/timer and safe logging —
+- **Required dependencies:** `AbortSignal` lifecycle and Node timer primitives —
   Available.
 - **Conditional dependencies:** product-owned durable due state, idempotency and
   fencing for crash recovery or multiple replicas.
-- **Blocked by:** exact narrow contract must stay free of work/schedule policy;
-  no consumer blocker exists.
+- **Blocked by:** none for the Kit; adoption still needs a process owner and
+  module-owned recovery policy.
 - **Unlocks:** reusable product maintenance loops and a future explicit wiring
   of outbox retention without claiming that wiring already exists.
-- **Priority:** P1; strongest new category-4 candidate.
+- **Priority:** P1 selected; implemented on the feature branch.
 - **Reasons to defer / non-goals:** no persisted schedule table, cron parser,
-  distributed singleton, retry classifier, queue or product task state; existing
-  outbox runner need not be refactored before an adopter uses the boundary.
-- **Evidence:** [`outbox-relay-runner.ts`](../src/platform/outbox/outbox-relay-runner.ts)
-  and its unit tests plus Gift Bot and Amazing EKB maintenance loops.
+  distributed singleton, retry classifier, queue or product task state.
+- **Evidence:** [`periodic-maintenance-runner.ts`](../src/platform/maintenance/periodic-maintenance-runner.ts),
+  its focused unit suite, the adopting
+  [`outbox-relay-runner.ts`](../src/platform/outbox/outbox-relay-runner.ts),
+  [adoption guide](architecture/periodic-maintenance.md) and the independent
+  Gift Bot/Amazing EKB product-local loops.
 
 ### `REL-04`. Database-effect processed-message receipt
 
@@ -1554,9 +1559,10 @@ Core lifecycle                       -> REL-03
 REL-03 + product durable due state   -> recoverable periodic work
 ```
 
-`REL-03` is the only new P1. A periodic runner invokes work but never provides
-distributed ownership by itself. `REL-04/05` wait for consumers; `REL-06/07`
-record explicitly rejected generic abstractions.
+`REL-03` is Available in this feature branch but is not delivered to `stage`
+until its pull request merges. It invokes work but never provides distributed
+ownership by itself. `REL-04/05` wait for consumers; `REL-06/07` record
+explicitly rejected generic abstractions.
 
 ## 5. Интеграции и синхронизация
 

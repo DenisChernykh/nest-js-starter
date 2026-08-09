@@ -110,4 +110,6 @@ Abort the reusable relay runner first. It stops poll waits immediately and
 waits at most its bounded shutdown grace for an active publish cycle. A cycle
 that outlives that grace is left for lease recovery; do not force its row to a
 terminal state. Close PostgreSQL and BullMQ only after that process-level grace
-decision.
+decision. These process-local mechanics come from the
+[periodic maintenance Kit](../architecture/periodic-maintenance.md); abort does
+not cancel an outbox lease or replace claim-token recovery.

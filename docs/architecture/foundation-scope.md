@@ -2,7 +2,8 @@
 
 This starter keeps a small production boundary: configuration, PostgreSQL,
 auth Redis, HTTP lifecycle/health, auth/RBAC, structured logging,
-trace-only OpenTelemetry and opt-in BullMQ and transactional-outbox foundations.
+trace-only OpenTelemetry and opt-in BullMQ, transactional-outbox and periodic
+maintenance foundations.
 The five local module layers remain `domain`, `application`, `infrastructure`,
 `presentation` and `composition`; their boundaries are documented in
 `module-boundaries.md`.
@@ -40,6 +41,13 @@ composition and defines no product event types, destinations, consumers,
 fan-out or exactly-once guarantee. The adopting module owns message
 versioning/payload and consumer idempotency through the contract in
 `transactional-outbox-adoption.md`.
+
+The periodic maintenance layer is a framework-free, process-local sequencing
+Kit. It runs one injected task at a time, waits after successful settlement and
+supports abortable idle waits plus bounded active-cycle drain. It adds no Nest
+module, timer, daemon, environment input or default composition by itself. It
+does not provide cron, durable schedules, retries or distributed ownership;
+adopters retain those policies under `periodic-maintenance.md`.
 
 `approval-requests` is the production-wired maintained vertical reference, not
 universal foundation and not a generic CRUD abstraction. It demonstrates an
