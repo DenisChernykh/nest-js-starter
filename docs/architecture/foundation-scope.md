@@ -2,18 +2,21 @@
 
 This starter keeps a small production boundary: configuration, PostgreSQL,
 auth Redis, HTTP lifecycle/health, auth/RBAC, structured logging,
-trace-only OpenTelemetry and an opt-in BullMQ connection foundation. The five local module layers remain
-`domain`, `application`, `infrastructure`, `presentation` and `composition`;
-their boundaries are documented in `module-boundaries.md`.
+trace-only OpenTelemetry and opt-in BullMQ and transactional-outbox foundations.
+The five local module layers remain `domain`, `application`, `infrastructure`,
+`presentation` and `composition`; their boundaries are documented in
+`module-boundaries.md`.
 
 Runtime defaults live in one typed immutable `runtime-defaults.ts` object.
 Deployment environment variables describe connectivity, public URLs, process
 identity and four auth secrets; internal deadlines and tuning stay in code.
 
 The repository gate uses Prettier, Prisma, non-mutating OpenAPI drift/lint,
-ESLint, TypeScript 6.0.2, unit tests, standard dependency-cruiser and the
-compiled build. Integration and e2e suites are added by `check`; OCI smoke is
-separate and runs during stage publication.
+ESLint, the TypeScript 7.0.2 production compiler, unit tests, standard
+dependency-cruiser and the compiled build. The exact TypeScript 6 alias remains
+available only to tooling that still requires its API or CLI. Integration and
+e2e suites are added by `check`; OCI smoke is separate and runs during stage
+publication.
 
 The foundation intentionally excludes a generator/manifest system, generic
 cache or pub/sub services, product queues, object storage, runtime metrics and
@@ -30,6 +33,14 @@ worker bootstrap in the starter. The default API does not import it. A copied
 product owns those additions through the adoption contract in
 `durable-jobs.md`.
 
+The optional outbox layer atomically appends broker-neutral messages inside a
+PostgreSQL business transaction and provides claim/lease/retry/recovery relay
+mechanics plus a BullMQ publisher adapter. It remains outside the default API
+composition and defines no product event types, destinations, consumers,
+fan-out or exactly-once guarantee. The adopting module owns message
+versioning/payload and consumer idempotency through the contract in
+`transactional-outbox-adoption.md`.
+
 `approval-requests` is the production-wired maintained vertical reference, not
 universal foundation and not a generic CRUD abstraction. It demonstrates an
 authenticated create/get/decision workflow across all five module-local
@@ -45,6 +56,8 @@ documented in `docs/runbooks/self-service-account-lifecycle.md`; external
 identity, notification-center and product-specific delivery remain absent
 until a concrete consumer and failure model exists.
 
-`docs/roadmap.md` is the canonical source for remaining deployment/recovery
-work and optional capability adoption. Product repositories may provide proven
-patterns, but they do not define starter scope.
+`docs/capability-catalog.md` records the wider inventory of available and
+candidate capabilities, while `docs/roadmap.md` remains the canonical source
+for selected delivery order and remaining deployment/recovery work. Product
+repositories may provide proven patterns, but they do not define starter
+scope.

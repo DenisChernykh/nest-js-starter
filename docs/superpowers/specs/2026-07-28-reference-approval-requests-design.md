@@ -376,7 +376,7 @@ Repository и use case обязаны различать:
 Различение выполняется без утечки persistence messages в HTTP.
 
 Для команды решения применяется порядок: загрузить запрос, проверить
-self-decision, проверить terminal state, затем выполнить compare-and-set.
+terminal state, затем проверить self-decision и выполнить compare-and-set.
 Проигравший конкурентный compare-and-set перечитывает состояние и возвращает
 already-decided conflict.
 

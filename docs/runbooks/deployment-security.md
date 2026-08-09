@@ -59,7 +59,7 @@ REDIS_PASSWORD through environment, writes a mode-0600 config under the
 mode-0700 noexec/nosuid/nodev /run/redis tmpfs, and execs redis-server from that
 config. The resolved Compose command contains only the variable reference.
 
-## Atomic rotation and recovery order
+## Planned rotation and incident recovery order
 
 Prepare a new protected file beside the existing one, validate its mode and
 syntax, then atomically replace the path:
@@ -69,17 +69,21 @@ syntax, then atomically replace the path:
     mv -f /opt/nest-js-starter/.env.next /opt/nest-js-starter/.env
     stat -c '%a %n' /opt/nest-js-starter/.env
 
-Rotate one secret class at a time. This per-secret recreation order retains only the old non-secret release
-identifier, never the old complete environment:
+For a planned rotation with a known, non-compromise scope, rotate one secret
+class at a time. This per-secret recreation order retains only the old
+non-secret release identifier, never the old complete environment:
 
 1. GHCR: use a mode-0700 transient DOCKER_CONFIG, login with password-stdin,
    pull and run production-preflight.sh, then logout and remove that directory.
    On failure, retain the old deployment and discard only the temporary client
    state.
-2. Auth: replace one of the four 32-byte encodings, recreate only API with the
-   canonical Compose prefix and verify public live/ready plus expected auth
-   boundaries. A failed smoke restores the previous single value atomically;
-   sessions are expected to be invalidated when the session key changes.
+2. Auth: stop and remove every API replica from traffic, replace one of the four
+   32-byte encodings, recreate all API processes with one consistent
+   configuration revision and verify public live/ready plus expected auth
+   boundaries. A failed planned-rotation smoke may restore the previous
+   confirmed-uncompromised single value atomically; sessions are expected to be
+   invalidated when the session key changes. Never run replicas with different
+   auth-secret revisions.
 3. Redis: rotate REDIS_PASSWORD, recreate auth Redis and API with the canonical
    prefix, verify readiness and session/limit behavior, and restore the old
    value atomically if bounded verification fails. Persistent Redis data is not
@@ -89,6 +93,12 @@ identifier, never the old complete environment:
    intended ownership/privileges, then recreate only the process that owns the
    changed credential. Restore the previous role password and environment value
    in the reverse order if verification fails; never merge the roles.
+
+Suspected exposure is not a planned rotation. Follow
+[`session-secret-compromise.md`](session-secret-compromise.md): if the affected
+scope is unknown, rotate all four auth secrets as one coordinated bundle, keep
+all API replicas out of traffic until they use that revision and never restore
+a suspected old value merely to recover sessions.
 
 Each recreation is explicit and bounded:
 

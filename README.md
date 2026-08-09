@@ -107,7 +107,7 @@ pnpm oci:check
 ```
 
 `check:quick` runs formatting, Prisma validation/generation, non-mutating
-OpenAPI drift and lint, ESLint, TypeScript 6.0.2, unit tests,
+OpenAPI drift and lint, ESLint, the TypeScript 7.0.2 production compiler, unit tests,
 dependency-cruiser and the compiled build. `check` adds PostgreSQL/Redis
 integration and e2e suites. Docker smoke is separate because it needs a
 running Docker daemon.
@@ -135,6 +135,7 @@ one-shot migrator and gates API startup on its successful exit.
 
 ## Repository guide
 
+- `docs/capability-catalog.md` — inventory of available and candidate capabilities, their consumers, failure models and dependencies;
 - `docs/roadmap.md` — accepted foundation, remaining operational milestones and capability adoption rules;
 - `docs/architecture/module-boundaries.md` — five module layers and allowed dependencies;
 - `docs/architecture/runtime-lifecycle.md` — startup, readiness and shutdown;

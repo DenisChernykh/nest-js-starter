@@ -32,12 +32,14 @@ Every response also contains `instance`, `requestId`, and the stable fields
 `errors`; each item contains an RFC 6901 `pointer`, finite client `code`, and
 constant `detail`. Rejected values and validator messages are never returned.
 
-The response-conformance gate keeps this table, the composed
-`HttpProblemRegistry` definitions exposed by `API_PROBLEM_CATALOG`, and the
-exact `ProblemResponseDto.code` OpenAPI enum in lockstep. A problem code absent
-from any one of these sources fails the full verification suite.
+The response-conformance gate keeps the composed `HttpProblemRegistry`
+definitions exposed by `API_PROBLEM_CATALOG` and the exact
+`ProblemResponseDto.code` OpenAPI enum in lockstep. It also asserts that every
+registered type URI and code appears in this Markdown document; it does not
+parse the table to reject additional stale rows.
 
-`openapi:conformance` also exercises representative real responses for
+`test/e2e/openapi/openapi-problem-conformance.e2e.spec.ts`, executed as part of
+`pnpm check`, exercises representative real responses for
 400/401/403/404/413/415/422/429/500/503 and requires the exact
 `application/problem+json` media type before validating each body against the
 committed component schema. Contract ownership and update workflow are defined

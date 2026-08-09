@@ -20,12 +20,15 @@ Lua scripts create/touch/revoke keys and TTLs atomically without runtime `KEYS`.
 
 ## Browser boundary
 
-Authentication is default-on. Health, login and the five opt-in self-service
-account lifecycle operations are public. Self-service is disabled unless
-`AUTH_SELF_SERVICE_MODE=open`; disabled mode maps those operations to the
-existing `NOT_FOUND` problem. Production uses `__Host-session; Secure; HttpOnly;
-SameSite=Lax; Path=/` without `Domain`; development uses a non-secure
-starter-specific name.
+Authentication is default-on. Health, login, the five self-service account
+lifecycle operations and invitation acceptance are statically public endpoints.
+Feature policy decides whether an optional operation executes:
+`AUTH_SELF_SERVICE_MODE=open` enables the five self-service operations, while
+invitation acceptance belongs to the separate account-email-workflows policy.
+All routes remain registered and present in OpenAPI; a disabled policy maps its
+optional use case to the existing `NOT_FOUND` problem. Production uses
+`__Host-session; Secure; HttpOnly; SameSite=Lax; Path=/` without `Domain`;
+development uses a non-secure starter-specific name.
 
 Unsafe requests require all of:
 
