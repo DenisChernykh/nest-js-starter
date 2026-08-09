@@ -466,6 +466,39 @@ describe('PeriodicMaintenanceRunner', () => {
     expect(observer).toHaveBeenCalledTimes(2)
   })
 
+  it('suppresses a rejected Promise returned by the observer', async () => {
+    const controller = new AbortController()
+    const observerError = new Error('asynchronous observer failure')
+    const unhandledRejections: unknown[] = []
+    const onUnhandledRejection = (error: unknown): void => {
+      unhandledRejections.push(error)
+    }
+    process.on('unhandledRejection', onUnhandledRejection)
+
+    try {
+      const runner = new PeriodicMaintenanceRunner(
+        () => {
+          controller.abort()
+          return Promise.resolve()
+        },
+        {
+          delayMs: 1_000,
+          shutdownGraceMs: 100,
+          // TypeScript allows a Promise-returning callback at a void boundary.
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises
+          observer: () => Promise.reject(observerError),
+        },
+      )
+
+      await expect(runner.run(controller.signal)).resolves.toBeUndefined()
+      await new Promise<void>((resolve) => setImmediate(resolve))
+
+      expect(unhandledRejections).not.toContain(observerError)
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection)
+    }
+  })
+
   it('emits only the grace event when a detached cycle rejects later', async () => {
     jest.useFakeTimers()
     let rejectCycle: ((error: Error) => void) | undefined

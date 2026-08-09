@@ -163,8 +163,10 @@ export class PeriodicMaintenanceRunner {
   }
 
   private emit(event: PeriodicMaintenanceEvent): void {
+    if (this.observer === undefined) return
     try {
-      this.observer?.(event)
+      const result: unknown = this.observer(event)
+      void Promise.resolve(result).catch(() => undefined)
     } catch {
       // Telemetry must not change the task or shutdown outcome.
     }
