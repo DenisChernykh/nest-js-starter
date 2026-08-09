@@ -172,8 +172,11 @@ The executable creates a Nest application context, obtains
 `OUTBOX_RELAY_RUNNER` and calls `runner.run(abortController.signal)`. On
 `SIGINT` or `SIGTERM`, abort the runner first, await its bounded shutdown, and
 only then close the Nest context. Treat an unexpected `run()` rejection as a
-process failure. The starter deliberately does not register this process in the
-default package scripts, image command or Compose file.
+process failure. `OutboxRelayRunner` delegates only this process-local sequence
+to the shared [periodic maintenance Kit](periodic-maintenance.md); its token,
+constructor defaults and outbox policy remain unchanged. The starter
+deliberately does not register this process in the default package scripts,
+image command or Compose file.
 
 The relay defaults are a 50-message batch, one-second polling and a 30-second
 lease. It releases database locks before calling BullMQ. Retryable publication
@@ -246,7 +249,9 @@ redrive requires `allowDuplicate: true` because delivery may happen again.
 
 Run the exported `OUTBOX_RETENTION_CLEANUP` from an operator-owned periodic
 lifecycle. One invocation deletes at most 500 `PUBLISHED` rows older than seven
-days. It never deletes `BLOCKED` rows.
+days. It never deletes `BLOCKED` rows. A product may wrap `runOnce()` in a
+separate `PeriodicMaintenanceRunner`, but it must choose the interval and
+process owner explicitly; the starter does not schedule retention by default.
 
 ## Adoption proof
 
