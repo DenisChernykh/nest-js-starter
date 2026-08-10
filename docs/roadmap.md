@@ -152,13 +152,12 @@ scope. The adoption and recovery contract is
 
 ## Optional bounded outbound HTTP platform foundation
 
-`INT-01` is implemented only on `feat/bounded-outbound-http-runner`; it is not
-part of `stage` until its pull request merges. The framework-free,
-inert-by-default Kit bounds one explicit native-fetch attempt with a required
-caller signal, timeout through response-body handling and either ignored or
-`buffer(maxBytes)` response data. Its runner adds one absolute deadline, finite
-attempt budget, abortable classifier-selected retry delay, typed outcomes and
-durations, and an isolated safe-metadata observer.
+`INT-01` is available on `stage` after PR #44 at merge commit `a0c8e80`. The
+framework-free, inert-by-default Kit bounds one explicit native-fetch attempt
+with a required caller signal, timeout through response-body handling and either
+ignored or `buffer(maxBytes)` response data. Its runner adds one absolute
+deadline, finite attempt budget, abortable classifier-selected retry delay,
+typed outcomes and durations, and an isolated safe-metadata observer.
 
 The Kit adds no Nest module, environment input, dependency, global
 `HttpService`, provider SDK, automatic status policy, persistence or default
@@ -169,7 +168,7 @@ durable state, reconciliation and restart recovery. The adoption, failure and
 removal contract is `docs/architecture/bounded-outbound-http.md`.
 
 Amazing EKB cache revalidation and the Threads follower snapshot are unchanged
-evidence scenarios only. This feature branch does not modify or adopt either
+evidence scenarios only. The delivered Kit does not modify or adopt either
 external product.
 
 ## Roadmap rules

@@ -109,7 +109,7 @@ Reference — default-disabled или production-wired.
 | BullMQ connection, readiness и worker lifecycle                                                                              | Available | Kit       | Нет product queue, payload, processor или worker executable                                   |
 | Transactional PostgreSQL outbox и BullMQ relay                                                                               | Available | Kit       | Нет product event catalog, consumer или exactly-once гарантии                                 |
 | Bounded non-overlapping periodic maintenance runner                                                                          | Available | Kit       | Process-local lifecycle; нет durable schedule, retries или distributed lock                   |
-| `INT-01` bounded native-fetch attempt и classifier-owned retry runner                                                        | Available | Kit       | Только feature branch; нет provider/status/idempotency или durable policy                     |
+| `INT-01` bounded native-fetch attempt и classifier-owned retry runner                                                        | Available | Kit       | Нет provider/status/idempotency или durable policy                                            |
 | Production Compose, Caddy handoff, rollback и database-role preparation                                                      | Available | Core      | Ручной operations path; hosted environment остаётся внешним                                   |
 | PostgreSQL backup и isolated restore procedure                                                                               | Available | Core      | Repository владеет безопасным operations contract; его исполнение environment-owned           |
 | `approval-requests`                                                                                                          | Available | Reference | Production-wired вертикаль, а не generic CRUD; удаление затрагивает root composition и Prisma |
@@ -1576,7 +1576,7 @@ abstractions.
 - Outbox Kit атомарно сохраняет сообщение вместе с PostgreSQL business
   transaction и публикует его через отдельный relay с at-least-once delivery.
 - Auth/RBAC доступны для защищённых operator и integration endpoints.
-- `INT-01` bounded outbound HTTP Kit доступен только в текущей feature branch;
+- `INT-01` bounded outbound HTTP Kit доступен в `stage`;
   provider adapters, inbound webhook и connector modules в starter отсутствуют.
 
 `INT-02` рассматривается здесь как lifecycle входящей интеграции. Если несколько
@@ -1586,8 +1586,8 @@ providers докажут одинаковую product-neutral persistence/recove
 ### `INT-01`. Bounded outbound HTTP attempt runner
 
 - **Entry kind:** Capability.
-- **Catalog status:** Available on this feature branch; not yet delivered to
-  `stage`.
+- **Catalog status:** Available on `stage` after PR #44 at merge commit
+  `a0c8e80`.
 - **What already exists:** framework-free `FetchOutboundHttpAttemptTransport`
   для одной native-fetch попытки с обязательным caller signal, timeout через
   headers/body, explicit `ignore` или `buffer(maxBytes)`, strict
@@ -1622,13 +1622,13 @@ providers докажут одинаковую product-neutral persistence/recove
   decision.
 - **Unlocks:** `INT-04`, `INT-05`, `INT-08` и provider transports категории
   Communications.
-- **Priority:** P1 selected; implemented on the feature branch.
+- **Priority:** P1 preservation; available on `stage`.
 - **Reasons to defer / non-goals:** не добавлять global `HttpService`,
   встроенную status/retry policy, автоматический retry любого запроса, provider
   SDK, persistence, circuit breaker или универсальную idempotency policy.
   Consumer решает, какие outcomes допускают повтор, какой delay использовать и
   приемлема ли потеря при process crash.
-- **Evidence:** branch-local
+- **Evidence:** repository-local
   [`fetch-outbound-http-attempt-transport.ts`](../src/platform/http/outbound/fetch-outbound-http-attempt-transport.ts),
   [`bounded-outbound-http-runner.ts`](../src/platform/http/outbound/bounded-outbound-http-runner.ts),
   focused [transport](../test/unit/platform/http/outbound/fetch-outbound-http-attempt-transport.spec.ts)
@@ -1699,9 +1699,8 @@ providers докажут одинаковую product-neutral persistence/recove
 
 - **Entry kind:** Capability.
 - **Catalog status:** Deferred.
-- **What already exists:** Outbox и BullMQ Kits доступны; `INT-01` Available
-  только в текущей feature branch. Endpoint registry и внешний subscriber
-  отсутствуют.
+- **What already exists:** Outbox, BullMQ и `INT-01` Kits доступны в `stage`.
+  Endpoint registry и внешний subscriber отсутствуют.
 - **What could be added:** versioned event envelope, endpoint lifecycle,
   signing/secret rotation, delivery attempts, redrive и subscriber diagnostics.
 - **Named consumer:** пока нет реального внешнего receiver и versioned event
@@ -1845,7 +1844,7 @@ providers докажут одинаковую product-neutral persistence/recove
 | `INT-08`   | Provider contract, durable cursor и reconciliation semantics                              | `INT-01`, `INT-05`, scheduler/BullMQ, `INT-03`                                                      |
 
 Порядок строк не является обязательным порядком реализации. `INT-01` Available
-только в текущей feature branch и ещё не доставлен в `stage`; `INT-06` имеет
+в `stage`; `INT-06` имеет
 реальный consumer, но сохраняет product-owned dataset и policy. `INT-05`
 остаётся deferred до настоящего state-comparison consumer.
 
