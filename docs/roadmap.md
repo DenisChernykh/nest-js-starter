@@ -18,12 +18,11 @@ document remains the source of truth for selected delivery order and evidence.
 ## Status snapshot
 
 The implementation baseline summarized by this roadmap is the remote `stage`
-branch at `307409f5a3dc8e6053767cdd093aee7243b1b73a` on 2026-08-10, after the
-capability catalog PR #42 merged. The opinionated production constructor, the
-maintained `approval-requests` reference, delivered account lifecycle and
-administration, the opt-in outbox Kit and the catalog are present on that
-baseline. The `REL-03` implementation described below exists only on its
-feature branch until its pull request merges.
+branch at `c01075381899da971d44af90eaa6901ad05006c6` on 2026-08-10, after the
+periodic maintenance PR #43 merged. The opinionated production constructor,
+the maintained `approval-requests` reference, delivered account lifecycle and
+administration, the opt-in outbox and periodic maintenance Kits and the catalog
+are present on that baseline.
 
 - PR [#13](https://github.com/DenisChernykh/nest-js-starter/pull/13)
   simplified the runtime, tooling, test and OCI boundaries while preserving the
@@ -42,12 +41,15 @@ feature branch until its pull request merges.
   the opt-in transactional PostgreSQL outbox and BullMQ relay foundation.
 - PR [#42](https://github.com/DenisChernykh/nest-js-starter/pull/42) added the
   capability catalog without delivering its candidates.
+- PR [#43](https://github.com/DenisChernykh/nest-js-starter/pull/43) delivered
+  the opt-in bounded non-overlapping periodic maintenance Kit and its first
+  in-repository adoption.
 - The
   [Stage image run for `c88dcf5`](https://github.com/DenisChernykh/nest-js-starter/actions/runs/31265993618)
   completed successfully after the outbox merge. Its published-image, Trivy,
   immutable-pull and OCI smoke evidence applies to that exact revision.
 
-This snapshot records repository evidence for `307409f`. The linked CI and
+This snapshot records repository evidence for `c010753`. The linked CI and
 published-image evidence applies only to `c88dcf5`; no later image result is
 claimed here. Hosted SMTP, DNS, secrets, deployment and recovery-drill
 verification remain unperformed and must not be inferred from those results.
@@ -135,11 +137,10 @@ topology remain deferred. The adoption and recovery contracts are
 
 ## Optional periodic maintenance platform foundation
 
-`REL-03` is implemented on `feat/periodic-maintenance-runner` but is not part of
-the `stage` baseline until review and merge. It is a framework-free,
-inert-by-default Kit for one process-local task: optional immediate first run,
-fixed delay after settlement, no overlap, abortable idle wait, bounded active
-drain and telemetry-only typed events.
+`REL-03` is available on `stage` after PR #43 at merge commit `c010753`. It is a
+framework-free, inert-by-default Kit for one process-local task: optional
+immediate first run, fixed delay after settlement, no overlap, abortable idle
+wait, bounded active drain and telemetry-only typed events.
 
 `OutboxRelayRunner` is the first in-repository adopter while retaining its
 public class, token, constructor defaults and fail-fast contract. The Kit adds
@@ -148,6 +149,28 @@ adoption must still own durable due state, idempotency, fencing and
 multi-replica behavior; cron, retries and distributed locks remain out of
 scope. The adoption and recovery contract is
 `docs/architecture/periodic-maintenance.md`.
+
+## Optional bounded outbound HTTP platform foundation
+
+`INT-01` is implemented only on `feat/bounded-outbound-http-runner`; it is not
+part of `stage` until its pull request merges. The framework-free,
+inert-by-default Kit bounds one explicit native-fetch attempt with a required
+caller signal, timeout through response-body handling and either ignored or
+`buffer(maxBytes)` response data. Its runner adds one absolute deadline, finite
+attempt budget, abortable classifier-selected retry delay, typed outcomes and
+durations, and an isolated safe-metadata observer.
+
+The Kit adds no Nest module, environment input, dependency, global
+`HttpService`, provider SDK, automatic status policy, persistence or default
+composition/adopter. A consuming module must close over its provider
+configuration and policy in `attempt` and the synchronous `classifier`, supply
+the outer signal to `run(attempt, classifier, signal)`, and own idempotency,
+durable state, reconciliation and restart recovery. The adoption, failure and
+removal contract is `docs/architecture/bounded-outbound-http.md`.
+
+Amazing EKB cache revalidation and the Threads follower snapshot are unchanged
+evidence scenarios only. This feature branch does not modify or adopt either
+external product.
 
 ## Roadmap rules
 
@@ -451,6 +474,7 @@ only inside an accepted product scenario.
 | ---------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Product durable jobs with BullMQ   | A workflow needs retries, replay or work outside the API process | Adopt the completed platform foundation with a separate `REDIS_QUEUE_URL`, feature-owned queue/payload, BullMQ-owned connections, and the opt-in transactional outbox only where DB-to-queue durability is required. The feature still owns worker health, idempotency, processor and rollout order. |
 | Process-local periodic maintenance | A module has repeatable due work and a process owner             | Adopt `REL-03` only for sequencing and bounded shutdown. Keep durable due state, idempotency, fencing, retry classification and multi-replica ownership in the product module.                                                                                                                       |
+| Bounded outbound native fetch      | A module needs explicit attempt/body bounds and finite retries   | Adopt `INT-01` only with a required outer signal and module-owned attempt/classifier closures. Keep provider statuses, credentials, idempotency, durable state, reconciliation and restart recovery outside the Kit; it has no automatic retry/status policy.                                        |
 | Public cache invalidation          | A frontend cache has a concrete tag/webhook contract             | Prefer a typed application event and signed HTTP adapter; TTL remains the fallback. Add an outbox/queue only when loss across process failure is unacceptable.                                                                                                                                       |
 
 The Amazing EKB backend demonstrates why these choices remain

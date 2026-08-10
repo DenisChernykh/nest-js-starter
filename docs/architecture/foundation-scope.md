@@ -2,8 +2,8 @@
 
 This starter keeps a small production boundary: configuration, PostgreSQL,
 auth Redis, HTTP lifecycle/health, auth/RBAC, structured logging,
-trace-only OpenTelemetry and opt-in BullMQ, transactional-outbox and periodic
-maintenance foundations.
+trace-only OpenTelemetry and opt-in BullMQ, transactional-outbox, periodic
+maintenance and bounded outbound HTTP foundations.
 The five local module layers remain `domain`, `application`, `infrastructure`,
 `presentation` and `composition`; their boundaries are documented in
 `module-boundaries.md`.
@@ -48,6 +48,15 @@ supports abortable idle waits plus bounded active-cycle drain. It adds no Nest
 module, timer, daemon, environment input or default composition by itself. It
 does not provide cron, durable schedules, retries or distributed ownership;
 adopters retain those policies under `periodic-maintenance.md`.
+
+The bounded outbound HTTP layer is a framework-free, inert Kit for one explicit
+native-fetch attempt and a classifier-owned finite retry sequence. It bounds an
+ignored or buffered response body, attempt timeout, total deadline, attempt
+budget, retry delay and abort while returning typed outcomes and durations. It
+adds no Nest module, environment input, dependency, provider/status policy,
+durable state, default composition or adopter. Consuming modules retain
+credentials, idempotency, persistence and recovery through
+`bounded-outbound-http.md`.
 
 `approval-requests` is the production-wired maintained vertical reference, not
 universal foundation and not a generic CRUD abstraction. It demonstrates an

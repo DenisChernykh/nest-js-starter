@@ -109,6 +109,7 @@ Reference — default-disabled или production-wired.
 | BullMQ connection, readiness и worker lifecycle                                                                              | Available | Kit       | Нет product queue, payload, processor или worker executable                                   |
 | Transactional PostgreSQL outbox и BullMQ relay                                                                               | Available | Kit       | Нет product event catalog, consumer или exactly-once гарантии                                 |
 | Bounded non-overlapping periodic maintenance runner                                                                          | Available | Kit       | Process-local lifecycle; нет durable schedule, retries или distributed lock                   |
+| `INT-01` bounded native-fetch attempt и classifier-owned retry runner                                                        | Available | Kit       | Только feature branch; нет provider/status/idempotency или durable policy                     |
 | Production Compose, Caddy handoff, rollback и database-role preparation                                                      | Available | Core      | Ручной operations path; hosted environment остаётся внешним                                   |
 | PostgreSQL backup и isolated restore procedure                                                                               | Available | Core      | Repository владеет безопасным operations contract; его исполнение environment-owned           |
 | `approval-requests`                                                                                                          | Available | Reference | Production-wired вертикаль, а не generic CRUD; удаление затрагивает root composition и Prisma |
@@ -117,7 +118,8 @@ Reference — default-disabled или production-wired.
 [`foundation-scope.md`](architecture/foundation-scope.md),
 [`durable-jobs.md`](architecture/durable-jobs.md),
 [`transactional-outbox-adoption.md`](architecture/transactional-outbox-adoption.md),
-[`periodic-maintenance.md`](architecture/periodic-maintenance.md)
+[`periodic-maintenance.md`](architecture/periodic-maintenance.md),
+[`bounded-outbound-http.md`](architecture/bounded-outbound-http.md)
 и [`src/modules/README.md`](../src/modules/README.md).
 
 ## Карта категорий
@@ -1398,8 +1400,7 @@ shared persistence/recovery contract. Import/export operations remain category
 ### `REL-03`. Bounded non-overlapping periodic maintenance runner
 
 - **Entry kind:** Capability.
-- **Catalog status:** Available on this feature branch; not yet delivered to
-  `stage`.
+- **Catalog status:** Available on `stage`.
 - **What already exists:** framework-free `PeriodicMaintenanceRunner` around an
   injected task with optional run-on-start, fixed delay, no overlap, abortable
   idle wait, stop admission, bounded drain and a safe typed observer.
@@ -1422,7 +1423,7 @@ shared persistence/recovery contract. Import/export operations remain category
   module-owned recovery policy.
 - **Unlocks:** reusable product maintenance loops and a future explicit wiring
   of outbox retention without claiming that wiring already exists.
-- **Priority:** P1 selected; implemented on the feature branch.
+- **Priority:** P1 preservation; available on `stage`.
 - **Reasons to defer / non-goals:** no persisted schedule table, cron parser,
   distributed singleton, retry classifier, queue or product task state.
 - **Evidence:** [`periodic-maintenance-runner.ts`](../src/platform/maintenance/periodic-maintenance-runner.ts),
@@ -1559,10 +1560,10 @@ Core lifecycle                       -> REL-03
 REL-03 + product durable due state   -> recoverable periodic work
 ```
 
-`REL-03` is Available in this feature branch but is not delivered to `stage`
-until its pull request merges. It invokes work but never provides distributed
-ownership by itself. `REL-04/05` wait for consumers; `REL-06/07` record
-explicitly rejected generic abstractions.
+`REL-03` is Available on `stage` after PR #43 at merge commit `c010753`. It
+invokes work but never provides distributed ownership by itself. `REL-04/05`
+wait for consumers; `REL-06/07` record explicitly rejected generic
+abstractions.
 
 ## 5. Интеграции и синхронизация
 
@@ -1575,8 +1576,8 @@ explicitly rejected generic abstractions.
 - Outbox Kit атомарно сохраняет сообщение вместе с PostgreSQL business
   transaction и публикует его через отдельный relay с at-least-once delivery.
 - Auth/RBAC доступны для защищённых operator и integration endpoints.
-- Production outbound HTTP resilience, inbound webhook и connector modules в
-  starter отсутствуют.
+- `INT-01` bounded outbound HTTP Kit доступен только в текущей feature branch;
+  provider adapters, inbound webhook и connector modules в starter отсутствуют.
 
 `INT-02` рассматривается здесь как lifecycle входящей интеграции. Если несколько
 providers докажут одинаковую product-neutral persistence/recovery механику, её
@@ -1585,44 +1586,56 @@ providers докажут одинаковую product-neutral persistence/recove
 ### `INT-01`. Bounded outbound HTTP attempt runner
 
 - **Entry kind:** Capability.
-- **Catalog status:** Validated candidate.
-- **What already exists:** необходимые config, logging/observability и shutdown
-  boundaries доступны в Core; готового outbound runner в starter нет.
-- **What could be added:** transport одной попытки с timeout и bounded/ignored
-  response body, общий deadline, ограниченный attempts budget, interruptible
-  backoff, injected outcome classifier с optional `nextDelayMs`, typed outcomes
-  и безопасный observer.
+- **Catalog status:** Available on this feature branch; not yet delivered to
+  `stage`.
+- **What already exists:** framework-free `FetchOutboundHttpAttemptTransport`
+  для одной native-fetch попытки с обязательным caller signal, timeout через
+  headers/body, explicit `ignore` или `buffer(maxBytes)`, strict
+  `Content-Length`/incremental cap и typed outcomes/durations;
+  `BoundedOutboundHttpRunner` добавляет один absolute deadline, attempts budget,
+  abortable classifier-selected delay, required outer signal, synchronous
+  outcome classifier и изолированный safe observer.
+- **What could be added:** только explicit module-owned construction и provider
+  adoption; Kit не требует global client, status defaults, persistence или
+  runtime composition.
 - **Named consumer:** подписанная cache revalidation доставка Amazing EKB и
-  authenticated Threads follower snapshot. Оба HTTP flows ограничивают число
-  попыток и отдельно классифицируют retryable transport/response outcomes;
-  конкретные status, delay и loss policies различаются и остаются у consumer.
+  authenticated Threads follower snapshot остаются неизменёнными evidence
+  scenarios, а не starter adopters. Их status, delay, credentials, loss и
+  recovery policies остаются product-owned.
 - **Failure model:** зависший upstream, network error, `408`, `429`, `5xx`,
   остановка процесса, неоднозначный timeout, retry storm и утечка URL, headers,
   body или secrets в diagnostics. Повтор неидемпотентной операции может создать
   дублирующий side effect.
 - **Form:** inert-by-default Kit.
-- **Required dependencies:** Core config, logging/observability и lifecycle
-  cancellation — Available.
-- **Conditional dependencies:** provider idempotency — Product-owned. Если
-  работа должна переживать restart, consumer владеет durable state/runner;
-  Outbox и BullMQ применяются только когда PostgreSQL business transaction
-  должна атомарно создать последующую queued work.
-- **Blocked by:** технических блокеров нет.
+- **Required dependencies:** только Node 24 native `fetch`, timers и
+  `AbortSignal` primitives — Available; Core imports и third-party dependencies
+  отсутствуют.
+- **Conditional dependencies:** adopter supplies the required outer
+  `AbortSignal` and may wire optional safe observer telemetry in its own
+  composition; global Core config/observability не требуются. Provider
+  idempotency — Product-owned. Если работа должна переживать restart, consumer
+  владеет durable state/runner; Outbox и BullMQ применяются только когда
+  PostgreSQL business transaction должна атомарно создать последующую queued
+  work.
+- **Blocked by:** none for the Kit; adoption still requires module-owned
+  provider configuration, classifier, outer lifecycle and durable recovery
+  decision.
 - **Unlocks:** `INT-04`, `INT-05`, `INT-08` и provider transports категории
   Communications.
-- **Priority:** P1, первый кандидат внутри этой категории; это не делает его
-  следующим roadmap item автоматически.
+- **Priority:** P1 selected; implemented on the feature branch.
 - **Reasons to defer / non-goals:** не добавлять global `HttpService`,
   встроенную status/retry policy, автоматический retry любого запроса, provider
   SDK, persistence, circuit breaker или универсальную idempotency policy.
   Consumer решает, какие outcomes допускают повтор, какой delay использовать и
   приемлема ли потеря при process crash.
-- **Evidence:** Amazing EKB repository
-  `src/modules/cache-invalidation/infrastructure/delivery/cache-revalidation-delivery.runner.ts`
-  and `test/integration/cache-revalidation-webhook.integration.spec.ts`; Threads
-  giveaway repository `src/threads/follower-graphql.mjs` and
-  `test/follower-graphql.test.mjs`; starter adoption remains direction-gated in
-  the [roadmap](roadmap.md#platform-adoption-candidates).
+- **Evidence:** branch-local
+  [`fetch-outbound-http-attempt-transport.ts`](../src/platform/http/outbound/fetch-outbound-http-attempt-transport.ts),
+  [`bounded-outbound-http-runner.ts`](../src/platform/http/outbound/bounded-outbound-http-runner.ts),
+  focused [transport](../test/unit/platform/http/outbound/fetch-outbound-http-attempt-transport.spec.ts)
+  and [runner](../test/unit/platform/http/outbound/bounded-outbound-http-runner.spec.ts)
+  unit suites, native-fetch [loopback integration](../test/integration/platform/http/outbound/fetch-outbound-http-attempt-transport.integration.spec.ts)
+  and the [adoption guide](architecture/bounded-outbound-http.md). Amazing EKB
+  and Threads remain unchanged external evidence only.
 
 ### `INT-02`. Durable Integration Inbox
 
@@ -1686,8 +1699,9 @@ providers докажут одинаковую product-neutral persistence/recove
 
 - **Entry kind:** Capability.
 - **Catalog status:** Deferred.
-- **What already exists:** Outbox и BullMQ Kits доступны; общий `INT-01`,
-  endpoint registry и внешний subscriber отсутствуют.
+- **What already exists:** Outbox и BullMQ Kits доступны; `INT-01` Available
+  только в текущей feature branch. Endpoint registry и внешний subscriber
+  отсутствуют.
 - **What could be added:** versioned event envelope, endpoint lifecycle,
   signing/secret rotation, delivery attempts, redrive и subscriber diagnostics.
 - **Named consumer:** пока нет реального внешнего receiver и versioned event
@@ -1819,19 +1833,19 @@ providers докажут одинаковую product-neutral persistence/recove
 
 ### Сводка зависимостей
 
-| Capability | Required before implementation                                                            | Conditional                                                                                 |
-| ---------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `INT-01`   | Core config, observability и lifecycle                                                    | Provider idempotency; durable state; Outbox/BullMQ only for transaction-coupled queued work |
-| `INT-02`   | PostgreSQL transactions                                                                   | BullMQ                                                                                      |
-| `INT-03`   | Конкретный provider contract и module-owned intake                                        | Извлечённый `INT-02`, BullMQ, audit                                                         |
-| `INT-04`   | Versioned event, durable delivery state, bounded HTTP, endpoint registry и signing policy | Outbox, BullMQ, `INT-01`, audit                                                             |
-| `INT-05`   | Authoritative product state и provider read/repair contract                               | `INT-01`, scheduler/BullMQ, `INT-03`                                                        |
-| `INT-06`   | Auth/RBAC, dataset contract и durable operation state                                     | BullMQ, Files, Communications                                                               |
-| `INT-07`   | Auth/RBAC, dataset snapshot, access и retention contracts                                 | Durable operation state, BullMQ, Files, Communications                                      |
-| `INT-08`   | Provider contract, durable cursor и reconciliation semantics                              | `INT-01`, `INT-05`, scheduler/BullMQ, `INT-03`                                              |
+| Capability | Required before implementation                                                            | Conditional                                                                                         |
+| ---------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `INT-01`   | Node 24 native `fetch`, timers и `AbortSignal` primitives                                 | Outer signal; optional safe observer; provider idempotency/durable state; conditional Outbox/BullMQ |
+| `INT-02`   | PostgreSQL transactions                                                                   | BullMQ                                                                                              |
+| `INT-03`   | Конкретный provider contract и module-owned intake                                        | Извлечённый `INT-02`, BullMQ, audit                                                                 |
+| `INT-04`   | Versioned event, durable delivery state, bounded HTTP, endpoint registry и signing policy | Outbox, BullMQ, `INT-01`, audit                                                                     |
+| `INT-05`   | Authoritative product state и provider read/repair contract                               | `INT-01`, scheduler/BullMQ, `INT-03`                                                                |
+| `INT-06`   | Auth/RBAC, dataset contract и durable operation state                                     | BullMQ, Files, Communications                                                                       |
+| `INT-07`   | Auth/RBAC, dataset snapshot, access и retention contracts                                 | Durable operation state, BullMQ, Files, Communications                                              |
+| `INT-08`   | Provider contract, durable cursor и reconciliation semantics                              | `INT-01`, `INT-05`, scheduler/BullMQ, `INT-03`                                                      |
 
-Порядок строк не является обязательным порядком реализации. Первым
-подтверждённым кандидатом категории выбран `INT-01`; `INT-06` также имеет
+Порядок строк не является обязательным порядком реализации. `INT-01` Available
+только в текущей feature branch и ещё не доставлен в `stage`; `INT-06` имеет
 реальный consumer, но сохраняет product-owned dataset и policy. `INT-05`
 остаётся deferred до настоящего state-comparison consumer.
 
