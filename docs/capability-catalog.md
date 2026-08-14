@@ -152,6 +152,7 @@ capabilities и их границы, а не готовый backlog: кажда�
 
 - **Entry kind:** `Capability | Certification | Repository maintenance | Environment evidence`
 - **Catalog status:**
+- **Expected from Planner:** optional cross-repository implementation or adoption evidence
 - **What already exists:**
 - **What could be added:**
 - **Named consumer:**
@@ -166,6 +167,13 @@ capabilities и их границы, а не готовый backlog: кажда�
 - **Reasons to defer / non-goals:**
 - **Evidence:**
 ```
+
+Поле **Expected from Planner** используется только для capability, где
+независимый repository Planner должен дать будущую реализацию или adoption
+evidence. Marker не меняет `Catalog status`, не делает capability `Available`,
+не выбирает её в roadmap и не означает автоматический перенос между
+репозиториями. Любое извлечение всё равно требует отдельной задачи, проверки
+обоих revisions, tests, adoption/removal documentation и merge в `stage`.
 
 ## 1. Production foundation
 
@@ -894,7 +902,9 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
 ### `ID-10`. Single-provider external human identity federation
 
 - **Entry kind:** Capability.
-- **Catalog status:** Deferred.
+- **Catalog status:** Validated candidate.
+- **Expected from Planner:** Telegram OIDC provider-specific Reference и
+  security/runtime evidence закрытого allowlist flow.
 - **What already exists:** stable local user ID/account/session foundation.
   External identity table, OIDC provider/client, callback ceremony и token/JWKS
   handling отсутствуют.
@@ -903,9 +913,10 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
   rotation/outage policy и durable unique mapping by `(issuer, subject)`.
   JIT account creation, local-password coexistence и recovery выбираются до
   implementation.
-- **Named consumer:** отсутствует selected provider/client. Telegram `from.id` в
-  Gift Bot является transport-native product identity, а не OIDC federation
-  local account.
+- **Named consumer:** Planner использует Telegram OIDC как единственный web
+  sign-in для закрытого пространства пары. Telegram `from.id` в Gift Bot
+  остаётся transport-native product identity, а не OIDC federation local
+  account.
 - **Failure model:** login CSRF/code replay, wrong issuer/audience/nonce,
   key-rotation outage, provider unavailability, duplicate local account, linking
   by mutable/reused email или unlinking the last authenticator.
@@ -917,8 +928,11 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
   `ID-11` только для explicit linking. Organization connection, discovery и
   tenant enablement принадлежат категории 3, но такой SSO flow использует
   human OIDC ceremony и local mapping этой capability.
-- **Blocked by:** named provider, concrete client flow и ownership of provider
-  outage/account collision decisions.
+- **Blocked by:** neutral extraction требует отдельного transfer review
+  Planner → Starter; выбранные provider/client/redirect,
+  account-creation/recovery policy и collision recovery остаются
+  Starter-owned решениями. Starter не принимает Planner allowlist, pair-space
+  policy или ручное product recovery как provider defaults.
 - **Unlocks:** external-provider sign-in одного выбранного product.
 - **Priority:** P2.
 - **Reasons to defer / non-goals:** не строить generic identity broker,
@@ -1401,6 +1415,8 @@ shared persistence/recovery contract. Import/export operations remain category
 
 - **Entry kind:** Capability.
 - **Catalog status:** Available on `stage`.
+- **Expected from Planner:** adoption evidence для PostgreSQL-owned due-state
+  polling и restart recovery; новой реализации Kit не ожидается.
 - **What already exists:** framework-free `PeriodicMaintenanceRunner` around an
   injected task with optional run-on-start, fixed delay, no overlap, abortable
   idle wait, stop admission, bounded drain and a safe typed observer.
@@ -1459,30 +1475,42 @@ shared persistence/recovery contract. Import/export operations remain category
 - **Evidence:** idempotent-consumer boundary in
   [`transactional-outbox-adoption.md`](architecture/transactional-outbox-adoption.md).
 
-### `REL-05`. HTTP command idempotency keys
+### `REL-05`. Actor-scoped application-command idempotency
 
 - **Entry kind:** Capability.
-- **Catalog status:** Deferred.
-- **What already exists:** no `Idempotency-Key`, request hash, command receipt or
-  response replay store.
-- **What could be added:** one Product-specific mutation with actor-scoped key,
-  canonical request fingerprint, pending/completed state, atomic result
-  reference and bounded conflict/retention behavior.
-- **Named consumer:** отсутствует; future payment/order is only a category-10
-  candidate.
+- **Catalog status:** Validated candidate.
+- **Expected from Planner:** product-owned command receipts, canonical
+  fingerprint conflicts и concurrent web/Telegram replay evidence.
+- **What already exists:** Starter не содержит actor-scoped command receipt,
+  canonical request fingerprint или result replay store. Planner независимо
+  использует durable command receipts для своих application commands.
+- **What could be added:** one Product-specific mutation with actor-scoped
+  command ID, canonical payload fingerprint, pending/completed state, atomic
+  result reference and bounded conflict/retention behavior. HTTP
+  `Idempotency-Key`, versioned body `commandId` или transport-native key остаются
+  adapter choices одного application contract.
+- **Named consumer:** Planner web и Telegram adapters должны безопасно повторять
+  одну product command без двойного business effect; future payment/order
+  остаётся только category-10 candidate.
 - **Failure model:** same key with different body, replay across actors/orgs,
   receipt without effect, effect without receipt, forever-pending record and
   cached response retaining secrets/PII.
 - **Form:** Product-specific first; Reference after repeated command semantics.
 - **Required dependencies:** named mutation, actor/organization scope,
-  authoritative result and transaction/recovery policy — Missing.
+  authoritative result and transaction/recovery policy — Product-owned в
+  Planner, Missing в Starter.
 - **Conditional dependencies:** `REL-02` only for subsequent async work;
   category 8 retention/audit.
-- **Blocked by:** concrete command/payment/provider contract.
+- **Blocked by:** cross-transport evidence, где одна actor-scoped command
+  повторяется через web и Telegram с тем же result, изменённый payload даёт
+  fingerprint conflict, а concurrent delivery создаёт один business effect;
+  затем требуется отдельное extraction решение. Один product receipt pattern
+  не разрешает global HTTP interceptor или общий receipt store.
 - **Unlocks:** safe client retry for that mutation.
 - **Priority:** P2.
 - **Reasons to defer / non-goals:** no global interceptor storing arbitrary HTTP
-  responses and no conflation with Integration Inbox or message receipt.
+  responses, no global command bus и no conflation with Integration Inbox or
+  message receipt.
 - **Evidence:** absence in [`openapi.json`](api/openapi.json) and future
   `BIZ-01` boundary.
 
@@ -1561,9 +1589,10 @@ REL-03 + product durable due state   -> recoverable periodic work
 ```
 
 `REL-03` is Available on `stage` after PR #43 at merge commit `c010753`. It
-invokes work but never provides distributed ownership by itself. `REL-04/05`
-wait for consumers; `REL-06/07` record explicitly rejected generic
-abstractions.
+invokes work but never provides distributed ownership by itself. `REL-04`
+waits for a consumer. `REL-05` has Planner as a consumer and waits for the
+cross-transport evidence and separate extraction decision above. `REL-06/07`
+record explicitly rejected generic abstractions.
 
 ## 5. Интеграции и синхронизация
 
@@ -1895,6 +1924,8 @@ preferences or campaigns before their own consumers.
 
 - **Entry kind:** Capability.
 - **Catalog status:** Validated candidate.
+- **Expected from Planner:** первый durable reminder vertical и evidence
+  границы между product relevance policy, intent lifecycle и transport.
 - **What already exists:** starter has transactions, Outbox and BullMQ but no
   notification semantics. Gift Bot stores durable draw-notification intents
   with an immutable content snapshot plus mutable claim/recovery/attempt state
@@ -2080,6 +2111,41 @@ preferences or campaigns before their own consumers.
   SMS MFA default and no transfer of Telegram semantics.
 - **Evidence:** consumer/dependencies absent in verified repositories.
 
+### `COM-09`. Telegram Bot outbound transport
+
+- **Entry kind:** Capability.
+- **Catalog status:** Validated candidate.
+- **Expected from Planner:** bounded `sendMessage` provider Reference и finite
+  outcome map, отделённые от reminder schedule, wording и suppression policy.
+- **What already exists:** `INT-01` даёт bounded HTTP attempt/retry primitives,
+  а Gift Bot независимо подтверждает Telegram delivery outcomes. Starter не
+  содержит Bot API adapter или Telegram credentials/configuration.
+- **What could be added:** provider-specific Reference для одной ограниченной
+  попытки `sendMessage`: timeout/body bounds, `429 retry_after`, blocked-chat
+  terminal outcome и explicit ambiguous result при неизвестном side effect.
+- **Named consumer:** Planner reminder delivery; Gift Bot остаётся внешним
+  product evidence, а не adopter Starter.
+- **Failure model:** Telegram принимает сообщение, но local outcome не
+  сохраняется; `429`, provider/network outage, blocked bot, duplicate retry,
+  утечка bot token/chat identity или неограниченный response body.
+- **Form:** provider-specific Reference.
+- **Required dependencies:** named Bot API consumer, verified destination,
+  credentials и safe diagnostics — Product-owned; `INT-01` — Available.
+- **Conditional dependencies:** `COM-02` для durable transactional delivery;
+  module-owned reconciliation/idempotency policy, если сообщение допускает
+  повтор.
+- **Blocked by:** отдельный Planner → Starter transfer review после появления
+  реального transport evidence; hosted Telegram smoke остаётся
+  environment-owned.
+- **Unlocks:** Telegram channel adapter для конкретной product notification
+  vertical без создания global notification service.
+- **Priority:** P1 inside Communications; не automatic roadmap selection.
+- **Reasons to defer / non-goals:** transport не владеет расписанием,
+  recipient selection, templates, keyboards, business suppression, durable
+  intent state или exactly-once promise.
+- **Evidence:** ожидается из Planner; external Gift Bot delivery flow остаётся
+  вторичным product evidence.
+
 ### Сводка зависимостей
 
 | Entry    | Required before implementation/adoption                        | Conditional                                             |
@@ -2092,6 +2158,7 @@ preferences or campaigns before their own consumers.
 | `COM-06` | Stable message catalog, destinations and mandatory policy      | `COM-02`, consent/unsubscribe                           |
 | `COM-07` | Source stream, cadence/window, aggregation and delivery policy | `COM-02/04/06`, periodic runner                         |
 | `COM-08` | Named flow, destination lifecycle and provider                 | `COM-02`, HTTP/callback adapters and factor policy      |
+| `COM-09` | `INT-01`, Telegram Bot consumer, destination and credentials   | `COM-02`, module-owned retry/idempotency                |
 
 Business module owns whether/why a message exists; Communications owns selected
 recipient/channel delivery. In-app Inbox is not Integration Inbox. `COM-02` is
@@ -2452,6 +2519,8 @@ Tempo, Outbox и auth tokens не становятся product-data retention de
 
 - **Entry kind:** Capability.
 - **Catalog status:** Validated candidate.
+- **Expected from Planner:** finite module-owned append-only action history,
+  atomic effect linkage и deferred database-bypass evidence.
 - **What already exists:** `approval-requests` атомарно сохраняет terminal
   decision, actor и timestamp; Amazing EKB атомарно добавляет
   `PlaceStatusTransition`; Gift Bot сохраняет reasoned `reroll_operations`,
