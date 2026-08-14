@@ -18,11 +18,11 @@ document remains the source of truth for selected delivery order and evidence.
 ## Status snapshot
 
 The implementation baseline summarized by this roadmap is the remote `stage`
-branch at `c01075381899da971d44af90eaa6901ad05006c6` on 2026-08-10, after the
-periodic maintenance PR #43 merged. The opinionated production constructor,
+branch at `a0c8e8002af59536dea3c8209fe527bd033b2eca` on 2026-08-10, after the
+bounded outbound HTTP PR #44 merged. The opinionated production constructor,
 the maintained `approval-requests` reference, delivered account lifecycle and
-administration, the opt-in outbox and periodic maintenance Kits and the catalog
-are present on that baseline.
+administration, the opt-in outbox, periodic maintenance and bounded outbound
+HTTP Kits and the catalog are present on that baseline.
 
 - PR [#13](https://github.com/DenisChernykh/nest-js-starter/pull/13)
   simplified the runtime, tooling, test and OCI boundaries while preserving the
@@ -44,12 +44,15 @@ are present on that baseline.
 - PR [#43](https://github.com/DenisChernykh/nest-js-starter/pull/43) delivered
   the opt-in bounded non-overlapping periodic maintenance Kit and its first
   in-repository adoption.
+- PR [#44](https://github.com/DenisChernykh/nest-js-starter/pull/44) delivered
+  the opt-in bounded outbound HTTP attempt and classifier-owned finite retry
+  Kit.
 - The
   [Stage image run for `c88dcf5`](https://github.com/DenisChernykh/nest-js-starter/actions/runs/31265993618)
   completed successfully after the outbox merge. Its published-image, Trivy,
   immutable-pull and OCI smoke evidence applies to that exact revision.
 
-This snapshot records repository evidence for `c010753`. The linked CI and
+This snapshot records repository evidence for `a0c8e80`. The linked CI and
 published-image evidence applies only to `c88dcf5`; no later image result is
 claimed here. Hosted SMTP, DNS, secrets, deployment and recovery-drill
 verification remain unperformed and must not be inferred from those results.
@@ -152,13 +155,12 @@ scope. The adoption and recovery contract is
 
 ## Optional bounded outbound HTTP platform foundation
 
-`INT-01` is implemented only on `feat/bounded-outbound-http-runner`; it is not
-part of `stage` until its pull request merges. The framework-free,
-inert-by-default Kit bounds one explicit native-fetch attempt with a required
-caller signal, timeout through response-body handling and either ignored or
-`buffer(maxBytes)` response data. Its runner adds one absolute deadline, finite
-attempt budget, abortable classifier-selected retry delay, typed outcomes and
-durations, and an isolated safe-metadata observer.
+`INT-01` is available on `stage` after PR #44 at merge commit `a0c8e80`. The
+framework-free, inert-by-default Kit bounds one explicit native-fetch attempt
+with a required caller signal, timeout through response-body handling and either
+ignored or `buffer(maxBytes)` response data. Its runner adds one absolute
+deadline, finite attempt budget, abortable classifier-selected retry delay,
+typed outcomes and durations, and an isolated safe-metadata observer.
 
 The Kit adds no Nest module, environment input, dependency, global
 `HttpService`, provider SDK, automatic status policy, persistence or default
@@ -169,7 +171,7 @@ durable state, reconciliation and restart recovery. The adoption, failure and
 removal contract is `docs/architecture/bounded-outbound-http.md`.
 
 Amazing EKB cache revalidation and the Threads follower snapshot are unchanged
-evidence scenarios only. This feature branch does not modify or adopt either
+evidence scenarios only. The delivered Kit does not modify or adopt either
 external product.
 
 ## Roadmap rules
