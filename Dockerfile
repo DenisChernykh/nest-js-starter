@@ -3,7 +3,21 @@
 
 ARG NODE_IMAGE=node:24.18.0-trixie-slim@sha256:ae91dcc111a68c9d2d81ff2a17bda61be126426176fde6fe7d08ab13b7f50573
 
-FROM ${NODE_IMAGE} AS dependencies
+FROM ${NODE_IMAGE} AS security-patched-base
+RUN apt-get update && \
+    apt-get install --only-upgrade --yes --no-install-recommends \
+      bsdutils \
+      libblkid1 \
+      liblastlog2-2 \
+      libmount1 \
+      libsmartcols1 \
+      libuuid1 \
+      login \
+      mount \
+      util-linux && \
+    rm -rf /var/lib/apt/lists/*
+
+FROM security-patched-base AS dependencies
 ENV HUSKY=0
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -26,7 +40,7 @@ COPY . .
 RUN corepack pnpm@11.15.1 run build && \
     CI=true corepack pnpm@11.15.1 prune --prod
 
-FROM ${NODE_IMAGE} AS runtime
+FROM security-patched-base AS runtime
 ARG BUILD_REVISION
 ARG BUILD_SOURCE
 ARG BUILD_CREATED
