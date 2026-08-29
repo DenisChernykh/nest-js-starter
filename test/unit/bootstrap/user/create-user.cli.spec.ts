@@ -1,4 +1,4 @@
-import { UnknownRoleAssignmentError } from '@/modules/auth/public-contracts/auth-errors'
+import { UnknownRoleAssignmentError } from '@/modules/identity-access/public-contracts/auth-errors'
 import {
   runCreateUserCli,
   type CreateUserCliDependencies,

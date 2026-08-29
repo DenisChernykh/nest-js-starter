@@ -39,8 +39,8 @@ module.exports = {
       from: { path: '(^|/)bootstrap(/|$)' },
       to: {
         path: [
-          '(^|/)modules/(?:auth|identity-access)/(identity|sessions|authentication|authorization|account-lifecycle|account-administration|public-contracts)(/|$)',
-          '(^|/)modules/(?:auth|identity-access)/index\\.(?:[cm]?[jt]s)$',
+          '(^|/)modules/identity-access/(identity|sessions|authentication|authorization|account-lifecycle|account-administration|public-contracts)(/|$)',
+          '(^|/)modules/identity-access/index\\.(?:[cm]?[jt]s)$',
         ],
       },
     },
@@ -50,10 +50,10 @@ module.exports = {
       comment:
         'The identity-access root entrypoint is a stable public API, not a shortcut into internal capabilities.',
       from: {
-        path: '(^|/)modules/(?:auth|identity-access)/index\\.(?:[cm]?[jt]s)$',
+        path: '(^|/)modules/identity-access/index\\.(?:[cm]?[jt]s)$',
       },
       to: {
-        path: '(^|/)modules/(?:auth|identity-access)/(?!public-contracts(?:/|$))',
+        path: '(^|/)modules/identity-access/(?!public-contracts(?:/|$))',
       },
     },
     {
@@ -62,10 +62,10 @@ module.exports = {
       comment:
         'Public contracts own their stable types and decorators and must not smuggle internal capability dependencies through the root.',
       from: {
-        path: '(^|/)modules/(?:auth|identity-access)/public-contracts(/|$)',
+        path: '(^|/)modules/identity-access/public-contracts(/|$)',
       },
       to: {
-        path: '(^|/)modules/(?:auth|identity-access)/(identity|sessions|authentication|authorization|account-lifecycle|account-administration|application|domain|infrastructure|presentation|composition)(/|$)',
+        path: '(^|/)modules/identity-access/(identity|sessions|authentication|authorization|account-lifecycle|account-administration|application|domain|infrastructure|presentation|composition)(/|$)',
       },
     },
     {
@@ -74,10 +74,10 @@ module.exports = {
       comment:
         'Other business modules consume identity-access only through modules/identity-access/index.ts.',
       from: {
-        path: '(^|/)modules/(?!(?:auth|identity-access)(?:/|$))',
+        path: '(^|/)modules/(?!identity-access(?:/|$))',
       },
       to: {
-        path: '(^|/)modules/(?:auth|identity-access)/(?!index\\.(?:[cm]?[jt]s)$)',
+        path: '(^|/)modules/identity-access/(?!index\\.(?:[cm]?[jt]s)$)',
       },
     },
     {

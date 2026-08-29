@@ -21,7 +21,7 @@ import {
   CurrentPrincipal,
   RequirePermission,
   type AuthenticatedPrincipal,
-} from '@/modules/auth'
+} from '@/modules/identity-access'
 import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.decorator'
 import { CreateApprovalRequestUseCase } from '../application/create-approval-request.use-case'
 import { DecideApprovalRequestUseCase } from '../application/decide-approval-request.use-case'

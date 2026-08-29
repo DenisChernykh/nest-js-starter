@@ -1,11 +1,11 @@
-import { AuthController } from '@/modules/auth/authorization/presentation/auth.controller'
+import { AuthController } from '@/modules/identity-access/authorization/presentation/auth.controller'
 import {
   ChangePasswordRequestDto,
   LoginRequestDto,
-} from '@/modules/auth/authentication/presentation/authentication.dto'
-import { AuthenticationController } from '@/modules/auth/authentication/presentation/authentication.controller'
-import { SessionPathDto } from '@/modules/auth/sessions/presentation/sessions.dto'
-import { SessionsController } from '@/modules/auth/sessions/presentation/sessions.controller'
+} from '@/modules/identity-access/authentication/presentation/authentication.dto'
+import { AuthenticationController } from '@/modules/identity-access/authentication/presentation/authentication.controller'
+import { SessionPathDto } from '@/modules/identity-access/sessions/presentation/sessions.dto'
+import { SessionsController } from '@/modules/identity-access/sessions/presentation/sessions.controller'
 import { APPROVAL_SELF_DECISION_FORBIDDEN_PROBLEM } from '@/modules/approval-requests/presentation/approval-request-problem.definitions'
 import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.decorator'
 import { HealthController } from '@/platform/http/health/health.controller'

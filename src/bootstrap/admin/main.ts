@@ -2,7 +2,7 @@ import 'dotenv/config'
 
 import { runCreateAdminCli } from './create-admin.cli'
 import { readSecret } from './read-secret'
-import { createInitialAdminCommand } from '@/modules/auth/composition/initial-admin.module'
+import { createInitialAdminCommand } from '@/modules/identity-access/composition/initial-admin.module'
 import { createPostgresCommandRuntimeConfig } from '@/platform/config/postgres-command-config'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import { PrismaTransactionAdapter } from '@/platform/database/prisma-transaction.adapter'

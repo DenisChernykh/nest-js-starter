@@ -2,9 +2,9 @@ import { Test } from '@nestjs/testing'
 
 import type { ApiModule as ApiModuleClass } from '@/bootstrap/api/api.module'
 import { API_ROLE_DEFINITIONS } from '@/bootstrap/api/api-auth.roles'
-import { RoleRegistry } from '@/modules/auth/authorization/application/role-registry'
-import { SessionIssuer } from '@/modules/auth/sessions/application/session-issuer'
-import { RedisSessionStore } from '@/modules/auth/sessions/infrastructure/redis-session.store'
+import { RoleRegistry } from '@/modules/identity-access/authorization/application/role-registry'
+import { SessionIssuer } from '@/modules/identity-access/sessions/application/session-issuer'
+import { RedisSessionStore } from '@/modules/identity-access/sessions/infrastructure/redis-session.store'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 

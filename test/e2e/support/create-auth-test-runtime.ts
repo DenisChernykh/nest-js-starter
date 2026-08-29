@@ -6,7 +6,7 @@ import type { StartedRedisContainer } from '@testcontainers/redis'
 import { Pool } from 'pg'
 import { createClient } from 'redis'
 
-import { Argon2PasswordHasher } from '@/modules/auth/authentication/infrastructure/argon2-password.hasher'
+import { Argon2PasswordHasher } from '@/modules/identity-access/authentication/infrastructure/argon2-password.hasher'
 import { reserveRuntimePort } from '@test/e2e/support/create-test-runtime'
 import {
   captureChildOutput,

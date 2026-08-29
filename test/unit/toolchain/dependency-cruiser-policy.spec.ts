@@ -167,8 +167,10 @@ describe('dependency-cruiser policy', () => {
     expect(validResult.status).toBe(0)
   })
 
-  it('keeps current auth public contracts independent from internals', () => {
-    const result = runFixture('auth-public-contracts-import-internal')
+  it('keeps identity-access public contracts independent from internals', () => {
+    const result = runFixture(
+      'identity-access-public-contracts-import-internal',
+    )
 
     expect(`${result.stdout}${result.stderr}`).toContain(
       'identity-access-public-contracts-must-not-import-internals',

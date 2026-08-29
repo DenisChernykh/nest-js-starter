@@ -4,7 +4,7 @@ import { ESLint, Linter } from 'eslint'
 
 const moduleApplicationPath = join(
   process.cwd(),
-  'src/modules/auth/application/login.use-case.ts',
+  'src/modules/identity-access/authentication/application/login.use-case.ts',
 )
 const sharedApplicationPath = join(
   process.cwd(),
@@ -12,7 +12,7 @@ const sharedApplicationPath = join(
 )
 const nestedDomainPath = join(
   process.cwd(),
-  'src/modules/identity-access/authentication/password/domain/password.ts',
+  'src/modules/identity-access/identity/domain/user-status.ts',
 )
 const nestedApplicationPath = join(
   process.cwd(),
@@ -24,11 +24,11 @@ const nestedPresentationPath = join(
 )
 const nestedInfrastructurePath = join(
   process.cwd(),
-  'src/modules/identity-access/authentication/password/infrastructure/password-hasher.adapter.ts',
+  'src/modules/identity-access/authentication/infrastructure/argon2-password.hasher.ts',
 )
 const nestedCompositionPath = join(
   process.cwd(),
-  'src/modules/identity-access/account-lifecycle/registration/composition/registration.module.ts',
+  'src/modules/identity-access/account-lifecycle/composition/account-lifecycle.module.ts',
 )
 
 async function lintApplicationSource(
@@ -84,7 +84,7 @@ describe('application Nest DI boundary', () => {
     ['Redis', "import Redis from 'ioredis'\nvoid Redis"],
     [
       'outer adapters',
-      "import { Adapter } from '@/modules/auth/infrastructure/adapter'\nvoid Adapter",
+      "import { Adapter } from '@/modules/identity-access/authentication/infrastructure/adapter'\nvoid Adapter",
     ],
   ])('rejects %s in module application code', async (_name, source) => {
     const messages = await lintApplicationSource(source)

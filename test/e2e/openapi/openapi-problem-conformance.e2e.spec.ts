@@ -20,8 +20,8 @@ import {
   AuthenticationFailedError,
   AuthorizationDeniedError,
   AuthRateLimitedError,
-} from '@/modules/auth/public-contracts/auth-errors'
-import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
+} from '@/modules/identity-access/public-contracts/auth-errors'
+import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/identity-access/composition/auth-http-problem.contribution'
 import { API_PROBLEM_CATALOG } from '@/bootstrap/api/api-http-problems'
 import { generateOpenApiArtifact } from '@/bootstrap/contracts/generate-openapi'
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'

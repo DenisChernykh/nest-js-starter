@@ -1,6 +1,6 @@
 import request from 'supertest'
 
-import { AuthenticationFailedError } from '@/modules/auth/public-contracts/auth-errors'
+import { AuthenticationFailedError } from '@/modules/identity-access/public-contracts/auth-errors'
 import {
   createAuthTestHarness,
   type AuthTestHarness,

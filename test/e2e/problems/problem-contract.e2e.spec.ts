@@ -20,8 +20,8 @@ import {
   AuthorizationDeniedError,
   AuthRateLimitedError,
   AuthStateConflictError,
-} from '@/modules/auth/public-contracts/auth-errors'
-import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
+} from '@/modules/identity-access/public-contracts/auth-errors'
+import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/identity-access/composition/auth-http-problem.contribution'
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'

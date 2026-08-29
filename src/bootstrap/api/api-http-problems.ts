@@ -1,4 +1,4 @@
-import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
+import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/identity-access/composition/auth-http-problem.contribution'
 import { APPROVAL_REQUEST_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/approval-requests/composition/approval-request-http-problem.contribution'
 import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
 import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registry'

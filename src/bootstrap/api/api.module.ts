@@ -5,7 +5,7 @@ import type { ApplicationRuntimeConfig } from '@/platform/config/runtime-config.
 import { DatabaseModule } from '@/platform/database/database.module'
 import { HealthModule } from '@/platform/http/health/health.module'
 import { LifecycleModule } from '@/platform/lifecycle/lifecycle.module'
-import { IdentityAccessModule } from '@/modules/auth/composition/identity-access.module'
+import { IdentityAccessModule } from '@/modules/identity-access/composition/identity-access.module'
 import { ApprovalRequestsModule } from '@/modules/approval-requests/composition/approval-requests.module'
 import { RedisModule } from '@/platform/redis/redis.module'
 import { LoggingModule } from '@/platform/logging/logging.module'
