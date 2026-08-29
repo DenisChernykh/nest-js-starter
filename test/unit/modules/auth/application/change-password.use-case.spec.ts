@@ -23,13 +23,10 @@ describe('ChangePasswordUseCase', () => {
       findCredentialByUserId: jest.fn(() =>
         Promise.resolve({
           userId: 'user',
-          email: 'user@example.com',
-          normalizedEmail: 'user@example.com',
           status: 'active' as const,
-          sessionGeneration: 0n,
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
           passwordHash: 'old',
           passwordVersion: 2,
-          roleKeys: [],
         }),
       ),
       changePasswordAndInvalidate: jest.fn(() => {
@@ -67,13 +64,10 @@ describe('ChangePasswordUseCase', () => {
       findCredentialByUserId: jest.fn(() =>
         Promise.resolve({
           userId: 'user',
-          email: 'user@example.com',
-          normalizedEmail: 'user@example.com',
           status: 'active' as const,
-          sessionGeneration: 0n,
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
           passwordHash: 'old',
           passwordVersion: 0,
-          roleKeys: [],
         }),
       ),
       changePasswordAndInvalidate: jest.fn(() => Promise.resolve(true)),

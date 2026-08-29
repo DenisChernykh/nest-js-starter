@@ -1,5 +1,5 @@
 import { Module, type DynamicModule } from '@nestjs/common'
-import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core'
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 
 import { AUTH_AUDIT } from '../application/auth-audit.port'
 import { ACCOUNT_PROVISIONING } from '../application/account-provisioning.port'
@@ -18,18 +18,11 @@ import {
   AUTH_MAIL_DELIVERY,
   type AuthMailDeliveryPort,
 } from '../application/auth-mail-delivery.port'
-import { AuthenticateSessionUseCase } from '../application/authenticate-session.use-case'
 import { ConfirmEmailVerificationUseCase } from '../application/confirm-email-verification.use-case'
 import { ConfirmPasswordResetUseCase } from '../application/confirm-password-reset.use-case'
-import { GetMeQuery } from '../application/get-me.query'
 import { EMAIL_VERIFICATION_PERSISTENCE } from '../application/email-verification-persistence.port'
 import { INVITATION_PERSISTENCE } from '../application/invitation-persistence.port'
 import { PASSWORD_RECOVERY_PERSISTENCE } from '../application/password-recovery-persistence.port'
-import {
-  createAuthRoleRegistry,
-  RoleRegistry,
-  type RoleDefinition,
-} from '../application/role-registry'
 import { ONE_TIME_TOKEN_CODEC } from '../application/one-time-token-codec.port'
 import { PUBLIC_AUTH_RATE_LIMITER } from '../application/public-auth-rate-limiter.port'
 import { REGISTRATION_PERSISTENCE } from '../application/registration-persistence.port'
@@ -46,24 +39,28 @@ import { NodeAccountLifecycleCryptoAdapter } from '../account-lifecycle/infrastr
 import { PrismaPasswordRecoveryAdapter } from '../account-lifecycle/password-recovery/infrastructure/prisma-password-recovery.adapter'
 import { PrismaRegistrationAdapter } from '../account-lifecycle/registration/infrastructure/prisma-registration.adapter'
 import { AuthenticationModule } from '../authentication/composition/authentication.module'
+import {
+  AuthorizationModule,
+  type ConfiguredAuthorizationModule,
+} from '../authorization/composition/authorization.module'
+import {
+  RoleRegistry,
+  type RoleDefinition,
+} from '../authorization/application/role-registry'
+import { AuthRequestInterceptor } from '../authorization/presentation/auth-request.interceptor'
+import { AuthenticationGuard } from '../authorization/presentation/authentication.guard'
+import { BrowserOriginGuard } from '../authorization/presentation/browser-origin.guard'
+import { PermissionGuard } from '../authorization/presentation/permission.guard'
+import { SessionCsrfGuard } from '../authorization/presentation/session-csrf.guard'
 import { IdentityModule } from '../identity/composition/identity.module'
 import { NodemailerAuthMailAdapter } from '../infrastructure/nodemailer-auth-mail.adapter'
 import { RedisPublicAuthRateLimiter } from '../infrastructure/redis-public-auth-rate-limiter'
-import { GetCsrfTokenQuery } from '../sessions/application/get-csrf-token.query'
 import { SessionCleanupService } from '../sessions/application/session-cleanup.service'
 import { SessionsModule } from '../sessions/composition/sessions.module'
 import { AdminAccountController } from '../presentation/admin-account.controller'
 import { AdminAccountEmailWorkflowsController } from '../presentation/admin-account-email-workflows.controller'
 import { AccountEmailWorkflowsController } from '../presentation/account-email-workflows.controller'
 import { PublicAuthResponseDelay } from '../presentation/public-auth-response-delay'
-import { AuthController } from '../presentation/auth.controller'
-import { AuthRequestContext } from '../presentation/auth-request.context'
-import { AuthRequestInterceptor } from '../presentation/auth-request.interceptor'
-import { AuthenticationGuard } from '../presentation/authentication.guard'
-import { BrowserOriginGuard } from '../presentation/browser-origin.guard'
-import { DocsAccessPolicyAdapter } from '../presentation/docs-access-policy.adapter'
-import { PermissionGuard } from '../presentation/permission.guard'
-import { SessionCsrfGuard } from '../presentation/session-csrf.guard'
 import { SelfServiceAuthController } from '../presentation/self-service-auth.controller'
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
@@ -71,13 +68,7 @@ import { DatabaseModule } from '@/platform/database/database.module'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisModule } from '@/platform/redis/redis.module'
 import { REDIS_AUTH_COMMAND_EXECUTOR } from '@/platform/redis/redis.tokens'
-import {
-  DOCS_ACCESS_POLICY,
-  type DocsAccessPolicy,
-} from '@/platform/http/docs/docs-access.contracts'
 import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
-
-const AUTH_ROLE_DEFINITIONS = Symbol('auth:role-definitions')
 
 /** Product-owned role catalog required to compose the auth capability. */
 export interface AuthModuleOptions {
@@ -95,24 +86,16 @@ export interface AuthModuleOptions {
     RedisModule,
   ],
   controllers: [
-    AuthController,
     SelfServiceAuthController,
     AdminAccountController,
     AdminAccountEmailWorkflowsController,
     AccountEmailWorkflowsController,
   ],
   providers: [
-    AuthRequestContext,
-    GetMeQuery,
     NodeAccountLifecycleCryptoAdapter,
     {
       provide: ONE_TIME_TOKEN_CODEC,
       useExisting: NodeAccountLifecycleCryptoAdapter,
-    },
-    {
-      provide: RoleRegistry,
-      inject: [AUTH_ROLE_DEFINITIONS],
-      useFactory: createAuthRoleRegistry,
     },
     PrismaAccountAdministrationReadAdapter,
     PrismaAccountAdministrationMutationAdapter,
@@ -251,27 +234,6 @@ export interface AuthModuleOptions {
         })
       },
     },
-    AuthenticateSessionUseCase,
-    {
-      provide: DOCS_ACCESS_POLICY,
-      inject: [
-        AuthenticateSessionUseCase,
-        AuthAuditLogger,
-        RuntimeConfigService,
-      ],
-      useFactory: (
-        authenticate: AuthenticateSessionUseCase,
-        audit: AuthAuditLogger,
-        config: RuntimeConfigService,
-      ): DocsAccessPolicy | null =>
-        config.docs.mode === 'protected'
-          ? new DocsAccessPolicyAdapter(
-              authenticate,
-              audit,
-              config.auth.sessionCookieName,
-            )
-          : null,
-    },
     RegisterUserUseCase,
     ResendEmailVerificationUseCase,
     ConfirmEmailVerificationUseCase,
@@ -286,52 +248,8 @@ export interface AuthModuleOptions {
           config.auth.selfService.acceptedResponseFloorMs,
         ),
     },
-    {
-      provide: AuthenticationGuard,
-      inject: [
-        Reflector,
-        AuthenticateSessionUseCase,
-        AuthRequestContext,
-        RuntimeConfigService,
-      ],
-      useFactory: (
-        reflector: Reflector,
-        authenticate: AuthenticateSessionUseCase,
-        requestContext: AuthRequestContext,
-        config: RuntimeConfigService,
-      ): AuthenticationGuard =>
-        new AuthenticationGuard(
-          reflector,
-          authenticate,
-          requestContext,
-          config.auth.sessionCookieName,
-        ),
-    },
-    {
-      provide: BrowserOriginGuard,
-      inject: [RuntimeConfigService],
-      useFactory: (config: RuntimeConfigService): BrowserOriginGuard =>
-        new BrowserOriginGuard(config.auth.csrfOrigins),
-    },
-    {
-      provide: SessionCsrfGuard,
-      inject: [Reflector, AuthRequestContext, GetCsrfTokenQuery],
-      useFactory: (
-        reflector: Reflector,
-        requestContext: AuthRequestContext,
-        csrf: GetCsrfTokenQuery,
-      ): SessionCsrfGuard =>
-        new SessionCsrfGuard(reflector, requestContext, csrf),
-    },
-    PermissionGuard,
-    AuthRequestInterceptor,
-    { provide: APP_GUARD, useExisting: AuthenticationGuard },
-    { provide: APP_GUARD, useExisting: BrowserOriginGuard },
-    { provide: APP_GUARD, useExisting: SessionCsrfGuard },
-    { provide: APP_GUARD, useExisting: PermissionGuard },
-    { provide: APP_INTERCEPTOR, useExisting: AuthRequestInterceptor },
   ],
-  exports: [AuthenticationModule, DOCS_ACCESS_POLICY],
+  exports: [AuthenticationModule],
 })
 export class AuthModule {
   /**
@@ -341,22 +259,20 @@ export class AuthModule {
    * @returns Dynamic auth module whose registry cannot observe later input mutations.
    */
   public static forRoot(options: AuthModuleOptions): DynamicModule {
-    const roleDefinitions = Object.freeze(
-      options.roleDefinitions.map((definition) =>
-        Object.freeze({
-          key: definition.key,
-          permissions: Object.freeze([...definition.permissions]),
-        }),
-      ),
-    )
+    const authorizationModule: ConfiguredAuthorizationModule =
+      AuthorizationModule.forRoot(options.roleDefinitions)
+
     return {
       module: AuthModule,
+      imports: [authorizationModule],
       providers: [
-        {
-          provide: AUTH_ROLE_DEFINITIONS,
-          useValue: roleDefinitions,
-        },
+        { provide: APP_GUARD, useExisting: AuthenticationGuard },
+        { provide: APP_GUARD, useExisting: BrowserOriginGuard },
+        { provide: APP_GUARD, useExisting: SessionCsrfGuard },
+        { provide: APP_GUARD, useExisting: PermissionGuard },
+        { provide: APP_INTERCEPTOR, useExisting: AuthRequestInterceptor },
       ],
+      exports: [authorizationModule],
     }
   }
 }

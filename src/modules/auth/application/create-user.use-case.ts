@@ -15,7 +15,7 @@ import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
 } from '../authentication/application/password-hasher.port'
-import { RoleRegistry } from './role-registry'
+import { RoleRegistry } from '../authorization/application/role-registry'
 
 /** Operator-supplied values for provisioning one product user. */
 export interface CreateUserInput {

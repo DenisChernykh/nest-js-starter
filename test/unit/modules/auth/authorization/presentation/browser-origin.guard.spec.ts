@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common'
 
 import { AuthCsrfRejectedError } from '@/modules/auth/application/auth-errors'
-import { BrowserOriginGuard } from '@/modules/auth/presentation/browser-origin.guard'
+import { BrowserOriginGuard } from '@/modules/auth/authorization/presentation/browser-origin.guard'
 
 function context(
   method: string,

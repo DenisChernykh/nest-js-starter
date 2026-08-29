@@ -1,13 +1,13 @@
 import type { ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
-import type { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
+import type { AuthenticateSessionUseCase } from '@/modules/auth/authorization/application/authenticate-session.use-case'
 import {
   AuthDependencyUnavailableError,
   AuthenticationRequiredError,
 } from '@/modules/auth/application/auth-errors'
-import { AuthRequestContext } from '@/modules/auth/presentation/auth-request.context'
-import { AuthenticationGuard } from '@/modules/auth/presentation/authentication.guard'
+import { AuthRequestContext } from '@/modules/auth/authorization/presentation/auth-request.context'
+import { AuthenticationGuard } from '@/modules/auth/authorization/presentation/authentication.guard'
 import { readAuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-request'
 import { PUBLIC_ENDPOINT_METADATA } from '@/platform/http/policy/public-endpoint.decorator'
 

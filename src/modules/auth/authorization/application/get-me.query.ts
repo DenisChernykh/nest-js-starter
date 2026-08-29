@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 
-import type { AuthenticatedPrincipal } from '../public-contracts/authenticated-principal'
+import type { AuthenticatedPrincipal } from '../../public-contracts/authenticated-principal'
 import type { PermissionKey } from './permission'
 
 /** Safe current-user projection returned by the browser auth API. */

@@ -1,4 +1,4 @@
-import { AuthController } from '@/modules/auth/presentation/auth.controller'
+import { AuthController } from '@/modules/auth/authorization/presentation/auth.controller'
 import {
   ChangePasswordRequestDto,
   LoginRequestDto,

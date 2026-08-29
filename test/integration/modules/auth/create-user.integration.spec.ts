@@ -95,7 +95,6 @@ describe('CreateUserUseCase integration', () => {
     const credential = await credentials.findCredentialByNormalizedEmail(
       'reviewer@example.com',
     )
-    expect(credential?.roleKeys).toEqual(['approval.reviewer'])
     await expect(
       new Argon2PasswordHasher().verify(
         'reviewer password',

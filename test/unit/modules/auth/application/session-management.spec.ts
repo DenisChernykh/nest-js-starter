@@ -4,11 +4,10 @@ import {
   type AuthSessionCleanupObserver,
 } from '@/modules/auth/sessions/application/session-cleanup.service'
 import { GetCsrfTokenQuery } from '@/modules/auth/sessions/application/get-csrf-token.query'
-import { GetMeQuery } from '@/modules/auth/application/get-me.query'
 import { ListSessionsQuery } from '@/modules/auth/sessions/application/list-sessions.query'
 import { LogoutAllUseCase } from '@/modules/auth/sessions/application/logout-all.use-case'
 import { LogoutUseCase } from '@/modules/auth/sessions/application/logout.use-case'
-import { definePermissions } from '@/modules/auth/application/permission'
+import { definePermissions } from '@/shared/application/permission'
 import { RevokeSessionUseCase } from '@/modules/auth/sessions/application/revoke-session.use-case'
 import type { SessionStorePort } from '@/modules/auth/sessions/application/session-store.port'
 import type { SessionGenerationPort } from '@/modules/auth/sessions/application/session-generation.port'
@@ -47,7 +46,7 @@ describe('auth session management', () => {
     ).rejects.toBeInstanceOf(AuthenticationRequiredError)
     expect(sessions.csrfToken).not.toHaveBeenCalled()
   })
-  it('returns the current CSRF token and a stable principal projection', async () => {
+  it('returns the current CSRF token for a live session', async () => {
     const record = {
       schema: 1 as const,
       publicId: 'current',
@@ -68,12 +67,6 @@ describe('auth session management', () => {
     await expect(
       new GetCsrfTokenQuery(sessions).execute('raw', 2),
     ).resolves.toEqual({ csrfToken: 'csrf' })
-    expect(new GetMeQuery().execute(principal)).toEqual({
-      userId: 'user',
-      normalizedEmail: 'user@example.com',
-      roleKeys: ['member.reader'],
-      permissions: ['catalog.read'],
-    })
   })
   it('increments generation before best-effort logout-all cleanup', async () => {
     const order: string[] = []

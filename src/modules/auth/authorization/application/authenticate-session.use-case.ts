@@ -4,9 +4,9 @@ import {
   AuthDependencyUnavailableError,
   AuthError,
   AuthenticationRequiredError,
-} from './auth-errors'
-import type { AuthenticatedPrincipal } from '../public-contracts/authenticated-principal'
-import { ResolveSessionIdentityQuery } from '../sessions/application/resolve-session-identity.query'
+} from '../../application/auth-errors'
+import type { AuthenticatedPrincipal } from '../../public-contracts/authenticated-principal'
+import { ResolveSessionIdentityQuery } from '../../sessions/application/resolve-session-identity.query'
 import { RoleRegistry } from './role-registry'
 
 /** Authenticates one opaque token against fresh durable account state. */

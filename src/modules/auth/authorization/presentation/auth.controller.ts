@@ -2,8 +2,8 @@ import { Controller, Get, Inject } from '@nestjs/common'
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'
 
 import { GetMeQuery } from '../application/get-me.query'
-import type { AuthenticatedPrincipal } from '../public-contracts/authenticated-principal'
-import { CurrentPrincipal } from '../public-contracts/current-principal.decorator'
+import type { AuthenticatedPrincipal } from '../../public-contracts/authenticated-principal'
+import { CurrentPrincipal } from '../../public-contracts/current-principal.decorator'
 import { CurrentUserResponseDto } from './auth-response.dto'
 import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.decorator'
 

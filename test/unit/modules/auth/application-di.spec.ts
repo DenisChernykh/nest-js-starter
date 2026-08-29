@@ -18,14 +18,14 @@ import {
   SessionCleanupService,
   type AuthSessionCleanupObserver,
 } from '@/modules/auth/sessions/application/session-cleanup.service'
-import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
+import { AuthenticateSessionUseCase } from '@/modules/auth/authorization/application/authenticate-session.use-case'
 import { ChangePasswordUseCase } from '@/modules/auth/authentication/application/change-password.use-case'
 import { ConfirmEmailVerificationUseCase } from '@/modules/auth/application/confirm-email-verification.use-case'
 import { ConfirmPasswordResetUseCase } from '@/modules/auth/application/confirm-password-reset.use-case'
 import { CreateInitialAdminUseCase } from '@/modules/auth/application/create-initial-admin.use-case'
 import { CreateUserUseCase } from '@/modules/auth/application/create-user.use-case'
 import { GetCsrfTokenQuery } from '@/modules/auth/sessions/application/get-csrf-token.query'
-import { GetMeQuery } from '@/modules/auth/application/get-me.query'
+import { GetMeQuery } from '@/modules/auth/authorization/application/get-me.query'
 import {
   EMAIL_VERIFICATION_PERSISTENCE,
   type EmailVerificationPersistencePort,
@@ -54,7 +54,7 @@ import {
   PASSWORD_RECOVERY_PERSISTENCE,
   type PasswordRecoveryPersistencePort,
 } from '@/modules/auth/application/password-recovery-persistence.port'
-import type { PermissionKey } from '@/modules/auth/application/permission'
+import type { PermissionKey } from '@/modules/auth/authorization/application/permission'
 import { RevokeSessionUseCase } from '@/modules/auth/sessions/application/revoke-session.use-case'
 import { ONE_TIME_TOKEN_CODEC } from '@/modules/auth/application/one-time-token-codec.port'
 import { PUBLIC_AUTH_RATE_LIMITER } from '@/modules/auth/application/public-auth-rate-limiter.port'
@@ -68,7 +68,7 @@ import { ResendEmailVerificationUseCase } from '@/modules/auth/application/resen
 import {
   createAuthRoleRegistry,
   RoleRegistry,
-} from '@/modules/auth/application/role-registry'
+} from '@/modules/auth/authorization/application/role-registry'
 import {
   SESSION_STORE,
   type SessionStorePort,
@@ -278,7 +278,6 @@ describe('auth application Nest dependency injection', () => {
     )
     expect(authProviders).toEqual(
       expect.arrayContaining([
-        AuthenticateSessionUseCase,
         PrismaAccountAdministrationMutationAdapter,
         PrismaAccountAdministrationReadAdapter,
         PrismaAccountProvisioningAdapter,
@@ -287,6 +286,9 @@ describe('auth application Nest dependency injection', () => {
         PrismaPasswordRecoveryAdapter,
         PrismaRegistrationAdapter,
       ]),
+    )
+    expect(authProviders).not.toEqual(
+      expect.arrayContaining([AuthenticateSessionUseCase, GetMeQuery]),
     )
 
     expect(identityDefinitions).toEqual(

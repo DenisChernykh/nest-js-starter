@@ -19,7 +19,7 @@ import {
   AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION,
   RoleRegistry,
   type RoleDefinition,
-} from './role-registry'
+} from '../authorization/application/role-registry'
 import type { PermissionKey } from '@/shared/application/permission'
 import { SessionCleanupService } from '../sessions/application/session-cleanup.service'
 import {

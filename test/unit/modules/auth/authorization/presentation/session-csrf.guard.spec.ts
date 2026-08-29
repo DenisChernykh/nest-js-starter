@@ -2,13 +2,13 @@ import type { ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
 import type { GetCsrfTokenQuery } from '@/modules/auth/sessions/application/get-csrf-token.query'
-import { AuthRequestContext } from '@/modules/auth/presentation/auth-request.context'
+import { AuthRequestContext } from '@/modules/auth/authorization/presentation/auth-request.context'
 import type { AuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-principal'
 import { CSRF_TOKEN_EXEMPT_METADATA } from '@/modules/auth/public-contracts/csrf-token-exempt.decorator'
 import {
   SessionCsrfGuard,
   type CsrfTokenComparator,
-} from '@/modules/auth/presentation/session-csrf.guard'
+} from '@/modules/auth/authorization/presentation/session-csrf.guard'
 
 function context(
   request: object,

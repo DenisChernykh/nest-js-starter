@@ -1,11 +1,14 @@
-import type { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+import type { AuthenticateSessionUseCase } from '@/modules/auth/authorization/application/authenticate-session.use-case'
 import type { AuthAuditPort } from '@/modules/auth/application/auth-audit.port'
 import {
   AuthDependencyUnavailableError,
   AuthenticationRequiredError,
 } from '@/modules/auth/application/auth-errors'
-import { definePermissions } from '@/modules/auth/application/permission'
-import { DocsAccessPolicyAdapter } from '@/modules/auth/presentation/docs-access-policy.adapter'
+import { definePermissions } from '@/modules/auth/authorization/application/permission'
+import { DocsAccessPolicyAdapter } from '@/modules/auth/authorization/presentation/docs-access-policy.adapter'
 
 describe('DocsAccessPolicyAdapter', () => {
   const rawToken = 'A'.repeat(43)
@@ -40,7 +43,9 @@ describe('DocsAccessPolicyAdapter', () => {
     ).toBe(false)
     expect(
       existsSync(
-        resolve('src/modules/auth/presentation/docs-access-policy.adapter.ts'),
+        resolve(
+          'src/modules/auth/authorization/presentation/docs-access-policy.adapter.ts',
+        ),
       ),
     ).toBe(true)
   })
@@ -132,5 +137,3 @@ describe('DocsAccessPolicyAdapter', () => {
     expect(emit).not.toHaveBeenCalled()
   })
 })
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'

@@ -3,7 +3,7 @@ import { PrismaAccountProvisioningAdapter } from '../account-administration/prov
 import {
   createAuthRoleRegistry,
   type RoleDefinition,
-} from '../application/role-registry'
+} from '../authorization/application/role-registry'
 import { Argon2PasswordHasher } from '../authentication/infrastructure/argon2-password.hasher'
 import type { AuthAuditPort } from '../application/auth-audit.port'
 import type { PrismaClientProvider } from '@/platform/database/prisma-client.provider'

@@ -1,10 +1,10 @@
 import type { ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
-import type { PermissionKey } from '@/modules/auth/application/permission'
+import type { PermissionKey } from '@/modules/auth/authorization/application/permission'
 import { AuthorizationDeniedError } from '@/modules/auth/application/auth-errors'
-import { AuthRequestContext } from '@/modules/auth/presentation/auth-request.context'
-import { PermissionGuard } from '@/modules/auth/presentation/permission.guard'
+import { AuthRequestContext } from '@/modules/auth/authorization/presentation/auth-request.context'
+import { PermissionGuard } from '@/modules/auth/authorization/presentation/permission.guard'
 import {
   REQUIRE_PERMISSION_METADATA,
   RequirePermission,

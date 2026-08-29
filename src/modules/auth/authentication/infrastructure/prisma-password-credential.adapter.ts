@@ -12,18 +12,19 @@ import {
   type TransactionPort,
 } from '@/shared/application/transaction.port'
 
-const authProjectionInclude = {
-  roles: { select: { roleKey: true } },
+const credentialSnapshotSelect = {
+  id: true,
+  status: true,
+  emailVerifiedAt: true,
+  credential: {
+    select: { passwordHash: true, version: true },
+  },
 } as const
 
 interface CredentialSnapshotRow {
   readonly id: string
-  readonly email: string
-  readonly normalizedEmail: string
   readonly status: 'INVITED' | 'ACTIVE' | 'DISABLED' | 'RETIRED'
   readonly emailVerifiedAt: Date | null
-  readonly sessionGeneration: bigint
-  readonly roles: readonly { readonly roleKey: string }[]
   readonly credential: {
     readonly passwordHash: string
     readonly version: number
@@ -45,12 +46,7 @@ export class PrismaPasswordCredentialAdapter implements PasswordCredentialPort {
     const row = await this.provider.withClient((client) =>
       client.user.findUnique({
         where: { normalizedEmail },
-        include: {
-          ...authProjectionInclude,
-          credential: {
-            select: { passwordHash: true, version: true },
-          },
-        },
+        select: credentialSnapshotSelect,
       }),
     )
     return row === null ? undefined : mapCredentialSnapshot(row)
@@ -62,12 +58,7 @@ export class PrismaPasswordCredentialAdapter implements PasswordCredentialPort {
     const row = await this.provider.withClient((client) =>
       client.user.findUnique({
         where: { id: userId },
-        include: {
-          ...authProjectionInclude,
-          credential: {
-            select: { passwordHash: true, version: true },
-          },
-        },
+        select: credentialSnapshotSelect,
       }),
     )
     return row === null ? undefined : mapCredentialSnapshot(row)
@@ -129,14 +120,10 @@ function mapCredentialSnapshot(
   if (row.credential === null) return undefined
   return Object.freeze({
     userId: row.id,
-    email: row.email,
-    normalizedEmail: row.normalizedEmail,
     status: row.status === 'ACTIVE' ? 'active' : 'disabled',
     emailVerifiedAt: row.emailVerifiedAt ?? undefined,
-    sessionGeneration: row.sessionGeneration,
     passwordHash: row.credential.passwordHash,
     passwordVersion: row.credential.version,
-    roleKeys: Object.freeze(row.roles.map(({ roleKey }) => roleKey).sort()),
   })
 }
 

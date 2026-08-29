@@ -29,12 +29,8 @@ describe('PrismaPasswordCredentialAdapter', () => {
   it('reads credential snapshots through normalized email and user id', async () => {
     const row = {
       id: 'user-1',
-      email: 'User@Example.com',
-      normalizedEmail: 'user@example.com',
       status: 'ACTIVE',
       emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
-      sessionGeneration: 2n,
-      roles: [{ roleKey: 'writer' }],
       credential: { passwordHash: 'hash', version: 4 },
     }
     const findUnique = jest.fn().mockResolvedValue(row)
@@ -46,28 +42,42 @@ describe('PrismaPasswordCredentialAdapter', () => {
 
     await expect(
       adapter.findCredentialByNormalizedEmail('user@example.com'),
-    ).resolves.toMatchObject({
+    ).resolves.toEqual({
       userId: 'user-1',
+      status: 'active',
+      emailVerifiedAt: row.emailVerifiedAt,
       passwordHash: 'hash',
       passwordVersion: 4,
     })
-    await expect(
-      adapter.findCredentialByUserId('user-1'),
-    ).resolves.toMatchObject({
+    await expect(adapter.findCredentialByUserId('user-1')).resolves.toEqual({
       userId: 'user-1',
+      status: 'active',
+      emailVerifiedAt: row.emailVerifiedAt,
       passwordHash: 'hash',
       passwordVersion: 4,
     })
-    expect(findUnique).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        where: { normalizedEmail: 'user@example.com' },
-      }),
-    )
-    expect(findUnique).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ where: { id: 'user-1' } }),
-    )
+    expect(findUnique).toHaveBeenNthCalledWith(1, {
+      where: { normalizedEmail: 'user@example.com' },
+      select: {
+        id: true,
+        status: true,
+        emailVerifiedAt: true,
+        credential: {
+          select: { passwordHash: true, version: true },
+        },
+      },
+    })
+    expect(findUnique).toHaveBeenNthCalledWith(2, {
+      where: { id: 'user-1' },
+      select: {
+        id: true,
+        status: true,
+        emailVerifiedAt: true,
+        credential: {
+          select: { passwordHash: true, version: true },
+        },
+      },
+    })
   })
 
   it('keeps password replacement and invalidation inside transaction boundaries', async () => {

@@ -14,22 +14,20 @@ describe('Prisma auth mapper', () => {
     roles: [{ roleKey: 'unknown.future' }, { roleKey: 'system.admin' }],
   }
 
-  it('maps durable values without Prisma types and sorts all role keys', () => {
+  it('maps only the credential verification fields', () => {
     expect(
       mapCredentialSnapshot({
-        ...row,
+        id: row.id,
+        status: row.status,
+        emailVerifiedAt: row.emailVerifiedAt,
         credential: { passwordHash: '$argon2id$fixture', version: 3 },
       }),
     ).toEqual({
       userId: row.id,
-      email: 'Admin@Example.com',
-      normalizedEmail: 'admin@example.com',
       status: 'active',
       emailVerifiedAt: row.emailVerifiedAt,
-      sessionGeneration: 7n,
       passwordHash: '$argon2id$fixture',
       passwordVersion: 3,
-      roleKeys: ['system.admin', 'unknown.future'],
     })
   })
 
@@ -45,6 +43,13 @@ describe('Prisma auth mapper', () => {
   })
 
   it('returns no credential snapshot when durable credentials are absent', () => {
-    expect(mapCredentialSnapshot({ ...row, credential: null })).toBeUndefined()
+    expect(
+      mapCredentialSnapshot({
+        id: row.id,
+        status: row.status,
+        emailVerifiedAt: row.emailVerifiedAt,
+        credential: null,
+      }),
+    ).toBeUndefined()
   })
 })

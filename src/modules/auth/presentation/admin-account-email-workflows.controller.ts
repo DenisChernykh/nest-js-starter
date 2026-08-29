@@ -11,14 +11,14 @@ import { AccountEmailWorkflowsService } from '../application/account-email-workf
 import {
   AUTH_ACCOUNTS_MANAGE_PERMISSION,
   AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION,
-} from '../application/role-registry'
+} from '../authorization/application/role-registry'
 import { RequirePermission } from '../public-contracts/require-permission.decorator'
 import {
   AccountMailDeliveryResponseDto,
   AdminAccountPathDto,
   CreateAccountInvitationRequestDto,
 } from './admin-account.dto'
-import { AuthRequestContext } from './auth-request.context'
+import { AuthRequestContext } from '../authorization/presentation/auth-request.context'
 import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.decorator'
 
 @Controller('admin/auth')

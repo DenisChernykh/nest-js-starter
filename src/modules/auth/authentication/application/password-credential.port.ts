@@ -2,14 +2,10 @@ import type { UserStatus } from '../../identity/domain/user-status'
 
 export interface CredentialSnapshot {
   readonly userId: string
-  readonly email: string
-  readonly normalizedEmail: string
   readonly status: UserStatus
   readonly emailVerifiedAt: Date | undefined
-  readonly sessionGeneration: bigint
   readonly passwordHash: string
   readonly passwordVersion: number
-  readonly roleKeys: readonly string[]
 }
 
 export interface ChangePasswordAndInvalidateInput {

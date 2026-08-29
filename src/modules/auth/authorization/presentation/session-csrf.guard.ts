@@ -4,9 +4,9 @@ import { Injectable } from '@nestjs/common'
 import type { CanActivate, ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
-import { AuthCsrfRejectedError } from '../application/auth-errors'
-import type { GetCsrfTokenQuery } from '../sessions/application/get-csrf-token.query'
-import { CSRF_TOKEN_EXEMPT_METADATA } from '../public-contracts/csrf-token-exempt.decorator'
+import { AuthCsrfRejectedError } from '../../application/auth-errors'
+import type { GetCsrfTokenQuery } from '../../sessions/application/get-csrf-token.query'
+import { CSRF_TOKEN_EXEMPT_METADATA } from '../../public-contracts/csrf-token-exempt.decorator'
 import type { AuthRequestContext } from './auth-request.context'
 
 /** Constant-time comparator contract for two canonical CSRF token values. */

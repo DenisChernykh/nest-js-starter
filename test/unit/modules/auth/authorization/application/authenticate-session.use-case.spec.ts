@@ -1,8 +1,8 @@
-import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
+import { AuthenticateSessionUseCase } from '@/modules/auth/authorization/application/authenticate-session.use-case'
 import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
 import type { IdentitySecurityStatePort } from '@/modules/auth/identity/application/identity-security-state.port'
-import { definePermissions } from '@/modules/auth/application/permission'
-import { RoleRegistry } from '@/modules/auth/application/role-registry'
+import { definePermissions } from '@/modules/auth/authorization/application/permission'
+import { RoleRegistry } from '@/modules/auth/authorization/application/role-registry'
 import type { SessionStorePort } from '@/modules/auth/sessions/application/session-store.port'
 import { ResolveSessionIdentityQuery } from '@/modules/auth/sessions/application/resolve-session-identity.query'
 

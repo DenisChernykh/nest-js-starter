@@ -2,12 +2,12 @@ import {
   DisabledUserError,
   UnknownRoleAssignmentError,
 } from '@/modules/auth/application/auth-errors'
-import { definePermissions } from '@/modules/auth/application/permission'
+import { definePermissions } from '@/modules/auth/authorization/application/permission'
 import {
   createAuthRoleRegistry,
   RoleRegistry,
   SYSTEM_ADMIN_PERMISSIONS,
-} from '@/modules/auth/application/role-registry'
+} from '@/modules/auth/authorization/application/role-registry'
 
 describe('RoleRegistry', () => {
   it('validates canonical permissions and rejects duplicates or wildcards', () => {

@@ -15,7 +15,7 @@ import {
   AUTH_ACCOUNTS_MANAGE_PERMISSION,
   AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION,
   RoleRegistry,
-} from '@/modules/auth/application/role-registry'
+} from '@/modules/auth/authorization/application/role-registry'
 
 const roles = new RoleRegistry([
   {

@@ -89,14 +89,10 @@ describe('LoginUseCase', () => {
   it('keeps missing, wrong-password and disabled failures indistinguishable', async () => {
     const activeSnapshot = {
       userId: 'user',
-      email: 'user@example.com',
-      normalizedEmail: 'user@example.com',
       status: 'active' as const,
       emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
-      sessionGeneration: 0n,
       passwordHash: 'stored-hash',
       passwordVersion: 0,
-      roleKeys: [],
     }
     const missing = harness(undefined)
     const wrongPassword = harness(activeSnapshot)
@@ -134,14 +130,10 @@ describe('LoginUseCase', () => {
   it('normalizes email and issues from durable generation and epoch', async () => {
     const target = harness({
       userId: 'user',
-      email: 'User@Example.com',
-      normalizedEmail: 'user@example.com',
       status: 'active',
       emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
-      sessionGeneration: 4n,
       passwordHash: 'stored-hash',
       passwordVersion: 2,
-      roleKeys: [],
     })
     await expect(
       target.useCase.execute({
@@ -168,14 +160,10 @@ describe('LoginUseCase', () => {
   it('requires verification after a correct password without rehash or session issuance', async () => {
     const target = harness({
       userId: 'unverified-user',
-      email: 'User@Example.com',
-      normalizedEmail: 'user@example.com',
       status: 'active',
       emailVerifiedAt: undefined,
-      sessionGeneration: 0n,
       passwordHash: 'stored-hash',
       passwordVersion: 0,
-      roleKeys: [],
     })
 
     await expect(

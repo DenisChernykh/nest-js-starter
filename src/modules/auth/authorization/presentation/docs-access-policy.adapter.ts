@@ -1,14 +1,14 @@
-import type { AuthAuditPort } from '../application/auth-audit.port'
+import type { AuthAuditPort } from '../../application/auth-audit.port'
 import {
   AuthDependencyUnavailableError,
   AuthenticationRequiredError,
-} from '../application/auth-errors'
+} from '../../application/auth-errors'
 import type { AuthenticateSessionUseCase } from '../application/authenticate-session.use-case'
 import {
   definePermissions,
   type PermissionKey,
 } from '../application/permission'
-import { readCanonicalSessionToken } from '../sessions/presentation/session-cookie'
+import { readCanonicalSessionToken } from '../../sessions'
 import type {
   DocsAccessDecision,
   DocsAccessProblemCode,

@@ -33,7 +33,7 @@ import {
   AUTH_ACCOUNTS_MANAGE_PERMISSION,
   AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION,
   RoleRegistry,
-} from './role-registry'
+} from '../authorization/application/role-registry'
 import type { PermissionKey } from '@/shared/application/permission'
 import {
   PUBLIC_AUTH_RATE_LIMITER,

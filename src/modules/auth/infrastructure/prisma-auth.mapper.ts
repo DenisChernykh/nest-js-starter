@@ -14,7 +14,10 @@ export interface AuthProjectionRow {
 }
 
 /** Structural Prisma row needed by the credential mapper. */
-export interface CredentialSnapshotRow extends AuthProjectionRow {
+export interface CredentialSnapshotRow {
+  readonly id: string
+  readonly status: AuthProjectionRow['status']
+  readonly emailVerifiedAt: Date | null
   readonly credential: {
     readonly passwordHash: string
     readonly version: number
@@ -47,7 +50,8 @@ export function mapCredentialSnapshot(
 ): CredentialSnapshot | undefined {
   if (row.credential === null) return undefined
   return Object.freeze({
-    ...mapAuthProjection(row),
+    userId: row.id,
+    status: mapStatus(row.status),
     emailVerifiedAt: row.emailVerifiedAt ?? undefined,
     passwordHash: row.credential.passwordHash,
     passwordVersion: row.credential.version,

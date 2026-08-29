@@ -30,9 +30,9 @@ import {
   AUTH_ACCOUNTS_MANAGE_PERMISSION,
   AUTH_ACCOUNTS_READ_PERMISSION,
   AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION,
-} from '../application/role-registry'
+} from '../authorization/application/role-registry'
 import { RequirePermission } from '../public-contracts/require-permission.decorator'
-import { AuthRequestContext } from './auth-request.context'
+import { AuthRequestContext } from '../authorization/presentation/auth-request.context'
 import {
   AdminAccountListResponseDto,
   AdminAccountPathDto,

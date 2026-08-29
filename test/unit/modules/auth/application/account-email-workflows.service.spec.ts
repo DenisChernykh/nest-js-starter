@@ -22,7 +22,7 @@ import {
   AUTH_ACCOUNTS_MANAGE_PERMISSION,
   AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION,
   RoleRegistry,
-} from '@/modules/auth/application/role-registry'
+} from '@/modules/auth/authorization/application/role-registry'
 import { AuthTokenInvalidOrExpiredError } from '@/modules/auth/application/self-service-auth.policy'
 import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
 import type { StructuredLogRecord } from '@/platform/logging/logging.contracts'

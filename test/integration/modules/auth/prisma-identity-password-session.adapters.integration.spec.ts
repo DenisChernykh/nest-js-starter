@@ -19,7 +19,7 @@ describe('Prisma identity, password credential and session adapters', () => {
     await runtime.close()
   })
 
-  it('retains original email, enforces normalized uniqueness and sorts roles', async () => {
+  it('keeps credential projection minimal and identity projection authoritative', async () => {
     const userId = await runtime.provider.withClient(async (client) => {
       const user = await client.user.create({
         data: {
@@ -49,10 +49,19 @@ describe('Prisma identity, password credential and session adapters', () => {
 
     await expect(
       runtime.credentials.findCredentialByNormalizedEmail('admin@example.com'),
+    ).resolves.toEqual({
+      userId,
+      status: 'active',
+      emailVerifiedAt: undefined,
+      passwordHash: '$argon2id$fixture',
+      passwordVersion: 0,
+    })
+    await expect(
+      runtime.identity.findAuthProjectionByUserId(userId),
     ).resolves.toEqual(
       expect.objectContaining({
-        userId,
         email: 'Admin@Example.com',
+        normalizedEmail: 'admin@example.com',
         roleKeys: ['system.admin', 'unknown.future'],
       }),
     )

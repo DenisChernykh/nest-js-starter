@@ -6,11 +6,11 @@ import {
   type CreateUserResult,
 } from '@/modules/auth/application/create-user.use-case'
 import type { PasswordHasherPort } from '@/modules/auth/authentication/application/password-hasher.port'
-import { definePermissions } from '@/modules/auth/application/permission'
+import { definePermissions } from '@/modules/auth/authorization/application/permission'
 import {
   createAuthRoleRegistry,
   type RoleDefinition,
-} from '@/modules/auth/application/role-registry'
+} from '@/modules/auth/authorization/application/role-registry'
 
 const roleDefinitions: readonly RoleDefinition[] = [
   { key: 'system.admin', permissions: definePermissions(['system.docs.read']) },
