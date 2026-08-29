@@ -310,6 +310,14 @@ describe('production Compose runtime contract', () => {
       postgres: { condition: 'service_healthy', required: true },
     })
     expect(migrator.restart).toBe('no')
+    expect(migrator.command).toEqual([
+      'node',
+      'node_modules/prisma/build/index.js',
+      'migrate',
+      'deploy',
+      '--config',
+      'prisma.config.ts',
+    ])
     expect(migrator.environment).toEqual({
       DATABASE_URL: `postgresql://app_migrator:${secrets.migratorPassword}@postgres:5432/nest_js_starter?schema=public`,
       NODE_ENV: 'production',
