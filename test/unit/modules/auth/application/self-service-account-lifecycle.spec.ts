@@ -3,7 +3,9 @@ import {
   AuthMailDeliveryError,
   type AuthMailDeliveryPort,
 } from '@/modules/auth/application/auth-mail-delivery.port'
-import type { AuthPersistencePort } from '@/modules/auth/application/auth-persistence.port'
+import type { EmailVerificationPersistencePort } from '@/modules/auth/application/email-verification-persistence.port'
+import type { PasswordRecoveryPersistencePort } from '@/modules/auth/application/password-recovery-persistence.port'
+import type { RegistrationPersistencePort } from '@/modules/auth/application/registration-persistence.port'
 import { AuthRateLimitedError } from '@/modules/auth/application/auth-errors'
 import { ConfirmEmailVerificationUseCase } from '@/modules/auth/application/confirm-email-verification.use-case'
 import { ConfirmPasswordResetUseCase } from '@/modules/auth/application/confirm-password-reset.use-case'
@@ -15,6 +17,10 @@ import { SelfServiceAuthPolicy } from '@/modules/auth/application/self-service-a
 import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
 import type { AuthSessionCleanupObserver } from '@/modules/auth/application/auth.types'
+
+type SelfServicePersistencePort = RegistrationPersistencePort &
+  EmailVerificationPersistencePort &
+  PasswordRecoveryPersistencePort
 
 const now = new Date('2026-08-06T00:00:00.000Z')
 const policy = new SelfServiceAuthPolicy({
@@ -85,7 +91,7 @@ describe('self-service account lifecycle use cases', () => {
     const consume = jest.fn(() => Promise.resolve({ allowed: true as const }))
     const publicLimiter: PublicAuthRateLimiterPort = { consume }
     const target = new RegisterUserUseCase(
-      {} as AuthPersistencePort,
+      {} as SelfServicePersistencePort,
       passwords(),
       publicLimiter,
       codec(),
@@ -116,7 +122,9 @@ describe('self-service account lifecycle use cases', () => {
     })
     const registerSelfServiceUser = jest.fn(
       (
-        input: Parameters<AuthPersistencePort['registerSelfServiceUser']>[0],
+        input: Parameters<
+          RegistrationPersistencePort['registerSelfServiceUser']
+        >[0],
       ) => {
         void input
         return Promise.resolve({
@@ -127,7 +135,7 @@ describe('self-service account lifecycle use cases', () => {
       },
     )
     const target = new RegisterUserUseCase(
-      { registerSelfServiceUser } as unknown as AuthPersistencePort,
+      { registerSelfServiceUser },
       password,
       limiter(),
       codec(),
@@ -174,7 +182,7 @@ describe('self-service account lifecycle use cases', () => {
         registerSelfServiceUser: jest.fn(() =>
           Promise.resolve({ created: false as const }),
         ),
-      } as unknown as AuthPersistencePort,
+      },
       passwords(),
       limiter(),
       codec(),
@@ -199,7 +207,7 @@ describe('self-service account lifecycle use cases', () => {
     const publicLimiter = limiter({ allowed: false, retryAfterMs: 12_000 })
     const persistence = { rotatePasswordResetToken: jest.fn() }
     const target = new RequestPasswordResetUseCase(
-      persistence as unknown as AuthPersistencePort,
+      persistence as unknown as SelfServicePersistencePort,
       publicLimiter,
       codec(),
       mail(),
@@ -222,7 +230,7 @@ describe('self-service account lifecycle use cases', () => {
       Promise.resolve({ userId: 'user-1', email: 'user@example.com' }),
     )
     const target = new ConfirmEmailVerificationUseCase(
-      { confirmEmailVerification } as unknown as AuthPersistencePort,
+      { confirmEmailVerification } as unknown as SelfServicePersistencePort,
       codec(),
       policy,
       { emit: events.emit },
@@ -253,7 +261,7 @@ describe('self-service account lifecycle use cases', () => {
       {
         getEligiblePasswordResetTokenSource,
         confirmPasswordReset,
-      } as unknown as AuthPersistencePort,
+      } as unknown as SelfServicePersistencePort,
       password,
       codec(),
       policy,
@@ -293,7 +301,7 @@ describe('self-service account lifecycle use cases', () => {
         {
           getEligiblePasswordResetTokenSource,
           confirmPasswordReset,
-        } as unknown as AuthPersistencePort,
+        } as unknown as SelfServicePersistencePort,
         password,
         codec(),
         policy,
@@ -328,7 +336,7 @@ describe('self-service account lifecycle use cases', () => {
         confirmPasswordReset: jest.fn(() =>
           Promise.resolve({ userId: 'user-1', email: 'user@example.com' }),
         ),
-      } as unknown as AuthPersistencePort,
+      } as unknown as SelfServicePersistencePort,
       passwords(),
       codec(),
       policy,
@@ -369,7 +377,7 @@ describe('self-service account lifecycle use cases', () => {
           Promise.resolve<'administrator'>('administrator'),
         ),
         confirmPasswordReset,
-      } as unknown as AuthPersistencePort,
+      } as unknown as SelfServicePersistencePort,
       password,
       codec(),
       policy,
@@ -403,7 +411,7 @@ describe('self-service account lifecycle use cases', () => {
           Promise.resolve<'administrator'>('administrator'),
         ),
         confirmPasswordReset,
-      } as unknown as AuthPersistencePort,
+      } as unknown as SelfServicePersistencePort,
       passwords(),
       codec(),
       administratorOnlyPolicy,

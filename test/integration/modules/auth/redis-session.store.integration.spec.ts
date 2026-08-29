@@ -1,8 +1,8 @@
 import type { StartedRedisContainer } from '@testcontainers/redis'
 
 import type { IssuedBrowserSession } from '@/modules/auth/application/session-store.port'
-import { NodeAuthCryptoAdapter } from '@/modules/auth/infrastructure/node-auth-crypto.adapter'
 import { RedisSessionStore } from '@/modules/auth/infrastructure/redis-session.store'
+import { NodeSessionCryptoAdapter } from '@/modules/auth/sessions/infrastructure/node-session-crypto.adapter'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'
 import { RedisAuthConnectionManager } from '@/platform/redis/redis-auth.connection'
@@ -18,7 +18,7 @@ describe('RedisSessionStore', () => {
   let container: StartedRedisContainer
   let lifecycle: RedisLifecycle
   let executor: RedisCommandExecutorPort
-  let crypto: NodeAuthCryptoAdapter
+  let crypto: NodeSessionCryptoAdapter
   let store: RedisSessionStore
 
   beforeAll(async () => {
@@ -37,7 +37,7 @@ describe('RedisSessionStore', () => {
     lifecycle = new RedisLifecycle(connection, 1_000)
     await lifecycle.connect(AbortSignal.timeout(2_000))
     executor = connection.commandExecutor
-    crypto = new NodeAuthCryptoAdapter()
+    crypto = new NodeSessionCryptoAdapter()
     store = createStore(executor, crypto)
   })
 
@@ -54,7 +54,7 @@ describe('RedisSessionStore', () => {
 
   function createStore(
     target: RedisCommandExecutorPort,
-    authCrypto: NodeAuthCryptoAdapter,
+    authCrypto: NodeSessionCryptoAdapter,
     overrides: Partial<{
       idleTimeoutMs: number
       absoluteTimeoutMs: number

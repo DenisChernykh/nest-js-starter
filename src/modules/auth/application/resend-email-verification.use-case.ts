@@ -16,9 +16,9 @@ import {
   AuthRateLimitedError,
 } from './auth-errors'
 import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from './auth-persistence.port'
+  EMAIL_VERIFICATION_PERSISTENCE,
+  type EmailVerificationPersistencePort,
+} from './email-verification-persistence.port'
 import {
   ONE_TIME_TOKEN_CODEC,
   type OneTimeTokenCodecPort,
@@ -38,7 +38,8 @@ export interface ResendEmailVerificationInput {
 @Injectable()
 export class ResendEmailVerificationUseCase {
   public constructor(
-    @Inject(AUTH_PERSISTENCE) private readonly persistence: AuthPersistencePort,
+    @Inject(EMAIL_VERIFICATION_PERSISTENCE)
+    private readonly persistence: EmailVerificationPersistencePort,
     @Inject(PUBLIC_AUTH_RATE_LIMITER)
     private readonly limiter: PublicAuthRateLimiterPort,
     @Inject(ONE_TIME_TOKEN_CODEC)

@@ -1,12 +1,11 @@
 import {
   AccountAdministrationDisabledError,
   AccountAdministrationService,
-  AccountEtagMalformedError,
-  AccountEtagPreconditionFailedError,
-  AccountEtagPreconditionRequiredError,
+  AccountRevisionConflictError,
   AccountSelfMutationForbiddenError,
 } from '@/modules/auth/application/account-administration.service'
-import type { AccountAdministrationPort } from '@/modules/auth/application/account-administration.port'
+import type { AccountAdministrationMutationPort } from '@/modules/auth/application/account-administration-mutation.port'
+import type { AccountAdministrationReadPort } from '@/modules/auth/application/account-administration-read.port'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
 import type { AuthAuditEvent } from '@/modules/auth/application/auth-audit.port'
 import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
@@ -27,13 +26,17 @@ const roles = new RoleRegistry([
   },
 ])
 
+type AccountAdministrationPersistence = AccountAdministrationReadPort &
+  AccountAdministrationMutationPort
+
 describe('AccountAdministrationService', () => {
   it('rejects a status mutation for the acting account before persistence', async () => {
     const changeStatus = jest.fn()
     const persistence = {
       changeStatus,
-    } as unknown as AccountAdministrationPort
+    } as unknown as AccountAdministrationPersistence
     const service = new AccountAdministrationService(
+      persistence,
       persistence,
       {
         mode: 'enabled',
@@ -46,7 +49,7 @@ describe('AccountAdministrationService', () => {
         actorId: 'user-1',
         accountId: 'user-1',
         status: 'disabled',
-        ifMatch: '"account-user-1-0"',
+        expectedRevision: 0,
       }),
     ).rejects.toBeInstanceOf(AccountSelfMutationForbiddenError)
     expect(changeStatus).not.toHaveBeenCalled()
@@ -56,8 +59,9 @@ describe('AccountAdministrationService', () => {
     const changeStatus = jest.fn()
     const persistence = {
       changeStatus,
-    } as unknown as AccountAdministrationPort
+    } as unknown as AccountAdministrationPersistence
     const service = new AccountAdministrationService(
+      persistence,
       persistence,
       { mode: 'enabled' },
       roles,
@@ -70,7 +74,7 @@ describe('AccountAdministrationService', () => {
         actorId,
         accountId,
         status: 'disabled',
-        ifMatch: `"account-${accountId}-0"`,
+        expectedRevision: 0,
       }),
     ).rejects.toBeInstanceOf(AccountSelfMutationForbiddenError)
     expect(changeStatus).not.toHaveBeenCalled()
@@ -80,8 +84,8 @@ describe('AccountAdministrationService', () => {
     const listAccounts = jest.fn()
     const persistence = {
       listAccounts,
-    } as unknown as AccountAdministrationPort
-    const service = new AccountAdministrationService(persistence, {
+    } as unknown as AccountAdministrationPersistence
+    const service = new AccountAdministrationService(persistence, persistence, {
       mode: 'disabled',
     })
 
@@ -91,12 +95,13 @@ describe('AccountAdministrationService', () => {
     expect(listAccounts).not.toHaveBeenCalled()
   })
 
-  it('parses only the current account strong ETag before a mutation', async () => {
+  it('passes the transport-neutral expected revision to persistence', async () => {
     const changeStatus = jest.fn().mockResolvedValue(undefined)
     const persistence = {
       changeStatus,
-    } as unknown as AccountAdministrationPort
+    } as unknown as AccountAdministrationPersistence
     const service = new AccountAdministrationService(
+      persistence,
       persistence,
       { mode: 'enabled' },
       roles,
@@ -107,42 +112,18 @@ describe('AccountAdministrationService', () => {
       actorId: '2f54e3a8-a613-4a85-b0dc-08ea0c3cf123',
       accountId,
       status: 'disabled',
-      ifMatch: `"account-${accountId}-7"`,
+      expectedRevision: 7,
     })
 
     expect(changeStatus).toHaveBeenCalledWith({
       actorId: '2f54e3a8-a613-4a85-b0dc-08ea0c3cf123',
       accountId,
       status: 'disabled',
-      ifMatch: `"account-${accountId}-7"`,
       expectedRevision: 7,
       actorAuthorization: {
         requiredRoleGroups: [['system.admin']],
       },
     })
-  })
-
-  it('rejects missing and malformed ETags before persistence', async () => {
-    const changeStatus = jest.fn()
-    const persistence = {
-      changeStatus,
-    } as unknown as AccountAdministrationPort
-    const service = new AccountAdministrationService(persistence, {
-      mode: 'enabled',
-    })
-    const input = {
-      actorId: '2f54e3a8-a613-4a85-b0dc-08ea0c3cf123',
-      accountId: '95ee8d48-2f19-49be-af21-c5f471c1e502',
-      status: 'disabled' as const,
-    }
-
-    await expect(
-      service.changeStatus({ ...input, ifMatch: undefined }),
-    ).rejects.toBeInstanceOf(AccountEtagPreconditionRequiredError)
-    await expect(
-      service.changeStatus({ ...input, ifMatch: 'W/"anything"' }),
-    ).rejects.toBeInstanceOf(AccountEtagMalformedError)
-    expect(changeStatus).not.toHaveBeenCalled()
   })
 
   it('cleans Redis sessions after a durable disable', async () => {
@@ -159,10 +140,12 @@ describe('AccountAdministrationService', () => {
       revision: 1,
     }
     const revokeAll = jest.fn(() => Promise.resolve(2))
+    const persistence = {
+      changeStatus: () => Promise.resolve(account),
+    } as unknown as AccountAdministrationPersistence
     const service = new AccountAdministrationService(
-      {
-        changeStatus: () => Promise.resolve(account),
-      } as unknown as AccountAdministrationPort,
+      persistence,
+      persistence,
       { mode: 'enabled' },
       roles,
       { revokeAll } as unknown as SessionStorePort,
@@ -173,7 +156,7 @@ describe('AccountAdministrationService', () => {
         actorId: '2f54e3a8-a613-4a85-b0dc-08ea0c3cf123',
         accountId,
         status: 'disabled',
-        ifMatch: `"account-${accountId}-0"`,
+        expectedRevision: 0,
       }),
     ).resolves.toEqual(account)
     expect(revokeAll).toHaveBeenCalledWith(accountId)
@@ -200,13 +183,15 @@ describe('AccountAdministrationService', () => {
       },
     }
     const audit = new AuthAuditLogger(sink)
+    const persistence = {
+      changeStatus: () => Promise.resolve(account),
+      replaceRoles: () => Promise.resolve(account),
+      retireAccount: () => Promise.resolve(true),
+      revokeAllSessions: () => Promise.resolve(true),
+    } as unknown as AccountAdministrationPersistence
     const service = new AccountAdministrationService(
-      {
-        changeStatus: () => Promise.resolve(account),
-        replaceRoles: () => Promise.resolve(account),
-        retireAccount: () => Promise.resolve(true),
-        revokeAllSessions: () => Promise.resolve(true),
-      } as unknown as AccountAdministrationPort,
+      persistence,
+      persistence,
       { mode: 'enabled' },
       roles,
       undefined,
@@ -218,18 +203,18 @@ describe('AccountAdministrationService', () => {
       actorId,
       accountId,
       status: 'disabled',
-      ifMatch: `"account-${accountId}-0"`,
+      expectedRevision: 0,
     })
     await service.replaceRoles({
       actorId,
       accountId,
       roleKeys: [],
-      ifMatch: `"account-${accountId}-1"`,
+      expectedRevision: 1,
     })
     await service.retireAccount({
       actorId,
       accountId,
-      ifMatch: `"account-${accountId}-2"`,
+      expectedRevision: 2,
     })
     await service.revokeAllSessions({ actorId, accountId })
 
@@ -278,11 +263,12 @@ describe('AccountAdministrationService', () => {
     const accountId = '95ee8d48-2f19-49be-af21-c5f471c1e502'
     const actorId = '2f54e3a8-a613-4a85-b0dc-08ea0c3cf123'
     const events: AuthAuditEvent[] = []
+    const persistence = {
+      changeStatus: () => Promise.reject(new AccountRevisionConflictError()),
+    } as unknown as AccountAdministrationPersistence
     const service = new AccountAdministrationService(
-      {
-        changeStatus: () =>
-          Promise.reject(new AccountEtagPreconditionFailedError()),
-      } as unknown as AccountAdministrationPort,
+      persistence,
+      persistence,
       { mode: 'enabled' },
       roles,
       undefined,
@@ -295,9 +281,9 @@ describe('AccountAdministrationService', () => {
         actorId,
         accountId,
         status: 'disabled',
-        ifMatch: `"account-${accountId}-0"`,
+        expectedRevision: 0,
       }),
-    ).rejects.toBeInstanceOf(AccountEtagPreconditionFailedError)
+    ).rejects.toBeInstanceOf(AccountRevisionConflictError)
     expect(events).toEqual([
       {
         action: 'status_change',
@@ -314,10 +300,12 @@ describe('AccountAdministrationService', () => {
     const accountId = '95ee8d48-2f19-49be-af21-c5f471c1e502'
     const cleanupIncomplete = jest.fn()
     const events: AuthAuditEvent[] = []
+    const persistence = {
+      revokeAllSessions: () => Promise.resolve(true),
+    } as unknown as AccountAdministrationPersistence
     const service = new AccountAdministrationService(
-      {
-        revokeAllSessions: () => Promise.resolve(true),
-      } as unknown as AccountAdministrationPort,
+      persistence,
+      persistence,
       { mode: 'enabled' },
       roles,
       {

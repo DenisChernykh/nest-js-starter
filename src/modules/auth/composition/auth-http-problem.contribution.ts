@@ -4,11 +4,11 @@ import {
   EmailVerificationRequiredError,
   AuthRateLimitedError,
 } from '../application/auth-errors'
+import { AccountRevisionConflictError } from '../application/account-administration.service'
 import {
   AccountEtagMalformedError,
-  AccountEtagPreconditionFailedError,
   AccountEtagPreconditionRequiredError,
-} from '../application/account-administration.service'
+} from '../presentation/account-etag.codec'
 import { AuthTokenInvalidOrExpiredError } from '../application/self-service-auth.policy'
 import {
   AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
@@ -61,7 +61,7 @@ function mapAuthHttpProblem(error: unknown): HttpProblemMapping | undefined {
   if (error instanceof AccountEtagPreconditionRequiredError) {
     return { code: AUTH_ACCOUNT_PRECONDITION_REQUIRED_PROBLEM.code }
   }
-  if (error instanceof AccountEtagPreconditionFailedError) {
+  if (error instanceof AccountRevisionConflictError) {
     return { code: AUTH_ACCOUNT_PRECONDITION_FAILED_PROBLEM.code }
   }
   if (!(error instanceof AuthError)) return undefined

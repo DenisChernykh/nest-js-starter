@@ -1,6 +1,7 @@
 import type { StartedRedisContainer } from '@testcontainers/redis'
 
-import { NodeAuthCryptoAdapter } from '@/modules/auth/infrastructure/node-auth-crypto.adapter'
+import { NodeAccountLifecycleCryptoAdapter } from '@/modules/auth/account-lifecycle/infrastructure/node-account-lifecycle-crypto.adapter'
+import { NodePasswordAuthCryptoAdapter } from '@/modules/auth/authentication/password/infrastructure/node-password-auth-crypto.adapter'
 import { RedisLoginRateLimiter } from '@/modules/auth/infrastructure/redis-login-rate-limiter'
 import { RedisPublicAuthRateLimiter } from '@/modules/auth/infrastructure/redis-public-auth-rate-limiter'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
@@ -15,7 +16,7 @@ describe('RedisPublicAuthRateLimiter', () => {
   let container: StartedRedisContainer
   let lifecycle: RedisLifecycle
   let executor: RedisCommandExecutorPort
-  let crypto: NodeAuthCryptoAdapter
+  let crypto: NodeAccountLifecycleCryptoAdapter
 
   beforeAll(async () => {
     container = await startRedisContainer()
@@ -32,7 +33,7 @@ describe('RedisPublicAuthRateLimiter', () => {
     )
     lifecycle = new RedisLifecycle(connection, 500)
     executor = connection.commandExecutor
-    crypto = new NodeAuthCryptoAdapter()
+    crypto = new NodeAccountLifecycleCryptoAdapter()
     await lifecycle.connect(AbortSignal.timeout(2_000))
   })
 
@@ -119,14 +120,18 @@ describe('RedisPublicAuthRateLimiter', () => {
 
   it('keeps public operation keys isolated from the existing login limiter', async () => {
     const publicLimiter = createLimiter()
-    const loginLimiter = new RedisLoginRateLimiter(executor, crypto, {
-      keyPrefix: 'nest-js-starter',
-      environment: 'test',
-      hmacSecret,
-      ipLimit: 20,
-      accountLimit: 10,
-      windowMs: 900_000,
-    })
+    const loginLimiter = new RedisLoginRateLimiter(
+      executor,
+      new NodePasswordAuthCryptoAdapter(),
+      {
+        keyPrefix: 'nest-js-starter',
+        environment: 'test',
+        hmacSecret,
+        ipLimit: 20,
+        accountLimit: 10,
+        windowMs: 900_000,
+      },
+    )
     const input = {
       ipAddress: '192.0.2.25',
       normalizedEmail: 'isolated@example.com',

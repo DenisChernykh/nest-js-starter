@@ -7,28 +7,22 @@ import {
   type AuthAuditPort,
 } from './auth-audit.port'
 import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from './auth-persistence.port'
-import {
   AUTH_SESSION_CLEANUP_OBSERVER,
   type AuthDurableMutationResult,
   type AuthSessionCleanupObserver,
 } from './auth.types'
 import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 import {
-  TRANSACTION_PORT,
-  type TransactionPort,
-} from '@/shared/application/transaction.port'
+  SESSION_GENERATION,
+  type SessionGenerationPort,
+} from './session-generation.port'
 
 /** Durably invalidates every generation before best-effort Redis cleanup. */
 @Injectable()
 export class LogoutAllUseCase {
   public constructor(
-    @Inject(AUTH_PERSISTENCE)
-    private readonly persistence: AuthPersistencePort,
-    @Inject(TRANSACTION_PORT)
-    private readonly transaction: TransactionPort,
+    @Inject(SESSION_GENERATION)
+    private readonly generation: SessionGenerationPort,
     @Inject(SESSION_STORE)
     private readonly sessions: SessionStorePort,
     @Inject(AUTH_SESSION_CLEANUP_OBSERVER)
@@ -46,9 +40,7 @@ export class LogoutAllUseCase {
     userId: string,
   ): Promise<AuthDurableMutationResult> {
     try {
-      await this.transaction.run(() =>
-        this.persistence.incrementSessionGeneration(userId),
-      )
+      await this.generation.incrementSessionGeneration(userId)
       try {
         await this.sessions.revokeAll(userId)
         this.audit.emit({

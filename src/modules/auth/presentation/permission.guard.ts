@@ -3,9 +3,9 @@ import type { CanActivate, ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
 import { AuthorizationDeniedError } from '../application/auth-errors'
-import type { PermissionKey } from '../application/permission'
+import { REQUIRE_PERMISSION_METADATA } from '../public-contracts/require-permission.decorator'
 import { AuthRequestContext } from './auth-request.context'
-import { REQUIRE_PERMISSION_METADATA } from './require-permission.decorator'
+import type { PermissionKey } from '@/shared/application/permission'
 
 /** Enforces an all-of permission policy against the freshly loaded principal. */
 @Injectable()

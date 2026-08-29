@@ -2,8 +2,8 @@ import type { ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
 import type { GetCsrfTokenQuery } from '@/modules/auth/application/get-csrf-token.query'
-import type { AuthenticatedPrincipal } from '@/modules/auth/application/auth.types'
 import { AuthRequestContext } from '@/modules/auth/presentation/auth-request.context'
+import type { AuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-principal'
 import {
   CSRF_TOKEN_EXEMPT_METADATA,
   SessionCsrfGuard,

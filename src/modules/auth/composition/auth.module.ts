@@ -2,19 +2,22 @@ import { Module, type DynamicModule } from '@nestjs/common'
 import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core'
 
 import { AUTH_AUDIT } from '../application/auth-audit.port'
+import { ACCOUNT_PROVISIONING } from '../application/account-provisioning.port'
 import {
-  ACCOUNT_ADMINISTRATION,
-  type AccountAdministrationPort,
-} from '../application/account-administration.port'
+  ACCOUNT_ADMINISTRATION_MUTATION,
+  type AccountAdministrationMutationPort,
+} from '../application/account-administration-mutation.port'
+import {
+  ACCOUNT_ADMINISTRATION_READ,
+  type AccountAdministrationReadPort,
+} from '../application/account-administration-read.port'
 import { AccountAdministrationService } from '../application/account-administration.service'
-import { ACCOUNT_EMAIL_WORKFLOWS } from '../application/account-email-workflows.port'
 import { AccountEmailWorkflowsPolicy } from '../application/account-email-workflows.policy'
 import { AccountEmailWorkflowsService } from '../application/account-email-workflows.service'
 import {
   AUTH_MAIL_DELIVERY,
   type AuthMailDeliveryPort,
 } from '../application/auth-mail-delivery.port'
-import { AUTH_PERSISTENCE } from '../application/auth-persistence.port'
 import {
   AUTH_DUMMY_PASSWORD_HASH,
   AUTH_SESSION_CLEANUP_OBSERVER,
@@ -27,12 +30,17 @@ import { ConfirmEmailVerificationUseCase } from '../application/confirm-email-ve
 import { ConfirmPasswordResetUseCase } from '../application/confirm-password-reset.use-case'
 import { GetCsrfTokenQuery } from '../application/get-csrf-token.query'
 import { GetMeQuery } from '../application/get-me.query'
+import { EMAIL_VERIFICATION_PERSISTENCE } from '../application/email-verification-persistence.port'
+import { IDENTITY_SECURITY_STATE } from '../application/identity-security-state.port'
+import { INVITATION_PERSISTENCE } from '../application/invitation-persistence.port'
 import { LOGIN_RATE_LIMITER } from '../application/login-rate-limiter.port'
 import { ListSessionsQuery } from '../application/list-sessions.query'
 import { LoginUseCase } from '../application/login.use-case'
 import { LogoutAllUseCase } from '../application/logout-all.use-case'
 import { LogoutUseCase } from '../application/logout.use-case'
 import { PASSWORD_HASHER } from '../application/password-hasher.port'
+import { PASSWORD_CREDENTIALS } from '../application/password-credential.port'
+import { PASSWORD_RECOVERY_PERSISTENCE } from '../application/password-recovery-persistence.port'
 import {
   createAuthRoleRegistry,
   RoleRegistry,
@@ -41,18 +49,32 @@ import {
 import { RevokeSessionUseCase } from '../application/revoke-session.use-case'
 import { ONE_TIME_TOKEN_CODEC } from '../application/one-time-token-codec.port'
 import { PUBLIC_AUTH_RATE_LIMITER } from '../application/public-auth-rate-limiter.port'
+import { REGISTRATION_PERSISTENCE } from '../application/registration-persistence.port'
 import { RegisterUserUseCase } from '../application/register-user.use-case'
 import { RequestPasswordResetUseCase } from '../application/request-password-reset.use-case'
 import { ResendEmailVerificationUseCase } from '../application/resend-email-verification.use-case'
 import { SESSION_STORE } from '../application/session-store.port'
+import { SESSION_GENERATION } from '../application/session-generation.port'
+import { SessionIssuer } from '../application/session-issuer'
 import { SelfServiceAuthPolicy } from '../application/self-service-auth.policy'
+import { PrismaAccountAdministrationMutationAdapter } from '../account-administration/infrastructure/prisma-account-administration-mutation.adapter'
+import { PrismaAccountAdministrationReadAdapter } from '../account-administration/infrastructure/prisma-account-administration-read.adapter'
+import { PrismaAccountProvisioningAdapter } from '../account-administration/provisioning/infrastructure/prisma-account-provisioning.adapter'
+import { PrismaEmailVerificationAdapter } from '../account-lifecycle/email-verification/infrastructure/prisma-email-verification.adapter'
+import { PrismaInvitationAdapter } from '../account-lifecycle/invitations/infrastructure/prisma-invitation.adapter'
+import { NodeAccountLifecycleCryptoAdapter } from '../account-lifecycle/infrastructure/node-account-lifecycle-crypto.adapter'
+import { PrismaPasswordRecoveryAdapter } from '../account-lifecycle/password-recovery/infrastructure/prisma-password-recovery.adapter'
+import { PrismaRegistrationAdapter } from '../account-lifecycle/registration/infrastructure/prisma-registration.adapter'
+import { NodePasswordAuthCryptoAdapter } from '../authentication/password/infrastructure/node-password-auth-crypto.adapter'
+import { PrismaPasswordCredentialAdapter } from '../authentication/password/infrastructure/prisma-password-credential.adapter'
+import { PrismaIdentitySecurityStateAdapter } from '../identity/infrastructure/prisma-identity-security-state.adapter'
 import { Argon2PasswordHasher } from '../infrastructure/argon2-password.hasher'
-import { NodeAuthCryptoAdapter } from '../infrastructure/node-auth-crypto.adapter'
 import { NodemailerAuthMailAdapter } from '../infrastructure/nodemailer-auth-mail.adapter'
-import { PrismaAuthRepository } from '../infrastructure/prisma-auth.repository'
 import { RedisLoginRateLimiter } from '../infrastructure/redis-login-rate-limiter'
 import { RedisPublicAuthRateLimiter } from '../infrastructure/redis-public-auth-rate-limiter'
 import { RedisSessionStore } from '../infrastructure/redis-session.store'
+import { NodeSessionCryptoAdapter } from '../sessions/infrastructure/node-session-crypto.adapter'
+import { PrismaSessionGenerationAdapter } from '../sessions/infrastructure/prisma-session-generation.adapter'
 import { AuthCookieAdapter } from '../presentation/auth-cookie.adapter'
 import { AdminAccountController } from '../presentation/admin-account.controller'
 import { AdminAccountEmailWorkflowsController } from '../presentation/admin-account-email-workflows.controller'
@@ -107,27 +129,38 @@ export interface AuthModuleOptions {
     AuthRequestContext,
     GetMeQuery,
     Argon2PasswordHasher,
-    NodeAuthCryptoAdapter,
+    NodeAccountLifecycleCryptoAdapter,
+    NodePasswordAuthCryptoAdapter,
+    NodeSessionCryptoAdapter,
     {
       provide: ONE_TIME_TOKEN_CODEC,
-      useExisting: NodeAuthCryptoAdapter,
+      useExisting: NodeAccountLifecycleCryptoAdapter,
     },
     {
       provide: RoleRegistry,
       inject: [AUTH_ROLE_DEFINITIONS],
       useFactory: createAuthRoleRegistry,
     },
-    PrismaAuthRepository,
+    PrismaAccountAdministrationReadAdapter,
+    PrismaAccountAdministrationMutationAdapter,
+    PrismaAccountProvisioningAdapter,
+    PrismaEmailVerificationAdapter,
+    PrismaInvitationAdapter,
+    PrismaPasswordRecoveryAdapter,
+    PrismaRegistrationAdapter,
+    PrismaIdentitySecurityStateAdapter,
+    PrismaPasswordCredentialAdapter,
+    PrismaSessionGenerationAdapter,
     {
       provide: RedisSessionStore,
       inject: [
         REDIS_AUTH_COMMAND_EXECUTOR,
-        NodeAuthCryptoAdapter,
+        NodeSessionCryptoAdapter,
         RuntimeConfigService,
       ],
       useFactory: (
         executor: RedisCommandExecutorPort,
-        crypto: NodeAuthCryptoAdapter,
+        crypto: NodeSessionCryptoAdapter,
         config: RuntimeConfigService,
       ): RedisSessionStore =>
         new RedisSessionStore(executor, crypto, {
@@ -144,12 +177,12 @@ export interface AuthModuleOptions {
       provide: RedisLoginRateLimiter,
       inject: [
         REDIS_AUTH_COMMAND_EXECUTOR,
-        NodeAuthCryptoAdapter,
+        NodePasswordAuthCryptoAdapter,
         RuntimeConfigService,
       ],
       useFactory: (
         executor: RedisCommandExecutorPort,
-        crypto: NodeAuthCryptoAdapter,
+        crypto: NodePasswordAuthCryptoAdapter,
         config: RuntimeConfigService,
       ): RedisLoginRateLimiter =>
         new RedisLoginRateLimiter(executor, crypto, {
@@ -161,9 +194,46 @@ export interface AuthModuleOptions {
           windowMs: config.auth.loginWindowMs,
         }),
     },
-    { provide: AUTH_PERSISTENCE, useExisting: PrismaAuthRepository },
-    { provide: ACCOUNT_ADMINISTRATION, useExisting: PrismaAuthRepository },
-    { provide: ACCOUNT_EMAIL_WORKFLOWS, useExisting: PrismaAuthRepository },
+    {
+      provide: IDENTITY_SECURITY_STATE,
+      useExisting: PrismaIdentitySecurityStateAdapter,
+    },
+    {
+      provide: PASSWORD_CREDENTIALS,
+      useExisting: PrismaPasswordCredentialAdapter,
+    },
+    {
+      provide: SESSION_GENERATION,
+      useExisting: PrismaSessionGenerationAdapter,
+    },
+    {
+      provide: ACCOUNT_PROVISIONING,
+      useExisting: PrismaAccountProvisioningAdapter,
+    },
+    {
+      provide: REGISTRATION_PERSISTENCE,
+      useExisting: PrismaRegistrationAdapter,
+    },
+    {
+      provide: EMAIL_VERIFICATION_PERSISTENCE,
+      useExisting: PrismaEmailVerificationAdapter,
+    },
+    {
+      provide: PASSWORD_RECOVERY_PERSISTENCE,
+      useExisting: PrismaPasswordRecoveryAdapter,
+    },
+    {
+      provide: ACCOUNT_ADMINISTRATION_READ,
+      useExisting: PrismaAccountAdministrationReadAdapter,
+    },
+    {
+      provide: ACCOUNT_ADMINISTRATION_MUTATION,
+      useExisting: PrismaAccountAdministrationMutationAdapter,
+    },
+    {
+      provide: INVITATION_PERSISTENCE,
+      useExisting: PrismaInvitationAdapter,
+    },
     { provide: PASSWORD_HASHER, useExisting: Argon2PasswordHasher },
     { provide: LOGIN_RATE_LIMITER, useExisting: RedisLoginRateLimiter },
     { provide: SESSION_STORE, useExisting: RedisSessionStore },
@@ -181,7 +251,8 @@ export interface AuthModuleOptions {
     {
       provide: AccountAdministrationService,
       inject: [
-        ACCOUNT_ADMINISTRATION,
+        ACCOUNT_ADMINISTRATION_READ,
+        ACCOUNT_ADMINISTRATION_MUTATION,
         RuntimeConfigService,
         RoleRegistry,
         SESSION_STORE,
@@ -189,7 +260,8 @@ export interface AuthModuleOptions {
         AUTH_AUDIT,
       ],
       useFactory: (
-        persistence: AccountAdministrationPort,
+        queries: AccountAdministrationReadPort,
+        mutations: AccountAdministrationMutationPort,
         config: RuntimeConfigService,
         roles: RoleRegistry,
         sessions: RedisSessionStore,
@@ -197,7 +269,8 @@ export interface AuthModuleOptions {
         audit: AuthAuditLogger,
       ): AccountAdministrationService =>
         new AccountAdministrationService(
-          persistence,
+          queries,
+          mutations,
           config.auth.accountAdministration,
           roles,
           sessions,
@@ -221,12 +294,12 @@ export interface AuthModuleOptions {
       provide: PUBLIC_AUTH_RATE_LIMITER,
       inject: [
         REDIS_AUTH_COMMAND_EXECUTOR,
-        NodeAuthCryptoAdapter,
+        NodeAccountLifecycleCryptoAdapter,
         RuntimeConfigService,
       ],
       useFactory: (
         executor: RedisCommandExecutorPort,
-        crypto: NodeAuthCryptoAdapter,
+        crypto: NodeAccountLifecycleCryptoAdapter,
         config: RuntimeConfigService,
       ): RedisPublicAuthRateLimiter =>
         new RedisPublicAuthRateLimiter(executor, crypto, {
@@ -275,6 +348,7 @@ export interface AuthModuleOptions {
       useValue: NOOP_AUTH_SESSION_CLEANUP_OBSERVER,
     },
     LoginUseCase,
+    SessionIssuer,
     AuthenticateSessionUseCase,
     {
       provide: DOCS_ACCESS_POLICY,
@@ -327,10 +401,10 @@ export interface AuthModuleOptions {
     },
     {
       provide: AUTH_LOGIN_METADATA_FACTORY,
-      inject: [NodeAuthCryptoAdapter, RuntimeConfigService],
+      inject: [NodePasswordAuthCryptoAdapter, RuntimeConfigService],
       useFactory:
         (
-          crypto: NodeAuthCryptoAdapter,
+          crypto: NodePasswordAuthCryptoAdapter,
           config: RuntimeConfigService,
         ): LoginRequestMetadataFactory =>
         ({ ipAddress, userAgent }) => ({
@@ -388,7 +462,7 @@ export interface AuthModuleOptions {
     { provide: APP_GUARD, useExisting: PermissionGuard },
     { provide: APP_INTERCEPTOR, useExisting: AuthRequestInterceptor },
   ],
-  exports: [PrismaAuthRepository, Argon2PasswordHasher, DOCS_ACCESS_POLICY],
+  exports: [Argon2PasswordHasher, DOCS_ACCESS_POLICY],
 })
 export class AuthModule {
   /**

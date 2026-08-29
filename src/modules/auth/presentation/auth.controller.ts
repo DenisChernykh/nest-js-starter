@@ -243,7 +243,6 @@ export class AuthController {
     const principal = this.requestContext.principal
     const result = await this.changePasswordUseCase.execute({
       userId: principal.userId,
-      normalizedEmail: principal.normalizedEmail,
       currentPassword: body.currentPassword,
       newPassword: body.newPassword,
     })

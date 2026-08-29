@@ -2,9 +2,9 @@ import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 
 import { API_ROLE_DEFINITIONS } from '@/bootstrap/api/api-auth.roles'
 import type { CreateUserUseCase } from '@/modules/auth/application/create-user.use-case'
+import { PrismaPasswordCredentialAdapter } from '@/modules/auth/authentication/password/infrastructure/prisma-password-credential.adapter'
 import { createUserCommand } from '@/modules/auth/composition/user-provisioning.module'
 import { Argon2PasswordHasher } from '@/modules/auth/infrastructure/argon2-password.hasher'
-import { PrismaAuthRepository } from '@/modules/auth/infrastructure/prisma-auth.repository'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
@@ -16,7 +16,7 @@ import { runPrismaCommand } from '@test/integration/support/run-prisma-command'
 describe('CreateUserUseCase integration', () => {
   let container: StartedPostgreSqlContainer
   let provider: PrismaClientProvider
-  let repository: PrismaAuthRepository
+  let credentials: PrismaPasswordCredentialAdapter
   let useCase: CreateUserUseCase
 
   beforeAll(async () => {
@@ -39,7 +39,7 @@ describe('CreateUserUseCase integration', () => {
     const context = new PrismaTransactionContext()
     provider = new PrismaClientProvider(config, context)
     const transaction = new PrismaTransactionAdapter(provider, context, config)
-    repository = new PrismaAuthRepository(provider, transaction)
+    credentials = new PrismaPasswordCredentialAdapter(provider, transaction)
     useCase = createUserCommand(
       provider,
       transaction,
@@ -92,7 +92,7 @@ describe('CreateUserUseCase integration', () => {
       roleKeys: ['approval.reviewer', 'approval.reviewer'],
     })
 
-    const credential = await repository.findCredentialByNormalizedEmail(
+    const credential = await credentials.findCredentialByNormalizedEmail(
       'reviewer@example.com',
     )
     expect(credential?.roleKeys).toEqual(['approval.reviewer'])

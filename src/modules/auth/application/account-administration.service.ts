@@ -1,12 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import {
-  ACCOUNT_ADMINISTRATION,
-  type AdminAccount,
-  type AccountActorAuthorization,
-  type AccountAdministrationPort,
-  type AccountAdministrationState,
+import type {
+  AccountActorAuthorization,
+  AccountAdministrationState,
+  AdminAccount,
 } from './account-administration.port'
+import {
+  ACCOUNT_ADMINISTRATION_MUTATION,
+  type AccountAdministrationMutationPort,
+} from './account-administration-mutation.port'
+import {
+  ACCOUNT_ADMINISTRATION_READ,
+  type AccountAdministrationReadPort,
+} from './account-administration-read.port'
 import { AuthDependencyUnavailableError, AuthError } from './auth-errors'
 import {
   AUTH_ACCOUNTS_MANAGE_PERMISSION,
@@ -24,24 +30,10 @@ import {
   type AuthAuditPort,
 } from './auth-audit.port'
 
-export class AccountEtagPreconditionRequiredError extends AuthError {
-  public constructor() {
-    super('AUTH_STATE_CONFLICT', 'The If-Match header is required')
-    this.name = 'AccountEtagPreconditionRequiredError'
-  }
-}
-
-export class AccountEtagMalformedError extends AuthError {
-  public constructor() {
-    super('AUTH_STATE_CONFLICT', 'The If-Match header is malformed')
-    this.name = 'AccountEtagMalformedError'
-  }
-}
-
-export class AccountEtagPreconditionFailedError extends AuthError {
+export class AccountRevisionConflictError extends AuthError {
   public constructor() {
     super('AUTH_STATE_CONFLICT', 'The account state has changed')
-    this.name = 'AccountEtagPreconditionFailedError'
+    this.name = 'AccountRevisionConflictError'
   }
 }
 
@@ -80,8 +72,10 @@ export class AccountSelfMutationForbiddenError extends AuthError {
 @Injectable()
 export class AccountAdministrationService {
   public constructor(
-    @Inject(ACCOUNT_ADMINISTRATION)
-    private readonly persistence: AccountAdministrationPort,
+    @Inject(ACCOUNT_ADMINISTRATION_READ)
+    private readonly queries: AccountAdministrationReadPort,
+    @Inject(ACCOUNT_ADMINISTRATION_MUTATION)
+    private readonly mutations: AccountAdministrationMutationPort,
     private readonly config: AccountAdministrationPolicyConfig,
     private readonly roles?: RoleRegistry,
     private readonly sessions?: SessionStorePort,
@@ -100,21 +94,21 @@ export class AccountAdministrationService {
     readonly total: number
   }> {
     this.assertEnabled()
-    return this.persistence.listAccounts(input)
+    return this.queries.listAccounts(input)
   }
 
   public async getAccount(
     accountId: string,
   ): Promise<AdminAccount | undefined> {
     this.assertEnabled()
-    return this.persistence.getAccount(accountId)
+    return this.queries.getAccount(accountId)
   }
 
   public async changeStatus(input: {
     readonly actorId: string
     readonly accountId: string
     readonly status: 'active' | 'disabled'
-    readonly ifMatch: string | undefined
+    readonly expectedRevision: number
   }): Promise<AdminAccount | undefined> {
     return this.auditedMutation(
       'status_change',
@@ -122,9 +116,8 @@ export class AccountAdministrationService {
       input.accountId,
       async () => {
         this.assertMutationTarget(input.actorId, input.accountId)
-        const account = await this.persistence.changeStatus({
+        const account = await this.mutations.changeStatus({
           ...input,
-          expectedRevision: parseAccountEtag(input.accountId, input.ifMatch),
           actorAuthorization: this.actorAuthorization(
             AUTH_ACCOUNTS_MANAGE_PERMISSION,
           ),
@@ -153,7 +146,7 @@ export class AccountAdministrationService {
     readonly actorId: string
     readonly accountId: string
     readonly roleKeys: readonly string[]
-    readonly ifMatch: string | undefined
+    readonly expectedRevision: number
   }): Promise<AdminAccount | undefined> {
     return this.auditedMutation(
       'role_change',
@@ -166,9 +159,8 @@ export class AccountAdministrationService {
           input.roleKeys.some((key) => !this.roles?.hasRole(key))
         )
           throw new AccountRoleUnknownError()
-        const account = await this.persistence.replaceRoles({
+        const account = await this.mutations.replaceRoles({
           ...input,
-          expectedRevision: parseAccountEtag(input.accountId, input.ifMatch),
           actorAuthorization: this.actorAuthorization(
             AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION,
           ),
@@ -193,7 +185,7 @@ export class AccountAdministrationService {
   public async retireAccount(input: {
     readonly actorId: string
     readonly accountId: string
-    readonly ifMatch: string | undefined
+    readonly expectedRevision: number
   }): Promise<boolean> {
     return this.auditedMutation(
       'account_retire',
@@ -201,9 +193,8 @@ export class AccountAdministrationService {
       input.accountId,
       async () => {
         this.assertMutationTarget(input.actorId, input.accountId)
-        const retired = await this.persistence.retireAccount({
+        const retired = await this.mutations.retireAccount({
           ...input,
-          expectedRevision: parseAccountEtag(input.accountId, input.ifMatch),
           actorAuthorization: this.actorAuthorization(
             AUTH_ACCOUNTS_MANAGE_PERMISSION,
           ),
@@ -241,7 +232,7 @@ export class AccountAdministrationService {
       input.accountId,
       async () => {
         this.assertMutationTarget(input.actorId, input.accountId)
-        const revoked = await this.persistence.revokeAllSessions({
+        const revoked = await this.mutations.revokeAllSessions({
           ...input,
           actorAuthorization: this.actorAuthorization(
             AUTH_ACCOUNTS_MANAGE_PERMISSION,
@@ -374,27 +365,4 @@ export class AccountAdministrationService {
       ),
     }
   }
-}
-
-export function formatAccountEtag(
-  account: Pick<AdminAccount, 'id' | 'revision'>,
-): string {
-  return `"account-${account.id}-${account.revision}"`
-}
-
-function parseAccountEtag(
-  accountId: string,
-  value: string | undefined,
-): number {
-  if (value === undefined || value.trim() === '')
-    throw new AccountEtagPreconditionRequiredError()
-  const match =
-    /^"account-([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})-([0-9]+)"$/iu.exec(
-      value.trim(),
-    )
-  if (match === null || match[1]?.toLowerCase() !== accountId.toLowerCase())
-    throw new AccountEtagMalformedError()
-  const revision = Number(match[2])
-  if (!Number.isSafeInteger(revision)) throw new AccountEtagMalformedError()
-  return revision
 }

@@ -7,9 +7,9 @@ import {
 } from './auth-audit.port'
 import { UnknownRoleAssignmentError } from './auth-errors'
 import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from './auth-persistence.port'
+  ACCOUNT_PROVISIONING,
+  type AccountProvisioningPort,
+} from './account-provisioning.port'
 import type { CreateUserResult } from './auth.types'
 import {
   PASSWORD_HASHER,
@@ -30,8 +30,8 @@ export type { CreateUserResult } from './auth.types'
 @Injectable()
 export class CreateUserUseCase {
   public constructor(
-    @Inject(AUTH_PERSISTENCE)
-    private readonly persistence: AuthPersistencePort,
+    @Inject(ACCOUNT_PROVISIONING)
+    private readonly provisioning: AccountProvisioningPort,
     @Inject(PASSWORD_HASHER)
     private readonly passwords: PasswordHasherPort,
     @Inject(RoleRegistry)
@@ -59,7 +59,7 @@ export class CreateUserUseCase {
       this.roles.resolve('active', roleKeys)
       const email = input.email.trim()
       const passwordHash = await this.passwords.hash(input.password)
-      const result = await this.persistence.createUser({
+      const result = await this.provisioning.createUser({
         email,
         normalizedEmail: email.toLowerCase(),
         passwordHash,

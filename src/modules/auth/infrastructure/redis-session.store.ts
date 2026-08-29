@@ -11,7 +11,6 @@ import type {
   SessionStorePort,
   StoredSessionRecord,
 } from '../application/session-store.port'
-import type { NodeAuthCryptoAdapter } from './node-auth-crypto.adapter'
 import { REDIS_SESSION_SCRIPTS } from './redis-session.scripts'
 import { sessionRecordCodec } from './session-record.codec'
 
@@ -26,6 +25,13 @@ export interface RedisSessionStoreConfig {
   readonly touchIntervalMs: number
 }
 
+export interface SessionCryptoPort {
+  generateSessionToken(): string
+  generatePublicId(): string
+  generateCsrfSeed(): string
+  hmac(key: Uint8Array, value: string): string
+}
+
 /** Opaque session adapter backed by exact Redis keys and reviewed Lua scripts. */
 export class RedisSessionStore implements SessionStorePort {
   private readonly keys: RedisKeyBuilder
@@ -33,7 +39,7 @@ export class RedisSessionStore implements SessionStorePort {
 
   public constructor(
     private readonly executor: RedisCommandExecutorPort,
-    private readonly crypto: NodeAuthCryptoAdapter,
+    private readonly crypto: SessionCryptoPort,
     private readonly config: RedisSessionStoreConfig,
   ) {
     if (

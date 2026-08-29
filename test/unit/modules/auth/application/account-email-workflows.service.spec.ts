@@ -1,4 +1,3 @@
-import type { AccountEmailWorkflowsPort } from '@/modules/auth/application/account-email-workflows.port'
 import type {
   AuthAuditEvent,
   AuthAuditPort,
@@ -15,6 +14,8 @@ import {
   AuthRateLimitedError,
 } from '@/modules/auth/application/auth-errors'
 import type { OneTimeTokenCodecPort } from '@/modules/auth/application/one-time-token-codec.port'
+import type { InvitationPersistencePort } from '@/modules/auth/application/invitation-persistence.port'
+import type { PasswordRecoveryPersistencePort } from '@/modules/auth/application/password-recovery-persistence.port'
 import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
 import type { PublicAuthRateLimiterPort } from '@/modules/auth/application/public-auth-rate-limiter.port'
 import {
@@ -28,8 +29,11 @@ import type { StructuredLogRecord } from '@/platform/logging/logging.contracts'
 
 const now = new Date('2026-08-07T12:00:00.000Z')
 
+type AccountEmailWorkflowsPersistence = InvitationPersistencePort &
+  PasswordRecoveryPersistencePort
+
 function service(input: {
-  readonly persistence: AccountEmailWorkflowsPort
+  readonly persistence: AccountEmailWorkflowsPersistence
   readonly mail: AuthMailDeliveryPort
   readonly passwords?: PasswordHasherPort
   readonly limiter?: PublicAuthRateLimiterPort
@@ -44,6 +48,7 @@ function service(input: {
     verify: () => Promise.resolve({ matches: false, needsRehash: false }),
   }
   return new AccountEmailWorkflowsService(
+    input.persistence,
     input.persistence,
     codec,
     passwords,
@@ -75,7 +80,7 @@ describe('AccountEmailWorkflowsService', () => {
     const rotateAdministratorPasswordReset = jest.fn(
       (
         _input: Parameters<
-          AccountEmailWorkflowsPort['rotateAdministratorPasswordReset']
+          PasswordRecoveryPersistencePort['rotateAdministratorPasswordReset']
         >[0],
       ) => {
         void _input
@@ -88,7 +93,7 @@ describe('AccountEmailWorkflowsService', () => {
     const target = service({
       persistence: {
         rotateAdministratorPasswordReset,
-      } as unknown as AccountEmailWorkflowsPort,
+      } as unknown as AccountEmailWorkflowsPersistence,
       mail: {
         sendPasswordReset: () => Promise.resolve({ delivered: true }),
       } as unknown as AuthMailDeliveryPort,
@@ -122,7 +127,9 @@ describe('AccountEmailWorkflowsService', () => {
       }),
     )
     const target = service({
-      persistence: { createInvitation } as unknown as AccountEmailWorkflowsPort,
+      persistence: {
+        createInvitation,
+      } as unknown as AccountEmailWorkflowsPersistence,
       mail: {
         sendEmailVerification: () => Promise.resolve({ delivered: false }),
         sendPasswordReset: () => Promise.resolve({ delivered: false }),
@@ -194,7 +201,8 @@ describe('AccountEmailWorkflowsService', () => {
     },
   ])('maps unexpected persistence failure during $name to 503', async (row) => {
     const target = service({
-      persistence: row.persistence as unknown as AccountEmailWorkflowsPort,
+      persistence:
+        row.persistence as unknown as AccountEmailWorkflowsPersistence,
       mail: {} as AuthMailDeliveryPort,
     })
 
@@ -208,7 +216,7 @@ describe('AccountEmailWorkflowsService', () => {
       persistence: {
         isInvitationTokenEligible: () => Promise.resolve(true),
         acceptInvitation: () => Promise.resolve(false),
-      } as unknown as AccountEmailWorkflowsPort,
+      } as unknown as AccountEmailWorkflowsPersistence,
       mail: {
         sendEmailVerification: () => Promise.resolve({ delivered: false }),
         sendPasswordReset: () => Promise.resolve({ delivered: false }),
@@ -232,7 +240,7 @@ describe('AccountEmailWorkflowsService', () => {
       persistence: {
         isInvitationTokenEligible: () => Promise.resolve(true),
         acceptInvitation: () => Promise.resolve(true),
-      } as unknown as AccountEmailWorkflowsPort,
+      } as unknown as AccountEmailWorkflowsPersistence,
       audit: { emit: (event) => events.push(event) },
       mail: {} as AuthMailDeliveryPort,
     })
@@ -259,7 +267,7 @@ describe('AccountEmailWorkflowsService', () => {
     const target = service({
       persistence: {
         createInvitation: () => Promise.resolve(undefined),
-      } as unknown as AccountEmailWorkflowsPort,
+      } as unknown as AccountEmailWorkflowsPersistence,
       mail: {
         sendEmailVerification: () => Promise.resolve({ delivered: false }),
         sendPasswordReset: () => Promise.resolve({ delivered: false }),
@@ -279,7 +287,7 @@ describe('AccountEmailWorkflowsService', () => {
 
   it('returns a typed conflict for an unknown invitation role', async () => {
     const target = service({
-      persistence: {} as AccountEmailWorkflowsPort,
+      persistence: {} as AccountEmailWorkflowsPersistence,
       mail: {} as AuthMailDeliveryPort,
     })
 
@@ -298,7 +306,7 @@ describe('AccountEmailWorkflowsService', () => {
     const target = service({
       persistence: {
         resendInvitation: () => Promise.resolve(undefined),
-      } as unknown as AccountEmailWorkflowsPort,
+      } as unknown as AccountEmailWorkflowsPersistence,
       mail: {
         sendAccountInvitation,
       } as unknown as AuthMailDeliveryPort,
@@ -319,7 +327,7 @@ describe('AccountEmailWorkflowsService', () => {
     const target = service({
       persistence: {
         rotateAdministratorPasswordReset: () => Promise.resolve(undefined),
-      } as unknown as AccountEmailWorkflowsPort,
+      } as unknown as AccountEmailWorkflowsPersistence,
       mail: {
         sendPasswordReset,
       } as unknown as AuthMailDeliveryPort,
@@ -341,7 +349,7 @@ describe('AccountEmailWorkflowsService', () => {
       persistence: {
         isInvitationTokenEligible: () => Promise.resolve(false),
         acceptInvitation: () => Promise.resolve(false),
-      } as unknown as AccountEmailWorkflowsPort,
+      } as unknown as AccountEmailWorkflowsPersistence,
       passwords: {
         hash,
         verify: () => Promise.resolve({ matches: false, needsRehash: false }),
@@ -366,7 +374,7 @@ describe('AccountEmailWorkflowsService', () => {
     const target = service({
       persistence: {
         isInvitationTokenEligible: eligible,
-      } as unknown as AccountEmailWorkflowsPort,
+      } as unknown as AccountEmailWorkflowsPersistence,
       passwords: {
         hash,
         verify: () => Promise.resolve({ matches: false, needsRehash: false }),

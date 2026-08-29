@@ -2,9 +2,9 @@ import { INJECTABLE_WATERMARK, MODULE_METADATA } from '@nestjs/common/constants'
 import { Test } from '@nestjs/testing'
 
 import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from '@/modules/auth/application/auth-persistence.port'
+  ACCOUNT_PROVISIONING,
+  type AccountProvisioningPort,
+} from '@/modules/auth/application/account-provisioning.port'
 import {
   AUTH_AUDIT,
   NOOP_AUTH_AUDIT,
@@ -15,7 +15,6 @@ import {
   AUTH_DUMMY_PASSWORD_HASH,
   AUTH_SESSION_CLEANUP_OBSERVER,
   NOOP_AUTH_SESSION_CLEANUP_OBSERVER,
-  type AuthenticatedPrincipal,
   type AuthSessionCleanupObserver,
 } from '@/modules/auth/application/auth.types'
 import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
@@ -26,6 +25,14 @@ import { CreateInitialAdminUseCase } from '@/modules/auth/application/create-ini
 import { CreateUserUseCase } from '@/modules/auth/application/create-user.use-case'
 import { GetCsrfTokenQuery } from '@/modules/auth/application/get-csrf-token.query'
 import { GetMeQuery } from '@/modules/auth/application/get-me.query'
+import {
+  EMAIL_VERIFICATION_PERSISTENCE,
+  type EmailVerificationPersistencePort,
+} from '@/modules/auth/application/email-verification-persistence.port'
+import {
+  IDENTITY_SECURITY_STATE,
+  type IdentitySecurityStatePort,
+} from '@/modules/auth/application/identity-security-state.port'
 import {
   LOGIN_RATE_LIMITER,
   type LoginRateLimiterPort,
@@ -38,11 +45,23 @@ import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
 } from '@/modules/auth/application/password-hasher.port'
+import {
+  PASSWORD_CREDENTIALS,
+  type PasswordCredentialPort,
+} from '@/modules/auth/application/password-credential.port'
+import {
+  PASSWORD_RECOVERY_PERSISTENCE,
+  type PasswordRecoveryPersistencePort,
+} from '@/modules/auth/application/password-recovery-persistence.port'
 import type { PermissionKey } from '@/modules/auth/application/permission'
 import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
 import { ONE_TIME_TOKEN_CODEC } from '@/modules/auth/application/one-time-token-codec.port'
 import { PUBLIC_AUTH_RATE_LIMITER } from '@/modules/auth/application/public-auth-rate-limiter.port'
 import { RegisterUserUseCase } from '@/modules/auth/application/register-user.use-case'
+import {
+  REGISTRATION_PERSISTENCE,
+  type RegistrationPersistencePort,
+} from '@/modules/auth/application/registration-persistence.port'
 import { RequestPasswordResetUseCase } from '@/modules/auth/application/request-password-reset.use-case'
 import { ResendEmailVerificationUseCase } from '@/modules/auth/application/resend-email-verification.use-case'
 import {
@@ -54,13 +73,24 @@ import {
   type SessionStorePort,
 } from '@/modules/auth/application/session-store.port'
 import {
-  TRANSACTION_PORT,
-  type TransactionPort,
-} from '@/shared/application/transaction.port'
+  SESSION_GENERATION,
+  type SessionGenerationPort,
+} from '@/modules/auth/application/session-generation.port'
+import { SessionIssuer } from '@/modules/auth/application/session-issuer'
+import type { AuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-principal'
+import { PrismaAccountAdministrationMutationAdapter } from '@/modules/auth/account-administration/infrastructure/prisma-account-administration-mutation.adapter'
+import { PrismaAccountAdministrationReadAdapter } from '@/modules/auth/account-administration/infrastructure/prisma-account-administration-read.adapter'
+import { PrismaAccountProvisioningAdapter } from '@/modules/auth/account-administration/provisioning/infrastructure/prisma-account-provisioning.adapter'
+import { PrismaEmailVerificationAdapter } from '@/modules/auth/account-lifecycle/email-verification/infrastructure/prisma-email-verification.adapter'
+import { PrismaInvitationAdapter } from '@/modules/auth/account-lifecycle/invitations/infrastructure/prisma-invitation.adapter'
+import { PrismaPasswordRecoveryAdapter } from '@/modules/auth/account-lifecycle/password-recovery/infrastructure/prisma-password-recovery.adapter'
+import { PrismaRegistrationAdapter } from '@/modules/auth/account-lifecycle/registration/infrastructure/prisma-registration.adapter'
+import { PrismaPasswordCredentialAdapter } from '@/modules/auth/authentication/password/infrastructure/prisma-password-credential.adapter'
+import { PrismaIdentitySecurityStateAdapter } from '@/modules/auth/identity/infrastructure/prisma-identity-security-state.adapter'
 import { Argon2PasswordHasher } from '@/modules/auth/infrastructure/argon2-password.hasher'
-import { PrismaAuthRepository } from '@/modules/auth/infrastructure/prisma-auth.repository'
 import { RedisLoginRateLimiter } from '@/modules/auth/infrastructure/redis-login-rate-limiter'
 import { RedisSessionStore } from '@/modules/auth/infrastructure/redis-session.store'
+import { PrismaSessionGenerationAdapter } from '@/modules/auth/sessions/infrastructure/prisma-session-generation.adapter'
 import { AuthModule } from '@/modules/auth/composition/auth.module'
 import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
 import { SelfServiceAuthPolicy } from '@/modules/auth/application/self-service-auth.policy'
@@ -84,6 +114,7 @@ const applicationClasses = [
   RegisterUserUseCase,
   RequestPasswordResetUseCase,
   ResendEmailVerificationUseCase,
+  SessionIssuer,
 ] as const
 
 const apiApplicationClasses = applicationClasses.filter(
@@ -99,19 +130,29 @@ interface ProviderDefinition {
   readonly useValue?: unknown
 }
 
+type AuthTestPersistence = AccountProvisioningPort &
+  EmailVerificationPersistencePort &
+  IdentitySecurityStatePort &
+  PasswordCredentialPort &
+  PasswordRecoveryPersistencePort &
+  RegistrationPersistencePort &
+  SessionGenerationPort
+
 describe('auth application Nest dependency injection', () => {
   it('constructs runtime application classes directly through port tokens', async () => {
-    const persistence: AuthPersistencePort = {
+    const persistence: AuthTestPersistence = {
       bootstrapInitialAdmin: jest.fn(),
+      changePasswordAndInvalidate: jest.fn(),
       createUser: jest.fn(),
-      deletePasswordResetToken: jest.fn(),
       findAuthProjectionByUserId: jest.fn(),
       findCredentialByNormalizedEmail: jest.fn(),
+      findCredentialByUserId: jest.fn(),
       incrementSessionGeneration: jest.fn(),
       readGlobalSessionEpoch: jest.fn(),
       replacePasswordIfVersion: jest.fn(),
       registerSelfServiceUser: jest.fn(),
       rotateEmailVerificationToken: jest.fn(),
+      rotateAdministratorPasswordReset: jest.fn(),
       confirmEmailVerification: jest.fn(),
       rotatePasswordResetToken: jest.fn(),
       getEligiblePasswordResetTokenSource: jest.fn(),
@@ -135,20 +176,22 @@ describe('auth application Nest dependency injection', () => {
       revoke: jest.fn(),
       revokeAll: jest.fn(),
     }
-    const transaction: TransactionPort = {
-      run: async <T>(operation: () => Promise<T>): Promise<T> => operation(),
-    }
     const cleanupObserver: AuthSessionCleanupObserver = {
       cleanupIncomplete: jest.fn(),
     }
     const moduleRef = await Test.createTestingModule({
       providers: [
         ...applicationClasses,
-        { provide: AUTH_PERSISTENCE, useValue: persistence },
+        { provide: ACCOUNT_PROVISIONING, useValue: persistence },
+        { provide: EMAIL_VERIFICATION_PERSISTENCE, useValue: persistence },
+        { provide: IDENTITY_SECURITY_STATE, useValue: persistence },
+        { provide: PASSWORD_CREDENTIALS, useValue: persistence },
+        { provide: PASSWORD_RECOVERY_PERSISTENCE, useValue: persistence },
+        { provide: REGISTRATION_PERSISTENCE, useValue: persistence },
+        { provide: SESSION_GENERATION, useValue: persistence },
         { provide: PASSWORD_HASHER, useValue: passwords },
         { provide: LOGIN_RATE_LIMITER, useValue: limiter },
         { provide: SESSION_STORE, useValue: sessions },
-        { provide: TRANSACTION_PORT, useValue: transaction },
         { provide: AUTH_AUDIT, useValue: NOOP_AUTH_AUDIT },
         {
           provide: AUTH_SESSION_CLEANUP_OBSERVER,
@@ -221,6 +264,20 @@ describe('auth application Nest dependency injection', () => {
     )
 
     expect(providers).toEqual(expect.arrayContaining(apiApplicationClasses))
+    expect(providers).toEqual(
+      expect.arrayContaining([
+        PrismaAccountAdministrationMutationAdapter,
+        PrismaAccountAdministrationReadAdapter,
+        PrismaAccountProvisioningAdapter,
+        PrismaEmailVerificationAdapter,
+        PrismaInvitationAdapter,
+        PrismaPasswordRecoveryAdapter,
+        PrismaRegistrationAdapter,
+        PrismaIdentitySecurityStateAdapter,
+        PrismaPasswordCredentialAdapter,
+        PrismaSessionGenerationAdapter,
+      ]),
+    )
 
     for (const applicationClass of apiApplicationClasses) {
       expect(
@@ -234,8 +291,32 @@ describe('auth application Nest dependency injection', () => {
     expect(definitions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          provide: AUTH_PERSISTENCE,
-          useExisting: PrismaAuthRepository,
+          provide: IDENTITY_SECURITY_STATE,
+          useExisting: PrismaIdentitySecurityStateAdapter,
+        }),
+        expect.objectContaining({
+          provide: PASSWORD_CREDENTIALS,
+          useExisting: PrismaPasswordCredentialAdapter,
+        }),
+        expect.objectContaining({
+          provide: SESSION_GENERATION,
+          useExisting: PrismaSessionGenerationAdapter,
+        }),
+        expect.objectContaining({
+          provide: ACCOUNT_PROVISIONING,
+          useExisting: PrismaAccountProvisioningAdapter,
+        }),
+        expect.objectContaining({
+          provide: REGISTRATION_PERSISTENCE,
+          useExisting: PrismaRegistrationAdapter,
+        }),
+        expect.objectContaining({
+          provide: EMAIL_VERIFICATION_PERSISTENCE,
+          useExisting: PrismaEmailVerificationAdapter,
+        }),
+        expect.objectContaining({
+          provide: PASSWORD_RECOVERY_PERSISTENCE,
+          useExisting: PrismaPasswordRecoveryAdapter,
         }),
         expect.objectContaining({
           provide: PASSWORD_HASHER,

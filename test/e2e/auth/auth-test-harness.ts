@@ -6,7 +6,7 @@ import { Test } from '@nestjs/testing'
 import type { INestApplication } from '@nestjs/common'
 import cookieParser from 'cookie-parser'
 
-import type { AuthenticatedPrincipal } from '@/modules/auth/application/auth.types'
+import type { AuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-principal'
 import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
 import { ChangePasswordUseCase } from '@/modules/auth/application/change-password.use-case'
 import { ConfirmEmailVerificationUseCase } from '@/modules/auth/application/confirm-email-verification.use-case'

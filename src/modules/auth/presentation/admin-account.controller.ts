@@ -25,13 +25,13 @@ import {
 import {
   AccountAdministrationService,
   AccountNotFoundError,
-  formatAccountEtag,
 } from '../application/account-administration.service'
 import {
   AUTH_ACCOUNTS_MANAGE_PERMISSION,
   AUTH_ACCOUNTS_READ_PERMISSION,
   AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION,
 } from '../application/role-registry'
+import { RequirePermission } from '../public-contracts/require-permission.decorator'
 import { AuthRequestContext } from './auth-request.context'
 import {
   AdminAccountListResponseDto,
@@ -42,13 +42,13 @@ import {
   ReplaceAccountRolesRequestDto,
   UpdateAccountStatusRequestDto,
 } from './admin-account.dto'
-import { RequirePermission } from './require-permission.decorator'
 import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.decorator'
 import {
   AUTH_ACCOUNT_ETAG_MALFORMED_PROBLEM,
   AUTH_ACCOUNT_PRECONDITION_FAILED_PROBLEM,
   AUTH_ACCOUNT_PRECONDITION_REQUIRED_PROBLEM,
 } from './auth-problem.definitions'
+import { formatAccountEtag, parseAccountEtag } from './account-etag.codec'
 
 @Controller('admin/auth')
 @ApiTags('admin auth')
@@ -152,7 +152,7 @@ export class AdminAccountController {
       actorId: this.requestContext.principal.userId,
       accountId: path.accountId,
       status: body.status,
-      ifMatch,
+      expectedRevision: parseAccountEtag(path.accountId, ifMatch),
     })
     if (account === undefined) return failAccountNotFound()
     response.setHeader('ETag', formatAccountEtag(account))
@@ -198,7 +198,7 @@ export class AdminAccountController {
       actorId: this.requestContext.principal.userId,
       accountId: path.accountId,
       roleKeys: body.roleKeys,
-      ifMatch,
+      expectedRevision: parseAccountEtag(path.accountId, ifMatch),
     })
     if (account === undefined) return failAccountNotFound()
     response.setHeader('ETag', formatAccountEtag(account))
@@ -237,7 +237,7 @@ export class AdminAccountController {
     const retired = await this.accounts.retireAccount({
       actorId: this.requestContext.principal.userId,
       accountId: path.accountId,
-      ifMatch,
+      expectedRevision: parseAccountEtag(path.accountId, ifMatch),
     })
     if (!retired) failAccountNotFound()
   }

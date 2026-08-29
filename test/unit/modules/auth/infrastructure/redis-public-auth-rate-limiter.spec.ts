@@ -1,7 +1,7 @@
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import type { RedisManagedClient } from '@/platform/redis/redis-client.factory'
+import { NodeAccountLifecycleCryptoAdapter } from '@/modules/auth/account-lifecycle/infrastructure/node-account-lifecycle-crypto.adapter'
 import { RedisPublicAuthRateLimiter } from '@/modules/auth/infrastructure/redis-public-auth-rate-limiter'
-import { NodeAuthCryptoAdapter } from '@/modules/auth/infrastructure/node-auth-crypto.adapter'
 
 function harness(response: readonly [number, number] = [1, 0]): {
   readonly limiter: RedisPublicAuthRateLimiter
@@ -20,7 +20,7 @@ function harness(response: readonly [number, number] = [1, 0]): {
   execute.mockImplementation((_name, operation) => operation(client))
   const limiter = new RedisPublicAuthRateLimiter(
     { execute },
-    new NodeAuthCryptoAdapter(() => Buffer.alloc(32, 9)),
+    new NodeAccountLifecycleCryptoAdapter(() => Buffer.alloc(32, 9)),
     {
       keyPrefix: 'nest-js-starter',
       environment: 'test',
@@ -67,7 +67,7 @@ describe('RedisPublicAuthRateLimiter', () => {
     secondExecute.mockImplementation((_name, operation) => operation(client))
     const second = new RedisPublicAuthRateLimiter(
       { execute: secondExecute },
-      new NodeAuthCryptoAdapter(() => Buffer.alloc(32, 9)),
+      new NodeAccountLifecycleCryptoAdapter(() => Buffer.alloc(32, 9)),
       {
         keyPrefix: 'nest-js-starter',
         environment: 'test',

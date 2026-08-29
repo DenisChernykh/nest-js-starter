@@ -1,6 +1,6 @@
-import type { AuthPersistencePort } from '@/modules/auth/application/auth-persistence.port'
 import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
 import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
+import type { IdentitySecurityStatePort } from '@/modules/auth/application/identity-security-state.port'
 import { definePermissions } from '@/modules/auth/application/permission'
 import { RoleRegistry } from '@/modules/auth/application/role-registry'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
@@ -38,7 +38,7 @@ describe('AuthenticateSessionUseCase', () => {
         }),
       ),
       readGlobalSessionEpoch: jest.fn(() => Promise.resolve(3n)),
-    } as unknown as AuthPersistencePort
+    } as unknown as IdentitySecurityStatePort
     const target = new AuthenticateSessionUseCase(
       sessions,
       persistence,
@@ -67,7 +67,7 @@ describe('AuthenticateSessionUseCase', () => {
         }),
       ),
       readGlobalSessionEpoch: jest.fn(() => Promise.resolve(3n)),
-    } as unknown as AuthPersistencePort
+    } as unknown as IdentitySecurityStatePort
     const stale = new AuthenticateSessionUseCase(
       {
         readAndTouch: jest.fn(() => Promise.resolve(record)),
@@ -82,7 +82,7 @@ describe('AuthenticateSessionUseCase', () => {
       {
         readAndTouch: jest.fn(() => Promise.resolve(undefined)),
       } as unknown as SessionStorePort,
-      {} as AuthPersistencePort,
+      {} as IdentitySecurityStatePort,
       new RoleRegistry([]),
     )
     await expect(missing.execute('raw', 100)).rejects.toMatchObject({
@@ -94,7 +94,7 @@ describe('AuthenticateSessionUseCase', () => {
       {
         readAndTouch: jest.fn(() => Promise.reject(new Error('driver detail'))),
       } as unknown as SessionStorePort,
-      {} as AuthPersistencePort,
+      {} as IdentitySecurityStatePort,
       new RoleRegistry([]),
     )
     await expect(target.execute('raw', 100)).rejects.toBeInstanceOf(

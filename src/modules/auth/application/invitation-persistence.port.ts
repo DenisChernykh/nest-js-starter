@@ -1,10 +1,10 @@
+import type { AccountActorAuthorization } from './account-administration.port'
 import type {
   SelfServiceDeliveryTarget,
   SelfServiceTokenInput,
 } from './auth.types'
-import type { AccountActorAuthorization } from './account-administration.port'
 
-export interface AccountEmailWorkflowsPort {
+export interface InvitationPersistencePort {
   createInvitation(
     input: {
       readonly email: string
@@ -21,13 +21,6 @@ export interface AccountEmailWorkflowsPort {
     readonly token: SelfServiceTokenInput
     readonly now: Date
   }): Promise<SelfServiceDeliveryTarget | undefined>
-  rotateAdministratorPasswordReset(input: {
-    readonly actorId: string
-    readonly accountId: string
-    readonly actorAuthorization: AccountActorAuthorization
-    readonly token: SelfServiceTokenInput
-    readonly now: Date
-  }): Promise<SelfServiceDeliveryTarget | undefined>
   isInvitationTokenEligible(tokenDigest: string, now: Date): Promise<boolean>
   acceptInvitation(input: {
     readonly tokenDigest: string
@@ -36,4 +29,6 @@ export interface AccountEmailWorkflowsPort {
   }): Promise<boolean>
 }
 
-export const ACCOUNT_EMAIL_WORKFLOWS = Symbol('ACCOUNT_EMAIL_WORKFLOWS')
+export const INVITATION_PERSISTENCE: unique symbol = Symbol(
+  'INVITATION_PERSISTENCE',
+)

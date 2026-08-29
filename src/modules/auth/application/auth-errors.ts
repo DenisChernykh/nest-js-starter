@@ -1,23 +1,10 @@
-import { ApplicationError } from '@/shared/application/application.error'
+import { AuthError } from '../public-contracts/auth-errors'
 
-/** Stable framework-free auth failure codes exposed at transport boundaries. */
-export type AuthFailureCode =
-  | 'AUTHENTICATION_REQUIRED'
-  | 'AUTHENTICATION_FAILED'
-  | 'AUTHORIZATION_DENIED'
-  | 'AUTH_DEPENDENCY_UNAVAILABLE'
-  | 'AUTH_RATE_LIMITED'
-  | 'AUTH_SESSION_NOT_FOUND'
-  | 'AUTH_STATE_CONFLICT'
-  | 'AUTH_CSRF_REJECTED'
-
-/** Base error that carries only a stable auth code and internal detail. */
-export class AuthError extends ApplicationError<AuthFailureCode> {
-  public constructor(code: AuthFailureCode, detail: string) {
-    super(code, detail)
-    this.name = 'AuthError'
-  }
-}
+export {
+  AuthError,
+  AuthenticationRequiredError,
+} from '../public-contracts/auth-errors'
+export type { AuthFailureCode } from '../public-contracts/auth-errors'
 
 /** Fail-closed result for a durable role unknown to the code registry. */
 export class UnknownRoleAssignmentError extends AuthError {
@@ -66,14 +53,6 @@ export class EmailVerificationRequiredError extends AuthError {
   public constructor() {
     super('AUTHENTICATION_FAILED', 'Email verification required')
     this.name = 'EmailVerificationRequiredError'
-  }
-}
-
-/** Missing, expired or durably stale browser authentication state. */
-export class AuthenticationRequiredError extends AuthError {
-  public constructor() {
-    super('AUTHENTICATION_REQUIRED', 'Authentication required')
-    this.name = 'AuthenticationRequiredError'
   }
 }
 

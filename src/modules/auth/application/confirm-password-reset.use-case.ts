@@ -12,9 +12,9 @@ import {
 } from './auth.types'
 import { AuthDependencyUnavailableError, AuthError } from './auth-errors'
 import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from './auth-persistence.port'
+  PASSWORD_RECOVERY_PERSISTENCE,
+  type PasswordRecoveryPersistencePort,
+} from './password-recovery-persistence.port'
 import {
   ONE_TIME_TOKEN_CODEC,
   type OneTimeTokenCodecPort,
@@ -38,7 +38,8 @@ export interface ConfirmPasswordResetInput {
 @Injectable()
 export class ConfirmPasswordResetUseCase {
   public constructor(
-    @Inject(AUTH_PERSISTENCE) private readonly persistence: AuthPersistencePort,
+    @Inject(PASSWORD_RECOVERY_PERSISTENCE)
+    private readonly persistence: PasswordRecoveryPersistencePort,
     @Inject(PASSWORD_HASHER) private readonly passwords: PasswordHasherPort,
     @Inject(ONE_TIME_TOKEN_CODEC)
     private readonly codec: OneTimeTokenCodecPort,

@@ -6,6 +6,7 @@ import {
   AuthRateLimitedError,
 } from '@/modules/auth/application/auth-errors'
 import { AuthTokenInvalidOrExpiredError } from '@/modules/auth/application/self-service-auth.policy'
+import { AccountRevisionConflictError } from '@/modules/auth/application/account-administration.service'
 import {
   AUTH_FAILURE_PROBLEM_CODES,
   AUTH_HTTP_PROBLEM_CONTRIBUTION,
@@ -20,6 +21,10 @@ import {
 import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
 import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registry'
 import type { CoreProblemCode } from '@/platform/http/errors/problem-registry'
+import {
+  AccountEtagMalformedError,
+  AccountEtagPreconditionRequiredError,
+} from '@/modules/auth/presentation/account-etag.codec'
 
 const registry = new HttpProblemRegistry([
   CORE_HTTP_PROBLEM_CONTRIBUTION,
@@ -41,6 +46,15 @@ describe('AUTH_HTTP_PROBLEM_CONTRIBUTION', () => {
     expect(
       registry.map(new AuthTokenInvalidOrExpiredError()).definition,
     ).toEqual(AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM)
+    expect(registry.map(new AccountEtagMalformedError()).definition).toEqual(
+      AUTH_ACCOUNT_ETAG_MALFORMED_PROBLEM,
+    )
+    expect(
+      registry.map(new AccountEtagPreconditionRequiredError()).definition,
+    ).toEqual(AUTH_ACCOUNT_PRECONDITION_REQUIRED_PROBLEM)
+    expect(registry.map(new AccountRevisionConflictError()).definition).toEqual(
+      AUTH_ACCOUNT_PRECONDITION_FAILED_PROBLEM,
+    )
   })
 
   it('keeps the auth failure mapping exhaustive at compile time', () => {

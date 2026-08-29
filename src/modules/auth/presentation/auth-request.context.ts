@@ -2,8 +2,8 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 
 import { Injectable } from '@nestjs/common'
 
-import { AuthenticationRequiredError } from '../application/auth-errors'
-import type { AuthenticatedPrincipal } from '../application/auth.types'
+import { AuthenticationRequiredError } from '../public-contracts/auth-errors'
+import type { AuthenticatedPrincipal } from '../public-contracts/authenticated-principal'
 
 interface AuthRequestState {
   readonly principal: AuthenticatedPrincipal

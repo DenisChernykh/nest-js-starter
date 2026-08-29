@@ -1,6 +1,6 @@
 import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
-import { NodeAuthCryptoAdapter } from '@/modules/auth/infrastructure/node-auth-crypto.adapter'
 import { RedisSessionStore } from '@/modules/auth/infrastructure/redis-session.store'
+import { NodeSessionCryptoAdapter } from '@/modules/auth/sessions/infrastructure/node-session-crypto.adapter'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 
 describe('RedisSessionStore dependency boundary', () => {
@@ -10,7 +10,7 @@ describe('RedisSessionStore dependency boundary', () => {
     } as RedisCommandExecutorPort
     const target = new RedisSessionStore(
       executor,
-      new NodeAuthCryptoAdapter(),
+      new NodeSessionCryptoAdapter(),
       {
         keyPrefix: 'nest-js-starter',
         environment: 'test',

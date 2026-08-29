@@ -16,10 +16,6 @@ import {
   AuthRateLimitedError,
 } from './auth-errors'
 import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from './auth-persistence.port'
-import {
   ONE_TIME_TOKEN_CODEC,
   type OneTimeTokenCodecPort,
 } from './one-time-token-codec.port'
@@ -27,6 +23,10 @@ import {
   PUBLIC_AUTH_RATE_LIMITER,
   type PublicAuthRateLimiterPort,
 } from './public-auth-rate-limiter.port'
+import {
+  REGISTRATION_PERSISTENCE,
+  type RegistrationPersistencePort,
+} from './registration-persistence.port'
 import { SelfServiceAuthPolicy } from './self-service-auth.policy'
 import {
   PASSWORD_HASHER,
@@ -43,7 +43,8 @@ export interface RegisterUserInput {
 @Injectable()
 export class RegisterUserUseCase {
   public constructor(
-    @Inject(AUTH_PERSISTENCE) private readonly persistence: AuthPersistencePort,
+    @Inject(REGISTRATION_PERSISTENCE)
+    private readonly persistence: RegistrationPersistencePort,
     @Inject(PASSWORD_HASHER) private readonly passwords: PasswordHasherPort,
     @Inject(PUBLIC_AUTH_RATE_LIMITER)
     private readonly limiter: PublicAuthRateLimiterPort,

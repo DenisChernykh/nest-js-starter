@@ -1,17 +1,15 @@
-import type { AuthPersistencePort } from '@/modules/auth/application/auth-persistence.port'
 import { ChangePasswordUseCase } from '@/modules/auth/application/change-password.use-case'
+import type { PasswordCredentialPort } from '@/modules/auth/application/password-credential.port'
 import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
 
 function input(): {
   readonly userId: string
-  readonly normalizedEmail: string
   readonly currentPassword: string
   readonly newPassword: string
 } {
   return {
     userId: 'user',
-    normalizedEmail: 'user@example.com',
     currentPassword: 'old',
     newPassword: 'new',
   }
@@ -20,8 +18,8 @@ function input(): {
 describe('ChangePasswordUseCase', () => {
   it('commits CAS and generation before Redis cleanup', async () => {
     const order: string[] = []
-    const persistence = {
-      findCredentialByNormalizedEmail: jest.fn(() =>
+    const credentials = {
+      findCredentialByUserId: jest.fn(() =>
         Promise.resolve({
           userId: 'user',
           email: 'user@example.com',
@@ -33,19 +31,11 @@ describe('ChangePasswordUseCase', () => {
           roleKeys: [],
         }),
       ),
-      replacePasswordIfVersion: jest.fn(() => {
-        order.push('replace')
+      changePasswordAndInvalidate: jest.fn(() => {
+        order.push('durable-transition')
         return Promise.resolve(true)
       }),
-      deletePasswordResetToken: jest.fn(() => {
-        order.push('delete-reset-token')
-        return Promise.resolve()
-      }),
-      incrementSessionGeneration: jest.fn(() => {
-        order.push('generation')
-        return Promise.resolve(1n)
-      }),
-    } as unknown as AuthPersistencePort
+    } as unknown as PasswordCredentialPort
     const passwords = {
       verify: jest.fn(() =>
         Promise.resolve({ matches: true, needsRehash: false }),
@@ -55,39 +45,21 @@ describe('ChangePasswordUseCase', () => {
         return Promise.resolve('new')
       }),
     } as unknown as PasswordHasherPort
-    const transaction = {
-      run: async <T>(operation: () => Promise<T>) => {
-        order.push('transaction')
-        return operation()
-      },
-    }
     const sessions = {
       revokeAll: jest.fn(() => {
         order.push('cleanup')
         return Promise.resolve(1)
       }),
     } as unknown as SessionStorePort
-    const target = new ChangePasswordUseCase(
-      persistence,
-      passwords,
-      transaction,
-      sessions,
-    )
+    const target = new ChangePasswordUseCase(credentials, passwords, sessions)
     await expect(target.execute(input())).resolves.toEqual({
       cleanupComplete: true,
     })
-    expect(order).toEqual([
-      'hash',
-      'transaction',
-      'replace',
-      'delete-reset-token',
-      'generation',
-      'cleanup',
-    ])
+    expect(order).toEqual(['hash', 'durable-transition', 'cleanup'])
   })
   it('reports partial cleanup after durable success', async () => {
-    const persistence = {
-      findCredentialByNormalizedEmail: jest.fn(() =>
+    const credentials = {
+      findCredentialByUserId: jest.fn(() =>
         Promise.resolve({
           userId: 'user',
           email: 'user@example.com',
@@ -99,24 +71,17 @@ describe('ChangePasswordUseCase', () => {
           roleKeys: [],
         }),
       ),
-      replacePasswordIfVersion: jest.fn(() => Promise.resolve(true)),
-      deletePasswordResetToken: jest.fn(() => Promise.resolve()),
-      incrementSessionGeneration: jest.fn(() => Promise.resolve(1n)),
-    } as unknown as AuthPersistencePort
+      changePasswordAndInvalidate: jest.fn(() => Promise.resolve(true)),
+    } as unknown as PasswordCredentialPort
     const passwords = {
       verify: jest.fn(() =>
         Promise.resolve({ matches: true, needsRehash: false }),
       ),
       hash: jest.fn(() => Promise.resolve('new')),
     } as unknown as PasswordHasherPort
-    const target = new ChangePasswordUseCase(
-      persistence,
-      passwords,
-      { run: (operation) => operation() },
-      {
-        revokeAll: jest.fn(() => Promise.reject(new Error('redis'))),
-      } as unknown as SessionStorePort,
-    )
+    const target = new ChangePasswordUseCase(credentials, passwords, {
+      revokeAll: jest.fn(() => Promise.reject(new Error('redis'))),
+    } as unknown as SessionStorePort)
     await expect(target.execute(input())).resolves.toEqual({
       cleanupComplete: false,
     })

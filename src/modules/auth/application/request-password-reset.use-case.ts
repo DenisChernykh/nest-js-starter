@@ -16,10 +16,6 @@ import {
   AuthRateLimitedError,
 } from './auth-errors'
 import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from './auth-persistence.port'
-import {
   ONE_TIME_TOKEN_CODEC,
   type OneTimeTokenCodecPort,
 } from './one-time-token-codec.port'
@@ -27,6 +23,10 @@ import {
   PUBLIC_AUTH_RATE_LIMITER,
   type PublicAuthRateLimiterPort,
 } from './public-auth-rate-limiter.port'
+import {
+  PASSWORD_RECOVERY_PERSISTENCE,
+  type PasswordRecoveryPersistencePort,
+} from './password-recovery-persistence.port'
 import { SelfServiceAuthPolicy } from './self-service-auth.policy'
 
 export interface RequestPasswordResetInput {
@@ -38,7 +38,8 @@ export interface RequestPasswordResetInput {
 @Injectable()
 export class RequestPasswordResetUseCase {
   public constructor(
-    @Inject(AUTH_PERSISTENCE) private readonly persistence: AuthPersistencePort,
+    @Inject(PASSWORD_RECOVERY_PERSISTENCE)
+    private readonly persistence: PasswordRecoveryPersistencePort,
     @Inject(PUBLIC_AUTH_RATE_LIMITER)
     private readonly limiter: PublicAuthRateLimiterPort,
     @Inject(ONE_TIME_TOKEN_CODEC)

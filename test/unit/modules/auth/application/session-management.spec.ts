@@ -1,9 +1,5 @@
 import { AuthenticationRequiredError } from '@/modules/auth/application/auth-errors'
-import type { AuthPersistencePort } from '@/modules/auth/application/auth-persistence.port'
-import type {
-  AuthenticatedPrincipal,
-  AuthSessionCleanupObserver,
-} from '@/modules/auth/application/auth.types'
+import type { AuthSessionCleanupObserver } from '@/modules/auth/application/auth.types'
 import { GetCsrfTokenQuery } from '@/modules/auth/application/get-csrf-token.query'
 import { GetMeQuery } from '@/modules/auth/application/get-me.query'
 import { ListSessionsQuery } from '@/modules/auth/application/list-sessions.query'
@@ -12,7 +8,8 @@ import { LogoutUseCase } from '@/modules/auth/application/logout.use-case'
 import { definePermissions } from '@/modules/auth/application/permission'
 import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
 import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
-import type { TransactionPort } from '@/shared/application/transaction.port'
+import type { SessionGenerationPort } from '@/modules/auth/application/session-generation.port'
+import type { AuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-principal'
 
 /* eslint-disable @typescript-eslint/unbound-method */
 
@@ -77,18 +74,12 @@ describe('auth session management', () => {
   })
   it('increments generation before best-effort logout-all cleanup', async () => {
     const order: string[] = []
-    const persistence = {
+    const generation = {
       incrementSessionGeneration: jest.fn(() => {
         order.push('generation')
         return Promise.resolve(2n)
       }),
-    } as unknown as AuthPersistencePort
-    const transaction: TransactionPort = {
-      run: async (operation) => {
-        order.push('transaction')
-        return operation()
-      },
-    }
+    } as unknown as SessionGenerationPort
     const sessions = {
       revokeAll: jest.fn(() => {
         order.push('cleanup')
@@ -99,13 +90,8 @@ describe('auth session management', () => {
       cleanupIncomplete: jest.fn(() => order.push('event')),
     } satisfies AuthSessionCleanupObserver
     await expect(
-      new LogoutAllUseCase(
-        persistence,
-        transaction,
-        sessions,
-        observer,
-      ).execute('user'),
+      new LogoutAllUseCase(generation, sessions, observer).execute('user'),
     ).resolves.toEqual({ cleanupComplete: false })
-    expect(order).toEqual(['transaction', 'generation', 'cleanup', 'event'])
+    expect(order).toEqual(['generation', 'cleanup', 'event'])
   })
 })

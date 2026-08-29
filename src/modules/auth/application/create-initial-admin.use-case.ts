@@ -6,9 +6,9 @@ import {
   type AuthAuditPort,
 } from './auth-audit.port'
 import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from './auth-persistence.port'
+  ACCOUNT_PROVISIONING,
+  type AccountProvisioningPort,
+} from './account-provisioning.port'
 import type { InitialAdminResult } from './auth.types'
 import {
   PASSWORD_HASHER,
@@ -25,8 +25,8 @@ export interface CreateInitialAdminInput {
 @Injectable()
 export class CreateInitialAdminUseCase {
   public constructor(
-    @Inject(AUTH_PERSISTENCE)
-    private readonly persistence: AuthPersistencePort,
+    @Inject(ACCOUNT_PROVISIONING)
+    private readonly provisioning: AccountProvisioningPort,
     @Inject(PASSWORD_HASHER)
     private readonly passwords: PasswordHasherPort,
     @Inject(AUTH_AUDIT)
@@ -40,7 +40,7 @@ export class CreateInitialAdminUseCase {
     try {
       const normalizedEmail = input.email.trim().toLowerCase()
       const passwordHash = await this.passwords.hash(input.password)
-      const result = await this.persistence.bootstrapInitialAdmin({
+      const result = await this.provisioning.bootstrapInitialAdmin({
         email: input.email.trim(),
         normalizedEmail,
         passwordHash,

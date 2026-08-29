@@ -1,8 +1,8 @@
 import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 
+import { PrismaAccountProvisioningAdapter } from '@/modules/auth/account-administration/provisioning/infrastructure/prisma-account-provisioning.adapter'
 import { CreateInitialAdminUseCase } from '@/modules/auth/application/create-initial-admin.use-case'
 import { Argon2PasswordHasher } from '@/modules/auth/infrastructure/argon2-password.hasher'
-import { PrismaAuthRepository } from '@/modules/auth/infrastructure/prisma-auth.repository'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
@@ -36,9 +36,12 @@ describe('CreateInitialAdminUseCase', () => {
     const context = new PrismaTransactionContext()
     provider = new PrismaClientProvider(config, context)
     const transaction = new PrismaTransactionAdapter(provider, context, config)
-    const repository = new PrismaAuthRepository(provider, transaction)
+    const provisioning = new PrismaAccountProvisioningAdapter(
+      provider,
+      transaction,
+    )
     useCase = new CreateInitialAdminUseCase(
-      repository,
+      provisioning,
       new Argon2PasswordHasher(),
     )
     await provider.connect(AbortSignal.timeout(2_000))

@@ -7,9 +7,9 @@ import {
 } from './auth-audit.port'
 import { AuthDependencyUnavailableError, AuthError } from './auth-errors'
 import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from './auth-persistence.port'
+  EMAIL_VERIFICATION_PERSISTENCE,
+  type EmailVerificationPersistencePort,
+} from './email-verification-persistence.port'
 import {
   ONE_TIME_TOKEN_CODEC,
   type OneTimeTokenCodecPort,
@@ -27,7 +27,8 @@ export interface ConfirmEmailVerificationInput {
 @Injectable()
 export class ConfirmEmailVerificationUseCase {
   public constructor(
-    @Inject(AUTH_PERSISTENCE) private readonly persistence: AuthPersistencePort,
+    @Inject(EMAIL_VERIFICATION_PERSISTENCE)
+    private readonly persistence: EmailVerificationPersistencePort,
     @Inject(ONE_TIME_TOKEN_CODEC)
     private readonly codec: OneTimeTokenCodecPort,
     @Inject(SelfServiceAuthPolicy)

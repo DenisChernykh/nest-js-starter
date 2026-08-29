@@ -1,6 +1,6 @@
 import { UnknownRoleAssignmentError } from '@/modules/auth/application/auth-errors'
 import type { AuthAuditEvent } from '@/modules/auth/application/auth-audit.port'
-import type { AuthPersistencePort } from '@/modules/auth/application/auth-persistence.port'
+import type { AccountProvisioningPort } from '@/modules/auth/application/account-provisioning.port'
 import {
   CreateUserUseCase,
   type CreateUserResult,
@@ -22,7 +22,9 @@ const roleDefinitions: readonly RoleDefinition[] = [
 
 interface UseCaseHarness {
   readonly auditEvents: AuthAuditEvent[]
-  readonly createUser: jest.MockedFunction<AuthPersistencePort['createUser']>
+  readonly createUser: jest.MockedFunction<
+    AccountProvisioningPort['createUser']
+  >
   readonly hash: jest.MockedFunction<PasswordHasherPort['hash']>
   readonly useCase: CreateUserUseCase
 }
@@ -30,7 +32,7 @@ interface UseCaseHarness {
 function harness(
   result: CreateUserResult = { created: true, userId: 'user-1' },
 ): UseCaseHarness {
-  const createUser: jest.MockedFunction<AuthPersistencePort['createUser']> =
+  const createUser: jest.MockedFunction<AccountProvisioningPort['createUser']> =
     jest.fn().mockResolvedValue(result)
   const hash: jest.MockedFunction<PasswordHasherPort['hash']> = jest
     .fn()
@@ -38,7 +40,7 @@ function harness(
   const auditEvents: AuthAuditEvent[] = []
   const persistence = {
     createUser,
-  } as unknown as AuthPersistencePort
+  } as unknown as AccountProvisioningPort
   const passwords: PasswordHasherPort = {
     hash,
     verify: () => Promise.resolve({ matches: false, needsRehash: false }),

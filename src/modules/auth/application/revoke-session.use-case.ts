@@ -5,7 +5,7 @@ import {
   NOOP_AUTH_AUDIT,
   type AuthAuditPort,
 } from './auth-audit.port'
-import type { AuthenticatedPrincipal } from './auth.types'
+import type { AuthenticatedPrincipal } from '../public-contracts/authenticated-principal'
 import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Revokes one public session identifier within authenticated user ownership. */

@@ -1,7 +1,7 @@
 import type { StartedRedisContainer } from '@testcontainers/redis'
 
 import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
-import { NodeAuthCryptoAdapter } from '@/modules/auth/infrastructure/node-auth-crypto.adapter'
+import { NodePasswordAuthCryptoAdapter } from '@/modules/auth/authentication/password/infrastructure/node-password-auth-crypto.adapter'
 import { RedisLoginRateLimiter } from '@/modules/auth/infrastructure/redis-login-rate-limiter'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'
@@ -15,14 +15,14 @@ describe('RedisLoginRateLimiter', () => {
   let container: StartedRedisContainer
   let lifecycle: RedisLifecycle
   let executor: RedisCommandExecutorPort
-  let crypto: NodeAuthCryptoAdapter
+  let crypto: NodePasswordAuthCryptoAdapter
 
   beforeAll(async () => {
     container = await startRedisContainer()
     const runtime = createRedisRuntime(container)
     lifecycle = runtime.lifecycle
     executor = runtime.executor
-    crypto = new NodeAuthCryptoAdapter()
+    crypto = new NodePasswordAuthCryptoAdapter()
     await lifecycle.connect(AbortSignal.timeout(2_000))
   })
 

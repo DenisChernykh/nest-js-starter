@@ -12,10 +12,6 @@ import {
   NOOP_AUTH_AUDIT,
   type AuthAuditPort,
 } from './auth-audit.port'
-import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from './auth-persistence.port'
 import { AUTH_DUMMY_PASSWORD_HASH } from './auth.types'
 import {
   LOGIN_RATE_LIMITER,
@@ -25,8 +21,12 @@ import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
 } from './password-hasher.port'
+import {
+  PASSWORD_CREDENTIALS,
+  type PasswordCredentialPort,
+} from './password-credential.port'
+import { SessionIssuer } from './session-issuer'
 import type { IssuedBrowserSession } from './session-store.port'
-import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Untrusted login fields plus safe request metadata. */
 export interface LoginInput {
@@ -42,14 +42,14 @@ export interface LoginInput {
 @Injectable()
 export class LoginUseCase {
   public constructor(
-    @Inject(AUTH_PERSISTENCE)
-    private readonly persistence: AuthPersistencePort,
+    @Inject(PASSWORD_CREDENTIALS)
+    private readonly credentials: PasswordCredentialPort,
     @Inject(PASSWORD_HASHER)
     private readonly passwords: PasswordHasherPort,
     @Inject(LOGIN_RATE_LIMITER)
     private readonly limiter: LoginRateLimiterPort,
-    @Inject(SESSION_STORE)
-    private readonly sessions: SessionStorePort,
+    @Inject(SessionIssuer)
+    private readonly sessions: SessionIssuer,
     @Inject(AUTH_DUMMY_PASSWORD_HASH)
     private readonly dummyPasswordHash: string,
     @Inject(AUTH_AUDIT)
@@ -70,7 +70,7 @@ export class LoginUseCase {
       if (!decision.allowed)
         throw new AuthRateLimitedError(decision.retryAfterMs)
       const snapshot =
-        await this.persistence.findCredentialByNormalizedEmail(normalizedEmail)
+        await this.credentials.findCredentialByNormalizedEmail(normalizedEmail)
       const verification = await this.passwords.verify(
         input.password,
         snapshot?.passwordHash ?? this.dummyPasswordHash,
@@ -87,17 +87,14 @@ export class LoginUseCase {
       }
       if (verification.needsRehash) {
         const upgraded = await this.passwords.hash(input.password)
-        await this.persistence.replacePasswordIfVersion(
+        await this.credentials.replacePasswordIfVersion(
           snapshot.userId,
           snapshot.passwordVersion,
           upgraded,
         )
       }
-      const globalSessionEpoch = await this.persistence.readGlobalSessionEpoch()
       const session = await this.sessions.issue({
         userId: snapshot.userId,
-        sessionGeneration: snapshot.sessionGeneration,
-        globalSessionEpoch,
         nowMs: input.nowMs,
         deviceLabel: input.deviceLabel,
         networkFingerprint: input.networkFingerprint,

@@ -5,11 +5,11 @@ import {
   AuthError,
   AuthenticationRequiredError,
 } from './auth-errors'
+import type { AuthenticatedPrincipal } from '../public-contracts/authenticated-principal'
 import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from './auth-persistence.port'
-import type { AuthenticatedPrincipal } from './auth.types'
+  IDENTITY_SECURITY_STATE,
+  type IdentitySecurityStatePort,
+} from './identity-security-state.port'
 import { RoleRegistry } from './role-registry'
 import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
@@ -19,8 +19,8 @@ export class AuthenticateSessionUseCase {
   public constructor(
     @Inject(SESSION_STORE)
     private readonly sessions: SessionStorePort,
-    @Inject(AUTH_PERSISTENCE)
-    private readonly persistence: AuthPersistencePort,
+    @Inject(IDENTITY_SECURITY_STATE)
+    private readonly identity: IdentitySecurityStatePort,
     private readonly roles: RoleRegistry,
   ) {}
 
@@ -39,8 +39,8 @@ export class AuthenticateSessionUseCase {
       const record = await this.sessions.readAndTouch(rawToken, nowMs)
       if (record === undefined) throw new AuthenticationRequiredError()
       const [projection, epoch] = await Promise.all([
-        this.persistence.findAuthProjectionByUserId(record.userId),
-        this.persistence.readGlobalSessionEpoch(),
+        this.identity.findAuthProjectionByUserId(record.userId),
+        this.identity.readGlobalSessionEpoch(),
       ])
       if (
         projection === undefined ||

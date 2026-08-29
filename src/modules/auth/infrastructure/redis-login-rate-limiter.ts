@@ -9,7 +9,10 @@ import type {
   LoginRateLimitInput,
   LoginRateLimiterPort,
 } from '../application/login-rate-limiter.port'
-import type { NodeAuthCryptoAdapter } from './node-auth-crypto.adapter'
+
+export interface LoginRateLimitKeyDigestPort {
+  hmac(key: Uint8Array, value: string): string
+}
 
 /** Atomic Lua definition for both keyed login limiter buckets. */
 export const LOGIN_RATE_LIMIT_SCRIPT = Object.freeze({
@@ -50,7 +53,7 @@ export class RedisLoginRateLimiter implements LoginRateLimiterPort {
 
   public constructor(
     executor: RedisCommandExecutorPort,
-    private readonly crypto: NodeAuthCryptoAdapter,
+    private readonly crypto: LoginRateLimitKeyDigestPort,
     private readonly config: RedisLoginRateLimiterConfig,
   ) {
     if (

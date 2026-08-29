@@ -8,8 +8,11 @@ import type {
   PublicAuthOperation,
   PublicAuthRateLimiterPort,
 } from '../application/public-auth-rate-limiter.port'
-import type { NodeAuthCryptoAdapter } from './node-auth-crypto.adapter'
 import { PUBLIC_AUTH_RATE_LIMIT_SCRIPT } from './redis-public-auth-rate-limiter.scripts'
+
+export interface PublicAccountRateLimitKeyDigestPort {
+  hmac(key: Uint8Array, value: string): string
+}
 
 export interface RedisPublicAuthRateLimiterConfig {
   readonly keyPrefix: string
@@ -31,7 +34,7 @@ export class RedisPublicAuthRateLimiter implements PublicAuthRateLimiterPort {
 
   public constructor(
     executor: RedisCommandExecutorPort,
-    private readonly crypto: NodeAuthCryptoAdapter,
+    private readonly crypto: PublicAccountRateLimitKeyDigestPort,
     private readonly config: RedisPublicAuthRateLimiterConfig,
   ) {
     const limits = [

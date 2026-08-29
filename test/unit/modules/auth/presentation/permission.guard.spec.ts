@@ -8,7 +8,7 @@ import { PermissionGuard } from '@/modules/auth/presentation/permission.guard'
 import {
   REQUIRE_PERMISSION_METADATA,
   RequirePermission,
-} from '@/modules/auth/presentation/require-permission.decorator'
+} from '@/modules/auth/public-contracts/require-permission.decorator'
 
 const read = 'catalog.read' as PermissionKey
 const write = 'catalog.write' as PermissionKey

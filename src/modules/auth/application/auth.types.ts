@@ -1,5 +1,4 @@
 import type { UserStatus } from '../domain/user-status'
-import type { PermissionKey } from './permission'
 
 /** Credential and account snapshot used by the login decision. */
 export interface CredentialSnapshot {
@@ -50,15 +49,6 @@ export interface UserProvisioningInput {
 export type CreateUserResult =
   | { readonly created: true; readonly userId: string }
   | { readonly created: false }
-
-/** Fresh authenticated identity attached to one request execution chain. */
-export interface AuthenticatedPrincipal {
-  readonly userId: string
-  readonly sessionId: string
-  readonly normalizedEmail: string
-  readonly roleKeys: readonly string[]
-  readonly permissions: ReadonlySet<PermissionKey>
-}
 
 /** Result of a durable auth mutation followed by best-effort Redis cleanup. */
 export interface AuthDurableMutationResult {

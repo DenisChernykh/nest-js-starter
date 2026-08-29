@@ -3,9 +3,9 @@ import type { CanActivate, ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
 import type { AuthenticateSessionUseCase } from '../application/authenticate-session.use-case'
-import { AuthenticationRequiredError } from '../application/auth-errors'
+import { AuthenticationRequiredError } from '../public-contracts/auth-errors'
+import { attachAuthenticatedPrincipal } from '../public-contracts/authenticated-request'
 import type { AuthRequestContext } from './auth-request.context'
-import { attachAuthenticatedPrincipal } from './current-principal.decorator'
 import { readCanonicalSessionToken } from './session-cookie'
 import { PUBLIC_ENDPOINT_METADATA } from '@/platform/http/policy/public-endpoint.decorator'
 

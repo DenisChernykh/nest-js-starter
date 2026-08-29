@@ -1,9 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import {
-  ACCOUNT_EMAIL_WORKFLOWS,
-  type AccountEmailWorkflowsPort,
-} from './account-email-workflows.port'
 import { AccountEmailWorkflowsPolicy } from './account-email-workflows.policy'
 import {
   AUTH_MAIL_DELIVERY,
@@ -22,9 +18,17 @@ import {
   type OneTimeTokenCodecPort,
 } from './one-time-token-codec.port'
 import {
+  INVITATION_PERSISTENCE,
+  type InvitationPersistencePort,
+} from './invitation-persistence.port'
+import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
 } from './password-hasher.port'
+import {
+  PASSWORD_RECOVERY_PERSISTENCE,
+  type PasswordRecoveryPersistencePort,
+} from './password-recovery-persistence.port'
 import {
   AUTH_ACCOUNTS_MANAGE_PERMISSION,
   AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION,
@@ -67,8 +71,10 @@ export class AccountEmailWorkflowTargetUnavailableError extends AuthError {
 @Injectable()
 export class AccountEmailWorkflowsService {
   public constructor(
-    @Inject(ACCOUNT_EMAIL_WORKFLOWS)
-    private readonly persistence: AccountEmailWorkflowsPort,
+    @Inject(INVITATION_PERSISTENCE)
+    private readonly invitations: InvitationPersistencePort,
+    @Inject(PASSWORD_RECOVERY_PERSISTENCE)
+    private readonly passwordRecovery: PasswordRecoveryPersistencePort,
     @Inject(ONE_TIME_TOKEN_CODEC)
     private readonly codec: OneTimeTokenCodecPort,
     @Inject(PASSWORD_HASHER) private readonly passwords: PasswordHasherPort,
@@ -98,7 +104,7 @@ export class AccountEmailWorkflowsService {
           throw new AccountRoleUnknownError()
         const issued = this.codec.issue()
         const target = await this.persist(() =>
-          this.persistence.createInvitation({
+          this.invitations.createInvitation({
             actorId: input.actorId,
             actorAuthorization: this.actorAuthorization(
               AUTH_ACCOUNTS_MANAGE_PERMISSION,
@@ -140,7 +146,7 @@ export class AccountEmailWorkflowsService {
       async () => {
         const issued = this.codec.issue()
         const target = await this.persist(() =>
-          this.persistence.resendInvitation({
+          this.invitations.resendInvitation({
             actorId,
             accountId,
             actorAuthorization: this.actorAuthorization(
@@ -183,7 +189,7 @@ export class AccountEmailWorkflowsService {
       async () => {
         const issued = this.codec.issue()
         const target = await this.persist(() =>
-          this.persistence.rotateAdministratorPasswordReset({
+          this.passwordRecovery.rotateAdministratorPasswordReset({
             actorId,
             accountId,
             actorAuthorization: this.actorAuthorization(
@@ -248,12 +254,12 @@ export class AccountEmailWorkflowsService {
         if (!decision.allowed)
           throw new AuthRateLimitedError(decision.retryAfterMs)
         const eligible = await this.persist(() =>
-          this.persistence.isInvitationTokenEligible(tokenDigest, input.now),
+          this.invitations.isInvitationTokenEligible(tokenDigest, input.now),
         )
         if (!eligible) throw new AuthTokenInvalidOrExpiredError()
         const passwordHash = await this.passwords.hash(input.password)
         const accepted = await this.persist(() =>
-          this.persistence.acceptInvitation({
+          this.invitations.acceptInvitation({
             tokenDigest,
             passwordHash,
             now: input.now,

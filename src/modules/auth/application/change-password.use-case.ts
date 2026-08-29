@@ -12,10 +12,6 @@ import {
   type AuthAuditPort,
 } from './auth-audit.port'
 import {
-  AUTH_PERSISTENCE,
-  type AuthPersistencePort,
-} from './auth-persistence.port'
-import {
   AUTH_SESSION_CLEANUP_OBSERVER,
   type AuthDurableMutationResult,
   type AuthSessionCleanupObserver,
@@ -24,16 +20,15 @@ import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
 } from './password-hasher.port'
-import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 import {
-  TRANSACTION_PORT,
-  type TransactionPort,
-} from '@/shared/application/transaction.port'
+  PASSWORD_CREDENTIALS,
+  type PasswordCredentialPort,
+} from './password-credential.port'
+import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Current/new password mutation fields bound to one authenticated identity. */
 export interface ChangePasswordInput {
   readonly userId: string
-  readonly normalizedEmail: string
   readonly currentPassword: string
   readonly newPassword: string
 }
@@ -42,12 +37,10 @@ export interface ChangePasswordInput {
 @Injectable()
 export class ChangePasswordUseCase {
   public constructor(
-    @Inject(AUTH_PERSISTENCE)
-    private readonly persistence: AuthPersistencePort,
+    @Inject(PASSWORD_CREDENTIALS)
+    private readonly credentials: PasswordCredentialPort,
     @Inject(PASSWORD_HASHER)
     private readonly passwords: PasswordHasherPort,
-    @Inject(TRANSACTION_PORT)
-    private readonly transaction: TransactionPort,
     @Inject(SESSION_STORE)
     private readonly sessions: SessionStorePort,
     @Inject(AUTH_SESSION_CLEANUP_OBSERVER)
@@ -67,27 +60,22 @@ export class ChangePasswordUseCase {
     input: ChangePasswordInput,
   ): Promise<AuthDurableMutationResult> {
     try {
-      const snapshot = await this.persistence.findCredentialByNormalizedEmail(
-        input.normalizedEmail,
+      const snapshot = await this.credentials.findCredentialByUserId(
+        input.userId,
       )
-      if (snapshot === undefined || snapshot.userId !== input.userId)
-        throw new AuthenticationFailedError()
+      if (snapshot === undefined) throw new AuthenticationFailedError()
       const current = await this.passwords.verify(
         input.currentPassword,
         snapshot.passwordHash,
       )
       if (!current.matches) throw new AuthenticationFailedError()
       const nextHash = await this.passwords.hash(input.newPassword)
-      await this.transaction.run(async () => {
-        const replaced = await this.persistence.replacePasswordIfVersion(
-          input.userId,
-          snapshot.passwordVersion,
-          nextHash,
-        )
-        if (!replaced) throw new AuthStateConflictError()
-        await this.persistence.deletePasswordResetToken(input.userId)
-        await this.persistence.incrementSessionGeneration(input.userId)
+      const replaced = await this.credentials.changePasswordAndInvalidate({
+        userId: input.userId,
+        expectedVersion: snapshot.passwordVersion,
+        passwordHash: nextHash,
       })
+      if (!replaced) throw new AuthStateConflictError()
       try {
         await this.sessions.revokeAll(input.userId)
         this.audit.emit({

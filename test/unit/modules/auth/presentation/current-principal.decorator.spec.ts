@@ -1,10 +1,15 @@
-import { CurrentPrincipal, RequirePermission } from '@/modules/auth'
-import { AuthenticationRequiredError } from '@/modules/auth/application/auth-errors'
-import type { AuthenticatedPrincipal } from '@/modules/auth/application/auth.types'
+import * as authPublicApi from '@/modules/auth'
+import {
+  CurrentPrincipal,
+  RequirePermission,
+  type AuthenticatedPrincipal,
+} from '@/modules/auth'
+import { AuthenticationRequiredError as InternalAuthenticationRequiredError } from '@/modules/auth/application/auth-errors'
 import {
   attachAuthenticatedPrincipal,
   readAuthenticatedPrincipal,
-} from '@/modules/auth/presentation/current-principal.decorator'
+} from '@/modules/auth/public-contracts/authenticated-request'
+import { AuthenticationRequiredError } from '@/modules/auth/public-contracts/auth-errors'
 
 describe('CurrentPrincipal request integration', () => {
   const principal: AuthenticatedPrincipal = {
@@ -16,8 +21,18 @@ describe('CurrentPrincipal request integration', () => {
   }
 
   it('is exposed with the permission decorator through the auth public API', () => {
+    expect(Object.keys(authPublicApi).sort()).toEqual([
+      'CurrentPrincipal',
+      'RequirePermission',
+    ])
     expect(CurrentPrincipal).toEqual(expect.any(Function))
     expect(RequirePermission).toEqual(expect.any(Function))
+  })
+
+  it('keeps the internal compatibility export on the same error constructor', () => {
+    expect(InternalAuthenticationRequiredError).toBe(
+      AuthenticationRequiredError,
+    )
   })
 
   it('stores one immutable non-enumerable principal and reads it back', () => {
