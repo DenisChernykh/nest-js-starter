@@ -40,6 +40,13 @@ describe('auth dependency failure policy', () => {
     runtime = await createAuthTestRuntime(1)
     baseUrl = runtime.instances[0]?.baseUrl ?? ''
     await runtime.createUser('dependency@example.com')
+    const disabledUserId = await runtime.createUser(
+      'disabled-dependency@example.com',
+    )
+    await runtime.pool.query(
+      "UPDATE users SET status = 'DISABLED', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+      [disabledUserId],
+    )
   })
 
   beforeEach(async () => runtime.flushRedis())
@@ -109,7 +116,7 @@ describe('auth dependency failure policy', () => {
     )
   })
 
-  it('returns byte-equivalent generic missing-user and wrong-password failures', async () => {
+  it('returns byte-equivalent missing, wrong-password and disabled failures', async () => {
     const missing = await loginResponse(
       baseUrl,
       'missing@example.com',
@@ -120,9 +127,20 @@ describe('auth dependency failure policy', () => {
       'dependency@example.com',
       'wrong password',
     )
+    const disabled = await loginResponse(
+      baseUrl,
+      'disabled-dependency@example.com',
+      'valid password',
+    )
     expect(missing.status).toBe(401)
     expect(wrong.status).toBe(401)
-    expect(await missing.text()).toBe(await wrong.text())
+    expect(disabled.status).toBe(401)
+    const missingBody = await missing.text()
+    expect(await wrong.text()).toBe(missingBody)
+    expect(await disabled.text()).toBe(missingBody)
+    expect(missing.headers.get('set-cookie')).toBeNull()
+    expect(wrong.headers.get('set-cookie')).toBeNull()
+    expect(disabled.headers.get('set-cookie')).toBeNull()
   })
 
   it('fails auth closed when PostgreSQL connections are lost', async () => {

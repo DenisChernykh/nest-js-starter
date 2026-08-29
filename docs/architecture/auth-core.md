@@ -1,4 +1,29 @@
-# Auth core
+# Identity-access core
+
+## Capability ownership
+
+The feature-first `src/modules/identity-access` context separates six runtime
+capabilities:
+
+- `identity` owns the stable `userId` and fresh PostgreSQL security projection;
+- `sessions` owns Redis sessions, durable invalidation, CSRF and the browser
+  cookie adapter;
+- `authentication` owns password login, Argon2id, rehash and login throttling;
+- `authorization` owns the single code-defined role registry, principal
+  resolution, request context, guards, decorators, documentation policy and
+  `GET /auth/me`;
+- `account-lifecycle` owns registration, email verification, password recovery,
+  invitations, one-time-token policy, public rate limits and ceremony mail;
+- `account-administration` owns account queries/mutations, roles, retirement,
+  administrator logout-all and PostgreSQL-only operator provisioning.
+
+The dependency DAG is defined in
+[`module-boundaries.md`](module-boundaries.md#identity-access-internal-capabilities).
+`IdentityAccessModule` creates one configured `AuthorizationModule`, passes that
+same dynamic module to lifecycle and administration, and registers exactly one
+global chain in this order: `AuthenticationGuard`, `BrowserOriginGuard`,
+`SessionCsrfGuard`, `PermissionGuard`, then one `AuthRequestInterceptor`.
+There is no global auth module, `forwardRef()` or parallel provider graph.
 
 ## Durable and ephemeral state
 
@@ -17,6 +42,29 @@ Auth Redis stores finite opaque sessions and their owner index. The
 256-bit raw token exists only in the HttpOnly browser cookie; Redis receives a
 session-secret HMAC. Public session IDs and CSRF seeds are independently random.
 Lua scripts create/touch/revoke keys and TTLs atomically without runtime `KEYS`.
+
+The raw session-store port is private to `sessions`. Authorization consumes a
+narrow session-resolution application contract that validates the Redis record
+against the fresh identity projection, per-user generation and global epoch.
+Every authenticated request performs that resolution before code-owned roles
+are converted to permissions.
+
+## Authentication-provider seam
+
+Email remains the required account identifier and ceremony-delivery channel;
+password is the currently implemented authentication method. Email is not a
+generic authentication provider, and a magic link would be a separate
+passwordless method.
+
+A future provider adapter follows one path: verify provider proof, safely
+resolve or explicitly link a stable local `userId`, then call `SessionIssuer`.
+The issuer accepts only `userId`, `nowMs`, `deviceLabel` and
+`networkFingerprint`; it reloads active identity, generation and epoch itself.
+Providers cannot supply roles, status, generation or epoch, cannot access Redis
+infrastructure and cannot auto-link accounts by matching email. The tracked
+[`authentication/providers`](../../src/modules/identity-access/authentication/providers/README.md)
+boundary documents this contract without adding a speculative registry,
+adapter or external-identity schema.
 
 ## Browser boundary
 
@@ -45,7 +93,19 @@ Password change and logout-all increment durable generation before best-effort
 Redis cleanup. Authenticated password change also deletes any outstanding
 password-reset token in that same PostgreSQL transaction. Therefore partial
 cleanup cannot restore old sessions. Revocation of one session is owner-scoped.
-Self-service registration, email verification and password recovery remain
-inside auth, with PostgreSQL authoritative for state and single-use digests.
+Self-service registration, email verification, password recovery and
+invitations remain in account lifecycle, with PostgreSQL authoritative for
+state and digest-only single-use tokens.
+
+Account-administration application methods receive a transport-neutral numeric
+`expectedRevision`. HTTP presentation alone parses and formats ETags and maps a
+stale revision back to the existing `412` contract. Administrator mutations
+reauthorize the actor inside the same transaction after ordered row locks.
+
+The public source API is only `AuthenticatedPrincipal`, `CurrentPrincipal` and
+`RequirePermission` through `@/modules/identity-access`. HTTP routes, cookies,
+OpenAPI operation IDs/tags, Problem Details, `AUTH_*` configuration, Redis key
+and session formats, audit events, CLI names and database tables remain stable.
+
 OAuth/OIDC, passkeys, MFA, organizations, a notification center and generic
 account CRUD remain separate capabilities.

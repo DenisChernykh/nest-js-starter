@@ -1,7 +1,9 @@
 # Module boundaries
 
-Each business capability owns one directory under `src/modules/<name>` with
-five local layers.
+Each business context owns one directory under `src/modules/<name>`. A simple
+context may place its five local layers directly below that root. A composite
+context uses feature-first capability directories, and the same layer rules
+apply recursively inside every capability.
 
 ## Allowed directions
 
@@ -28,13 +30,47 @@ to `src/modules/<name>/index.ts`. Internal entities, ports, adapters, DTOs and
 composition files are private. Bootstrap is the only layer allowed to import a
 module's composition class directly.
 
-Auth is the public presentation integration for authenticated business
-controllers. They consume `CurrentPrincipal`, `RequirePermission` and
-`AuthenticatedPrincipal` through `@/modules/auth`; they do not import auth
-application or presentation internals. Product modules own their permission
-keys and expose frozen role contributions from `composition`. The API root
-combines those contributions into product-owned role definitions passed to
-auth, so auth resolves roles without importing the contributing module.
+`identity-access` is the public integration for authenticated business
+controllers. Its root `index.ts` exports exactly `CurrentPrincipal`,
+`RequirePermission` and `AuthenticatedPrincipal`. Other business modules import
+those contracts only through `@/modules/identity-access`; ports, adapters,
+controllers and composition files remain private. Product modules own their
+permission keys and expose frozen role contributions from `composition`. The
+API root combines those contributions into product-owned role definitions, so
+identity-access resolves roles without importing the contributing module.
+
+## Identity-access internal capabilities
+
+`src/modules/identity-access` is a composite context with these allowed
+capability dependencies:
+
+```text
+SessionsModule -> IdentityModule
+AuthenticationModule -> SessionsModule
+AuthorizationModule -> SessionsModule
+AccountLifecycleModule -> AuthenticationModule, SessionsModule, AuthorizationModule
+AccountAdministrationModule -> SessionsModule, AuthorizationModule
+IdentityAccessModule -> all capability modules
+```
+
+An arrow means that the left capability imports only the right capability's
+public internal exports. Reverse edges, bare composition-module imports and
+deep imports into another capability are forbidden. Platform dependencies such
+as PostgreSQL, Redis, runtime configuration and logging are wired by the owning
+capability composition and do not change this business DAG.
+
+`IdentityAccessModule.forRoot()` creates one configured
+`AuthorizationModule.forRoot(roleDefinitions)`. The exact same dynamic module
+is passed to account lifecycle and account administration; neither capability
+constructs a second role registry or imports a bare `AuthorizationModule`.
+Only `IdentityAccessModule` registers the ordered global security chain.
+
+Authentication providers do not receive Redis/session infrastructure or
+principal security fields. A provider verifies its proof, safely resolves or
+explicitly links a stable `userId`, then calls `SessionIssuer` with only
+`userId`, time and bounded device/network metadata. `SessionIssuer` reloads
+the authoritative identity security state, session generation and global epoch
+before issuing a session. Automatic linking by matching email is forbidden.
 
 Each module also owns its public HTTP problem definitions and the mapper from
 explicit module error classes. Its composition layer exports that contribution;

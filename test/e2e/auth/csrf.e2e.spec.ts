@@ -56,6 +56,25 @@ describe('browser CSRF contract', () => {
     )
   })
 
+  it('runs authentication before the session-bound CSRF check', async () => {
+    const response = await request(harness.server)
+      .post('/v1/auth/logout')
+      .set('Origin', 'https://app.example.com')
+      .set('Content-Type', 'application/json')
+      .set('X-Request-ID', requestId)
+      .expect(401)
+
+    expect(response.body).toEqual({
+      type: 'https://nest-js-starter.invalid/problems/authentication-required',
+      title: 'Authentication required',
+      status: 401,
+      detail: 'Valid authentication is required for this request.',
+      instance: `urn:request:${requestId}`,
+      code: 'AUTHENTICATION_REQUIRED',
+      requestId,
+    })
+  })
+
   it('does not exempt login from exact origin and JSON policy', async () => {
     await request(harness.server)
       .post('/v1/auth/login')

@@ -1,9 +1,11 @@
-import { AuthController } from '@/modules/auth/presentation/auth.controller'
+import { AuthController } from '@/modules/identity-access/authorization/presentation/auth.controller'
 import {
   ChangePasswordRequestDto,
   LoginRequestDto,
-  SessionPathDto,
-} from '@/modules/auth/presentation/auth.dto'
+} from '@/modules/identity-access/authentication/presentation/authentication.dto'
+import { AuthenticationController } from '@/modules/identity-access/authentication/presentation/authentication.controller'
+import { SessionPathDto } from '@/modules/identity-access/sessions/presentation/sessions.dto'
+import { SessionsController } from '@/modules/identity-access/sessions/presentation/sessions.controller'
 import { APPROVAL_SELF_DECISION_FORBIDDEN_PROBLEM } from '@/modules/approval-requests/presentation/approval-request-problem.definitions'
 import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.decorator'
 import { HealthController } from '@/platform/http/health/health.controller'
@@ -18,7 +20,11 @@ const metadataKeys = {
 } as const
 
 interface OperationExpectation {
-  readonly controller: typeof AuthController | typeof HealthController
+  readonly controller:
+    | typeof AuthController
+    | typeof AuthenticationController
+    | typeof SessionsController
+    | typeof HealthController
   readonly handler: string
   readonly operationId: string
   readonly successStatus: number
@@ -75,7 +81,7 @@ const operations: readonly OperationExpectation[] = [
     tag: 'health',
   },
   {
-    controller: AuthController,
+    controller: AuthenticationController,
     handler: 'login',
     operationId: 'authLogin',
     successStatus: 200,
@@ -85,7 +91,7 @@ const operations: readonly OperationExpectation[] = [
     tag: 'auth',
   },
   {
-    controller: AuthController,
+    controller: SessionsController,
     handler: 'logout',
     operationId: 'authLogout',
     successStatus: 204,
@@ -102,7 +108,7 @@ const operations: readonly OperationExpectation[] = [
     tag: 'auth',
   },
   {
-    controller: AuthController,
+    controller: SessionsController,
     handler: 'csrf',
     operationId: 'authGetCsrfToken',
     successStatus: 200,
@@ -111,7 +117,7 @@ const operations: readonly OperationExpectation[] = [
     tag: 'auth',
   },
   {
-    controller: AuthController,
+    controller: AuthenticationController,
     handler: 'changePassword',
     operationId: 'authChangePassword',
     successStatus: 200,
@@ -121,7 +127,7 @@ const operations: readonly OperationExpectation[] = [
     tag: 'auth',
   },
   {
-    controller: AuthController,
+    controller: SessionsController,
     handler: 'sessions',
     operationId: 'authListSessions',
     successStatus: 200,
@@ -130,7 +136,7 @@ const operations: readonly OperationExpectation[] = [
     tag: 'auth',
   },
   {
-    controller: AuthController,
+    controller: SessionsController,
     handler: 'revokeSession',
     operationId: 'authRevokeSession',
     successStatus: 204,
@@ -139,7 +145,7 @@ const operations: readonly OperationExpectation[] = [
     tag: 'auth',
   },
   {
-    controller: AuthController,
+    controller: SessionsController,
     handler: 'logoutAll',
     operationId: 'authLogoutAll',
     successStatus: 200,

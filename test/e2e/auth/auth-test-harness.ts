@@ -6,35 +6,39 @@ import { Test } from '@nestjs/testing'
 import type { INestApplication } from '@nestjs/common'
 import cookieParser from 'cookie-parser'
 
-import type { AuthenticatedPrincipal } from '@/modules/auth/application/auth.types'
-import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
-import { ChangePasswordUseCase } from '@/modules/auth/application/change-password.use-case'
-import { ConfirmEmailVerificationUseCase } from '@/modules/auth/application/confirm-email-verification.use-case'
-import { ConfirmPasswordResetUseCase } from '@/modules/auth/application/confirm-password-reset.use-case'
-import { GetCsrfTokenQuery } from '@/modules/auth/application/get-csrf-token.query'
-import { GetMeQuery } from '@/modules/auth/application/get-me.query'
-import { ListSessionsQuery } from '@/modules/auth/application/list-sessions.query'
-import { LoginUseCase } from '@/modules/auth/application/login.use-case'
-import { LogoutAllUseCase } from '@/modules/auth/application/logout-all.use-case'
-import { LogoutUseCase } from '@/modules/auth/application/logout.use-case'
-import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
-import { RegisterUserUseCase } from '@/modules/auth/application/register-user.use-case'
-import { RequestPasswordResetUseCase } from '@/modules/auth/application/request-password-reset.use-case'
-import { ResendEmailVerificationUseCase } from '@/modules/auth/application/resend-email-verification.use-case'
-import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
+import type { AuthenticatedPrincipal } from '@/modules/identity-access/public-contracts/authenticated-principal'
+import { AuthenticateSessionUseCase } from '@/modules/identity-access/authorization/application/authenticate-session.use-case'
+import { ChangePasswordUseCase } from '@/modules/identity-access/authentication/application/change-password.use-case'
+import { ConfirmEmailVerificationUseCase } from '@/modules/identity-access/account-lifecycle/email-verification/application/confirm-email-verification.use-case'
+import { EmailVerificationController } from '@/modules/identity-access/account-lifecycle/email-verification/presentation/email-verification.controller'
+import { ConfirmPasswordResetUseCase } from '@/modules/identity-access/account-lifecycle/password-recovery/application/confirm-password-reset.use-case'
+import { RequestPasswordResetUseCase } from '@/modules/identity-access/account-lifecycle/password-recovery/application/request-password-reset.use-case'
+import { PasswordRecoveryController } from '@/modules/identity-access/account-lifecycle/password-recovery/presentation/password-recovery.controller'
+import { PublicAuthResponseDelay } from '@/modules/identity-access/account-lifecycle/presentation/public-auth-response-delay'
+import { RegisterUserUseCase } from '@/modules/identity-access/account-lifecycle/registration/application/register-user.use-case'
+import { RegistrationController } from '@/modules/identity-access/account-lifecycle/registration/presentation/registration.controller'
+import { GetCsrfTokenQuery } from '@/modules/identity-access/sessions/application/get-csrf-token.query'
+import { GetMeQuery } from '@/modules/identity-access/authorization/application/get-me.query'
+import { ListSessionsQuery } from '@/modules/identity-access/sessions/application/list-sessions.query'
+import { LoginUseCase } from '@/modules/identity-access/authentication/application/login.use-case'
+import { LogoutAllUseCase } from '@/modules/identity-access/sessions/application/logout-all.use-case'
+import { LogoutUseCase } from '@/modules/identity-access/sessions/application/logout.use-case'
+import { RevokeSessionUseCase } from '@/modules/identity-access/sessions/application/revoke-session.use-case'
+import { ResendEmailVerificationUseCase } from '@/modules/identity-access/account-lifecycle/email-verification/application/resend-email-verification.use-case'
+import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/identity-access/composition/auth-http-problem.contribution'
 import {
   AUTH_LOGIN_METADATA_FACTORY,
-  AuthController,
-} from '@/modules/auth/presentation/auth.controller'
-import { AuthCookieAdapter } from '@/modules/auth/presentation/auth-cookie.adapter'
-import { AuthRequestContext } from '@/modules/auth/presentation/auth-request.context'
-import { AuthRequestInterceptor } from '@/modules/auth/presentation/auth-request.interceptor'
-import { AuthenticationGuard } from '@/modules/auth/presentation/authentication.guard'
-import { BrowserOriginGuard } from '@/modules/auth/presentation/browser-origin.guard'
-import { PublicAuthResponseDelay } from '@/modules/auth/presentation/public-auth-response-delay'
-import { PermissionGuard } from '@/modules/auth/presentation/permission.guard'
-import { SelfServiceAuthController } from '@/modules/auth/presentation/self-service-auth.controller'
-import { SessionCsrfGuard } from '@/modules/auth/presentation/session-csrf.guard'
+  AuthenticationController,
+} from '@/modules/identity-access/authentication/presentation/authentication.controller'
+import { AuthController } from '@/modules/identity-access/authorization/presentation/auth.controller'
+import { SessionsController } from '@/modules/identity-access/sessions/presentation/sessions.controller'
+import { AuthCookieAdapter } from '@/modules/identity-access/sessions'
+import { AuthRequestContext } from '@/modules/identity-access/authorization/presentation/auth-request.context'
+import { AuthRequestInterceptor } from '@/modules/identity-access/authorization/presentation/auth-request.interceptor'
+import { AuthenticationGuard } from '@/modules/identity-access/authorization/presentation/authentication.guard'
+import { BrowserOriginGuard } from '@/modules/identity-access/authorization/presentation/browser-origin.guard'
+import { PermissionGuard } from '@/modules/identity-access/authorization/presentation/permission.guard'
+import { SessionCsrfGuard } from '@/modules/identity-access/authorization/presentation/session-csrf.guard'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { createRequestContextMiddleware } from '@/platform/http/context/request-context.middleware'
 import { ProblemExceptionFilter } from '@/platform/http/errors/problem-exception.filter'
@@ -137,7 +141,14 @@ export async function createAuthTestHarness(
     responseDelay: { wait: jest.fn(() => Promise.resolve()) },
   }
   const moduleRef = await Test.createTestingModule({
-    controllers: [AuthController, SelfServiceAuthController],
+    controllers: [
+      AuthController,
+      AuthenticationController,
+      SessionsController,
+      RegistrationController,
+      EmailVerificationController,
+      PasswordRecoveryController,
+    ],
     providers: [
       Reflector,
       AuthRequestContext,

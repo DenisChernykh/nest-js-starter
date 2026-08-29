@@ -4,7 +4,7 @@ import {
   UnknownRoleAssignmentError,
   type CreateUserInput,
   type CreateUserResult,
-} from '@/modules/auth/composition/user-provisioning.module'
+} from '@/modules/identity-access/composition/user-provisioning.module'
 
 /** Narrow user-provisioning use-case surface consumed by the CLI parser. */
 export interface UserCreator {

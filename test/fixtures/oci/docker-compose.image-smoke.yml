@@ -29,10 +29,12 @@ services:
     image: ${IMAGE}
     build: !reset null
     command:
-      - corepack
-      - pnpm@11.15.1
-      - run
-      - start:migrate
+      - node
+      - node_modules/prisma/build/index.js
+      - migrate
+      - deploy
+      - --config
+      - prisma.config.ts
     env_file:
       - ${SMOKE_ENV_FILE}
     environment: !reset {}

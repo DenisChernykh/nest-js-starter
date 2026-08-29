@@ -1,6 +1,6 @@
 import { argon2id, hash as argon2Hash } from 'argon2'
 
-import { Argon2PasswordHasher } from '@/modules/auth/infrastructure/argon2-password.hasher'
+import { Argon2PasswordHasher } from '@/modules/identity-access/authentication/infrastructure/argon2-password.hasher'
 import {
   createAuthTestRuntime,
   type AuthE2eRuntime,

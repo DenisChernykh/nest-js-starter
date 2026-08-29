@@ -540,13 +540,17 @@ sessions, восстановление контроля над аккаунто�
 `emailVerifiedAt` подтверждает контроль mailbox в момент ceremony, но не
 является identity proofing или KYC.
 
-Текущий auth runtime состоит из двух Core-границ и трёх default-disabled
-Reference-вертикалей. Самостоятельного generic Identity Kit нет: механика
-аутентификатора становится Kit только после повторения одного контракта и
-failure model в нескольких независимых methods или products.
+Текущий `identity-access` context разделён на identity, sessions,
+authentication, authorization, account lifecycle и account administration. Эти
+границы разделяют ownership и dependencies, но не являются самостоятельными
+generic Kits. Механика аутентификатора становится Kit только после повторения
+одного контракта и failure model в нескольких независимых methods или products.
+В продуктовой классификации runtime по-прежнему состоит из двух Core-границ и
+трёх default-disabled Reference-вертикалей.
 
-Все auth controllers входят в статическую API composition и committed OpenAPI;
-public/protected metadata routes также статична. Feature modes не удаляют route:
+Все identity-access controllers входят в статическую API composition и
+committed OpenAPI; public/protected metadata routes также статична. Feature
+modes не удаляют route:
 после применимых authentication/permission guards policy конкретной
 Reference-вертикали отвечает безопасным `NOT_FOUND`, когда capability выключена.
 
@@ -581,8 +585,10 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
 - **Reasons to defer / non-goals:** не превращать account principal в proof
   реальной личности, generic credential repository, organization membership или
   machine principal; не переносить product roles в dynamic role CRUD.
-- **Evidence:** [`auth-core.md`](architecture/auth-core.md),
-  [`login.use-case.ts`](../src/modules/auth/application/login.use-case.ts) и
+- **Evidence:** [`auth-core.md`](architecture/auth-core.md), password login in
+  [`authentication`](../src/modules/identity-access/authentication/), the fresh
+  principal policy in
+  [`authorization`](../src/modules/identity-access/authorization/) and
   [`api.module.ts`](../src/bootstrap/api/api.module.ts).
 
 ### `ID-02`. Opaque browser sessions and self-revocation
@@ -617,9 +623,8 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
 - **Reasons to defer / non-goals:** не считать User-Agent device identity,
   network fingerprint authentication factor или session cookie device
   attestation; не хранить raw cookies в PostgreSQL/logs.
-- **Evidence:**
-  [`session-store.port.ts`](../src/modules/auth/application/session-store.port.ts),
-  [`auth.controller.ts`](../src/modules/auth/presentation/auth.controller.ts) и
+- **Evidence:** the private store and public session operations in
+  [`sessions`](../src/modules/identity-access/sessions/) and
   [`session-management.e2e.spec.ts`](../test/e2e/auth/session-management.e2e.spec.ts).
 
 ### `ID-03`. Self-service email/password account lifecycle
@@ -643,8 +648,9 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
   accepted shape/floor; token confirmation остаётся atomic single-use.
 - **Form:** default-disabled Reference.
 - **Required dependencies:** `ID-01` и `ID-02`, PostgreSQL token state, auth
-  Redis public limiter, auth-owned mail port, public app origin и matching CORS
-  origin — Available; hosted SMTP/DNS/secrets — Environment-owned при adoption.
+  Redis public limiter, account-lifecycle mail port, public app origin и
+  matching CORS origin — Available; hosted SMTP/DNS/secrets —
+  Environment-owned при adoption.
 - **Conditional dependencies:** category 6 attempts/outbox/worker, только если
   продукт больше не принимает текущую best-effort потерю delivery.
 - **Blocked by:** repository blockers отсутствуют; enablement требует выбранный
@@ -656,8 +662,7 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
   делать SMTP readiness dependency.
 - **Evidence:**
   [`self-service-account-lifecycle.md`](runbooks/self-service-account-lifecycle.md)
-  и
-  [`self-service-auth.controller.ts`](../src/modules/auth/presentation/self-service-auth.controller.ts).
+  и [`account-lifecycle`](../src/modules/identity-access/account-lifecycle/).
 
 ### `ID-04`. Administrative account lifecycle
 
@@ -692,7 +697,7 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
   administrator-set password.
 - **Evidence:**
   [`account-administration.md`](runbooks/account-administration.md),
-  [`admin-account.controller.ts`](../src/modules/auth/presentation/admin-account.controller.ts)
+  [`account-administration`](../src/modules/identity-access/account-administration/)
   и
   [`account-administration.e2e.spec.ts`](../test/e2e/auth/account-administration.e2e.spec.ts).
 
@@ -732,9 +737,8 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
   превращать auth mail в notification platform.
 - **Evidence:**
   [`account-administration.md`](runbooks/account-administration.md),
-  [`account-email-workflows.service.ts`](../src/modules/auth/application/account-email-workflows.service.ts)
-  и
-  [`account-email-workflows.controller.ts`](../src/modules/auth/presentation/account-email-workflows.controller.ts).
+  [`account-lifecycle`](../src/modules/identity-access/account-lifecycle/) и
+  [`account-administration`](../src/modules/identity-access/account-administration/).
 
 ### `ID-06`. Prospective-password acceptance policy and blocklist
 
@@ -745,7 +749,7 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
   проверки commonly used/expected/compromised values нет; HTTP new-password
   contracts используют текущую длину `12..1024`, а CLI additionally bounds
   secret bytes.
-- **What could be added:** одна auth-owned prospective-password policy,
+- **What could be added:** одна identity-access prospective-password policy,
   вызываемая только при установке/смене password после дешёвой
   authorization/token eligibility и до Argon2. Она сравнивает полное значение с
   выбранным blocklist, выдаёт стабильную value-free rejection и явно фиксирует
@@ -778,14 +782,10 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
   rehash; не добавлять password history, periodic rotation, arbitrary complexity
   rules, remote breach API или generic secret-policy framework без отдельного
   решения.
-- **Evidence:** password-setting calls in
-  [`create-initial-admin.use-case.ts`](../src/modules/auth/application/create-initial-admin.use-case.ts),
-  [`create-user.use-case.ts`](../src/modules/auth/application/create-user.use-case.ts),
-  [`register-user.use-case.ts`](../src/modules/auth/application/register-user.use-case.ts),
-  [`change-password.use-case.ts`](../src/modules/auth/application/change-password.use-case.ts),
-  [`confirm-password-reset.use-case.ts`](../src/modules/auth/application/confirm-password-reset.use-case.ts)
-  and
-  [`account-email-workflows.service.ts`](../src/modules/auth/application/account-email-workflows.service.ts);
+- **Evidence:** password-setting paths in
+  [`authentication`](../src/modules/identity-access/authentication/),
+  [`account-lifecycle`](../src/modules/identity-access/account-lifecycle/) and
+  [`account-administration`](../src/modules/identity-access/account-administration/);
   current external direction in
   [NIST SP 800-63B-4](https://pages.nist.gov/800-63-4/sp800-63b.html#passwordver).
 
@@ -905,9 +905,10 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
 - **Catalog status:** Validated candidate.
 - **Expected from Planner:** Telegram OIDC provider-specific Reference и
   security/runtime evidence закрытого allowlist flow.
-- **What already exists:** stable local user ID/account/session foundation.
-  External identity table, OIDC provider/client, callback ceremony и token/JWKS
-  handling отсутствуют.
+- **What already exists:** stable local user ID/account/session foundation и
+  документированная provider-to-`SessionIssuer` граница. External identity
+  table, OIDC provider/client, callback ceremony и token/JWKS handling
+  отсутствуют.
 - **What could be added:** один provider-specific OIDC Authorization Code flow
   with PKCE/state/nonce, strict issuer/audience/time validation, JWKS
   rotation/outage policy и durable unique mapping by `(issuer, subject)`.
@@ -939,8 +940,10 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
   multi-provider registry или SAML/enterprise tenant discovery; не использовать
   email как stable external ID и не считать provider authentication identity
   proofing.
-- **Evidence:** current exclusion in [`auth-core.md`](architecture/auth-core.md)
-  and stable-identifier requirement in
+- **Evidence:** current exclusion and provider seam in
+  [`auth-core.md`](architecture/auth-core.md) and
+  [`authentication/providers`](../src/modules/identity-access/authentication/providers/README.md),
+  plus the stable-identifier requirement in
   [OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability).
 
 ### `ID-11`. Multiple authenticators and explicit account linking
@@ -977,7 +980,9 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
   не auto-link по email и не смешивать account linking with profile merge or
   organization membership.
 - **Evidence:** absent persistence boundary in
-  [`schema.prisma`](../prisma/schema.prisma) and external identifier semantics in
+  [`schema.prisma`](../prisma/schema.prisma), explicit no-auto-link policy in
+  [`authentication/providers`](../src/modules/identity-access/authentication/providers/README.md)
+  and external identifier semantics in
   [OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability).
 
 ### `ID-12`. Generic adaptive risk and trusted-device engine
@@ -1010,10 +1015,9 @@ Reference-вертикали отвечает безопасным `NOT_FOUND`, 
 - **Reasons to defer / non-goals:** не повышать User-Agent/IP metadata до device
   identity, не добавлять CAPTCHA/IP reputation/geolocation по умолчанию и не
   создавать generic rules engine.
-- **Evidence:** metadata creation in
-  [`auth.module.ts`](../src/modules/auth/composition/auth.module.ts) and fixed
-  limiter in
-  [`redis-login-rate-limiter.ts`](../src/modules/auth/infrastructure/redis-login-rate-limiter.ts).
+- **Evidence:** bounded metadata and fixed throttling in
+  [`authentication`](../src/modules/identity-access/authentication/) and
+  session metadata in [`sessions`](../src/modules/identity-access/sessions/).
 
 ### Сводка зависимостей
 
@@ -1133,7 +1137,7 @@ identity. Human OIDC ceremony остаётся `ID-10`; product aggregate author
   auth `User`.
 - **Evidence:** current human-only persistence in
   [`schema.prisma`](../prisma/schema.prisma) and global role catalog in
-  [`role-registry.ts`](../src/modules/auth/application/role-registry.ts).
+  [`authorization`](../src/modules/identity-access/authorization/).
 
 ### `ORG-02`. Organization membership and invitation lifecycle
 
@@ -1189,7 +1193,7 @@ identity. Human OIDC ceremony остаётся `ID-10`; product aggregate author
 - **Reasons to defer / non-goals:** no middleware that silently injects tenant
   predicates, no global tenant context and no universal repository abstraction.
 - **Evidence:** current principal shape in
-  [`auth.types.ts`](../src/modules/auth/application/auth.types.ts) and user-owned
+  [`identity-access/index.ts`](../src/modules/identity-access/index.ts) and user-owned
   approval controller in
   [`approval-request.controller.ts`](../src/modules/approval-requests/presentation/approval-request.controller.ts).
 
@@ -1224,7 +1228,8 @@ identity. Human OIDC ceremony остаётся `ID-10`; product aggregate author
   permanent bearer token or generic OAuth authorization server.
 - **Evidence:** current cookie-only OpenAPI security in
   [`openapi-document.ts`](../src/platform/http/docs/openapi-document.ts) and
-  human principal in [`auth.types.ts`](../src/modules/auth/application/auth.types.ts).
+  human principal in
+  [`identity-access/index.ts`](../src/modules/identity-access/index.ts).
 
 ### `ORG-05`. Service-account machine principal lifecycle
 
@@ -1253,7 +1258,7 @@ identity. Human OIDC ceremony остаётся `ID-10`; product aggregate author
   email/password, recovery mail or browser sessions for machine principals.
 - **Evidence:** current `User` and principal contracts in
   [`schema.prisma`](../prisma/schema.prisma) and
-  [`auth.types.ts`](../src/modules/auth/application/auth.types.ts).
+  [`identity-access/index.ts`](../src/modules/identity-access/index.ts).
 
 ### `ORG-06`. Organization SSO connection and discovery
 
@@ -1306,7 +1311,7 @@ identity. Human OIDC ceremony остаётся `ID-10`; product aggregate author
 - **Evidence:** explicit boundaries in
   [`module-boundaries.md`](architecture/module-boundaries.md) and code-owned
   permissions in
-  [`role-registry.ts`](../src/modules/auth/application/role-registry.ts).
+  [`authorization`](../src/modules/identity-access/authorization/).
 
 ### Сводка зависимостей
 
@@ -1899,14 +1904,16 @@ preferences or campaigns before their own consumers.
   send fixed verification, reset and invitation messages. SMTP is selected only
   with the owning auth mode, not readiness; account/token commit precedes
   best-effort send; Mailpit is local evidence.
-- **What could be added:** nothing generic for auth. Another provider can be an
-  auth-owned adapter without expanding content into Communications.
+- **What could be added:** nothing generic for identity-access. Another
+  provider can be an account-lifecycle-owned adapter without expanding content
+  into Communications.
 - **Named consumer:** `react-starter` self-service lifecycle, invitation and
   administrator recovery.
 - **Failure model:** SMTP/DNS/TLS/credential outage after commit, ambiguous
   timeout, duplicate resend and provider acceptance without inbox delivery.
   Self-service remains non-enumerating; admin reports `delivered|failed`.
-- **Form:** default-disabled Reference owned by Identity/Auth.
+- **Form:** default-disabled Reference owned by identity-access account
+  lifecycle.
 - **Required dependencies:** `ID-03` or `ID-05`, token state, app URL/CORS and
   SMTP configuration — Available/Environment-owned.
 - **Conditional dependencies:** `COM-02` only if a product replaces current
@@ -1916,8 +1923,8 @@ preferences or campaigns before their own consumers.
 - **Priority:** —; already Available.
 - **Reasons to defer / non-goals:** no templates, preferences, inbox, campaigns,
   delivery ledger or SMTP readiness; auth token/content policy stays in auth.
-- **Evidence:** [`auth-mail-delivery.port.ts`](../src/modules/auth/application/auth-mail-delivery.port.ts),
-  [`nodemailer-auth-mail.adapter.ts`](../src/modules/auth/infrastructure/nodemailer-auth-mail.adapter.ts)
+- **Evidence:** ceremony mail ownership in
+  [`account-lifecycle`](../src/modules/identity-access/account-lifecycle/)
   and [`self-service-account-lifecycle.md`](runbooks/self-service-account-lifecycle.md).
 
 ### `COM-02`. Product transactional notification intent and durable delivery
@@ -1963,8 +1970,8 @@ preferences or campaigns before their own consumers.
 
 - **Entry kind:** Capability.
 - **Catalog status:** Deferred.
-- **What already exists:** bounded SMTP is private to auth ceremony types; its
-  port is not an arbitrary notification envelope.
+- **What already exists:** bounded SMTP is private to account-lifecycle ceremony
+  types; its port is not an arbitrary notification envelope.
 - **What could be added:** inert single-attempt SMTP/provider adapter with
   explicit sender/recipient/subject/text/html, deadline, TLS policy and safe
   outcome classification. Persistence/retry/templates remain outside.
@@ -1983,19 +1990,22 @@ preferences or campaigns before their own consumers.
 - **Priority:** P2.
 - **Reasons to defer / non-goals:** do not export Auth port, put retry/templates
   in transport or make SMTP an API readiness dependency.
-- **Evidence:** current auth adapter and DARTS `scope-v1.md` external contract.
+- **Evidence:** current account-lifecycle adapter and DARTS `scope-v1.md`
+  external contract.
 
 ### `COM-04`. Typed notification templates and content versioning
 
 - **Entry kind:** Capability.
 - **Catalog status:** Deferred.
-- **What already exists:** auth has fixed messages; Gift Bot has product-owned
-  pure renderers. No shared template/locale/version registry exists.
+- **What already exists:** account lifecycle has fixed messages; Gift Bot has
+  product-owned pure renderers. No shared template/locale/version registry
+  exists.
 - **What could be added:** code-owned typed IDs, allowlisted variables,
   deterministic escaped text/html, locale fallback, snapshot tests and explicit
   content version; queued intent stores rendered snapshot or template version.
 - **Named consumer:** DARTS needs events/content but the exact catalog is still
-  proposed; current auth/Gift Bot renderers need no common abstraction.
+  proposed; current account-lifecycle/Gift Bot renderers need no common
+  abstraction.
 - **Failure model:** missing variable, event/template drift, HTML/link injection,
   wrong locale fallback, secret in preview/log and old queued message changing
   under a new template.
@@ -2169,7 +2179,7 @@ the strongest new P1; `COM-05` is P1 only after DARTS visibility/retention rules
 ### Граница владения
 
 Auth владеет login identity и своим SMTP ceremony; product profile относится к
-этой категории, но не расширяет Auth `User`. Product/data owner задаёт data
+этой категории, но не расширяет identity-access `User`. Product/data owner задаёт data
 class, association, visibility, content limits и lifecycle requirements.
 `GOV-03` владеет consent evidence, `GOV-05` — subject-erasure plan, а `GOV-06`
 — retention, legal holds и purge orchestration. Data module и storage adapter
@@ -2187,7 +2197,8 @@ documents, но не реализованный runtime. Само наличие
 
 - **Entry kind:** Capability.
 - **Catalog status:** Validated candidate.
-- **What already exists:** starter `User` содержит только auth-owned поля, а
+- **What already exists:** starter `User` содержит только identity-access-owned
+  поля, а
   React consumer работает с account email. Gift Bot хранит Telegram username и
   display name как product snapshot. DARTS описывает профиль риелтора и
   verification, но точные PII, legal basis, access и retention ещё не определены.
@@ -2403,8 +2414,9 @@ documents, но не реализованный runtime. Само наличие
 - **Priority:** —.
 - **Reasons to defer / non-goals:** no generic repository/controller/service,
   global pagination helper или universal filtering DSL.
-- **Evidence:** `src/modules/auth/infrastructure/prisma-auth.repository.ts`;
-  `src/modules/auth/presentation/admin-account.dto.ts`; Amazing EKB catalog
+- **Evidence:** bounded account queries in
+  [`account-administration`](../src/modules/identity-access/account-administration/);
+  Amazing EKB catalog
   queries — audited implemented runtime.
 
 ### `DATA-08`. External search projection and index lifecycle
@@ -2473,13 +2485,14 @@ Category 8 владеет durable business accountability и product privacy pol
 business action history, consent evidence, subject export, erasure/anonymization
 и retention. Она не превращает технические логи в legal evidence и не выбирает
 одинаковую privacy policy для разных продуктов. `GOV-01` включён ниже только как
-adjacent existing comparator: его implementation owner — Auth/Platform logging
+adjacent existing comparator: его implementation owner — identity-access и platform logging
 в категориях 1/2, не governance runtime.
 
-Текущий auth audit — security telemetry, а не durable business audit. Account
-retirement удаляет auth-owned credentials и tombstones identity, но сохраняет
-user ID и product foreign keys; это не full erasure. Технические сроки Loki,
-Tempo, Outbox и auth tokens не становятся product-data retention defaults.
+Текущий identity-access audit — security telemetry, а не durable business
+audit. Account retirement удаляет identity-access-owned credentials и
+tombstones identity, но сохраняет user ID и product foreign keys; это не full
+erasure. Технические сроки Loki, Tempo, Outbox и auth tokens не становятся
+product-data retention defaults.
 
 ### `GOV-01`. Adjacent auth security audit telemetry comparator
 
@@ -2491,13 +2504,14 @@ Tempo, Outbox и auth tokens не становятся product-data retention de
   request/trace correlation. Локальные Loki/Tempo имеют retention `168h`.
 - **What could be added:** только environment-owned centralized sink, retention
   и alerts, если production contract этого требует.
-- **Named consumer:** security-sensitive login, session, password и administrator
-  operations текущего auth-модуля.
+- **Named consumer:** security-sensitive login, session, password и
+  administrator operations текущего identity-access context.
 - **Failure model:** invalid event отбрасывается с process-local counter, crash
   или stdout pipeline outage теряет запись, retention удаляет историю, malformed
   identifier не проходит validation. Transactional/durable guarantee нет.
-- **Form:** Core security observability owned by Auth/Platform logging; recorded
-  here as an adjacent comparator, not a category-8-owned runtime.
+- **Form:** Core security observability owned by identity-access/platform
+  logging; recorded here as an adjacent comparator, not a category-8-owned
+  runtime.
 - **Required dependencies:** `AuthAuditPort`, structured logging и stdout sink
   — Available.
 - **Conditional dependencies:** hosted log storage, access control, retention и
@@ -2510,7 +2524,8 @@ Tempo, Outbox и auth tokens не становятся product-data retention de
   или legal evidence; не добавлять PII, before/after snapshots и arbitrary event
   codes.
 - **Evidence:**
-  [`auth-audit.port.ts`](../src/modules/auth/application/auth-audit.port.ts),
+  identity-access audit ownership in
+  [`identity-access`](../src/modules/identity-access/),
   [`auth-audit.logger.ts`](../src/platform/logging/auth-audit.logger.ts),
   [`auth-audit.e2e.spec.ts`](../test/e2e/logging/auth-audit.e2e.spec.ts) и
   [`errors-logging-observability.md`](architecture/errors-logging-observability.md).
@@ -2633,7 +2648,7 @@ Tempo, Outbox и auth tokens не становятся product-data retention de
 
 - **Entry kind:** Capability.
 - **Catalog status:** Deferred.
-- **What already exists:** `ID-04` удаляет auth-owned
+- **What already exists:** `ID-04` удаляет identity-access-owned
   credentials/tokens/roles и tombstones email, но сохраняет `User.id` и
   product foreign keys. Это retirement, не erasure. DARTS требует определить
   deletion до сбора паспортных данных; Gift Bot показывает связанный
@@ -2650,8 +2665,9 @@ Tempo, Outbox и auth tokens не становятся product-data retention de
   или выбран неверный subject.
 - **Form:** Product-specific; повторяемый lifecycle может стать Reference.
 - **Required dependencies:** authoritative subject mapping, data inventory,
-  per-module erase/anonymize contracts including an auth-owned identity/session
-  contribution, and retention/legal-hold policy — Missing/Product-owned.
+  per-module erase/anonymize contracts including an identity-access-owned
+  identity/session contribution, and retention/legal-hold policy —
+  Missing/Product-owned.
 - **Conditional dependencies:** `ID-04` only when its auth-retirement contract
   is reused as one module contribution; category 4 durable job/saga, category 5
   provider deletion, category 7 blob deletion and `GOV-02` operation evidence.
@@ -2664,8 +2680,8 @@ Tempo, Outbox и auth tokens не становятся product-data retention de
   business/legal history без policy и не обещать physical backup deletion без
   отдельного contract.
 - **Evidence:** [account administration runbook](runbooks/account-administration.md),
-  [auth repository](../src/modules/auth/infrastructure/prisma-auth.repository.ts)
-  и auth retirement integration test; DARTS repository
+  [`account-administration`](../src/modules/identity-access/account-administration/)
+  and its retirement integration tests; DARTS repository
   `docs/product/prd.md`, `FR-007/U-003`.
 
 ### `GOV-06`. Product data retention and bounded purge
@@ -2735,7 +2751,7 @@ Tempo, Outbox и auth tokens не становятся product-data retention de
   делать hidden impersonation, universal login-as или замену explicit support
   commands.
 - **Evidence:** текущие
-  [`account-administration.service.ts`](../src/modules/auth/application/account-administration.service.ts),
+  [`account-administration`](../src/modules/identity-access/account-administration/),
   `AuthAuditPort` и отсутствие impersonation route/state.
 
 ### Сводка зависимостей

@@ -11,6 +11,7 @@ interface ResolvedComposePort {
 
 interface ResolvedComposeService {
   readonly build?: unknown
+  readonly command?: readonly string[]
   readonly develop?: unknown
   readonly environment?: Readonly<Record<string, string>>
   readonly image?: string
@@ -148,5 +149,13 @@ describe('OCI image smoke Compose contract', () => {
       NODE_ENV: 'production',
       REDIS_AUTH_URL: redisUrl,
     })
+    expect(migrator.command).toEqual([
+      'node',
+      'node_modules/prisma/build/index.js',
+      'migrate',
+      'deploy',
+      '--config',
+      'prisma.config.ts',
+    ])
   })
 })

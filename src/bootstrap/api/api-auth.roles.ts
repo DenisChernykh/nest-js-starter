@@ -1,7 +1,7 @@
 import {
   SYSTEM_ADMIN_PERMISSIONS,
   type RoleDefinition,
-} from '@/modules/auth/composition/role-catalog'
+} from '@/modules/identity-access/composition/role-catalog'
 import { APPROVAL_REQUEST_PERMISSIONS } from '@/modules/approval-requests/composition/approval-request-role.contribution'
 
 /** Immutable product-owned role definitions installed by the API root. */
