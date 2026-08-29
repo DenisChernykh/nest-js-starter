@@ -1,3 +1,5 @@
+import type { IssuedBrowserSession } from './session-issuance.contract'
+
 /** Exact versioned Redis payload for one opaque browser session. */
 export interface StoredSessionRecord {
   readonly schema: 1
@@ -21,14 +23,6 @@ export interface IssueSessionInput {
   readonly nowMs: number
   readonly deviceLabel: string
   readonly networkFingerprint: string
-}
-
-/** Raw browser-only token plus public values returned after session creation. */
-export interface IssuedBrowserSession {
-  readonly rawToken: string
-  readonly publicId: string
-  readonly csrfToken: string
-  readonly absoluteExpiresAt: Date
 }
 
 /** Safe session metadata shown to its owning authenticated user. */

@@ -3,20 +3,20 @@ import {
   type AuthFailureCode,
   EmailVerificationRequiredError,
   AuthRateLimitedError,
-} from '../application/auth-errors'
-import { AccountRevisionConflictError } from '../application/account-administration.service'
+} from '../public-contracts/auth-errors'
+import { AccountRevisionConflictError } from '../account-administration/application/account-administration.errors'
 import {
   AccountEtagMalformedError,
   AccountEtagPreconditionRequiredError,
-} from '../presentation/account-etag.codec'
-import { AuthTokenInvalidOrExpiredError } from '../application/self-service-auth.policy'
+} from '../account-administration/presentation/account-etag.codec'
+import { AuthTokenInvalidOrExpiredError } from '../account-lifecycle/application/self-service-auth.policy'
 import {
-  AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
   AUTH_ACCOUNT_ETAG_MALFORMED_PROBLEM,
   AUTH_ACCOUNT_PRECONDITION_FAILED_PROBLEM,
   AUTH_ACCOUNT_PRECONDITION_REQUIRED_PROBLEM,
-  EMAIL_VERIFICATION_REQUIRED_PROBLEM,
-} from '../presentation/auth-problem.definitions'
+} from '../account-administration/presentation/account-administration-problem.definitions'
+import { AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM } from '../account-lifecycle/presentation/account-lifecycle-problem.definitions'
+import { EMAIL_VERIFICATION_REQUIRED_PROBLEM } from '../authentication/presentation/authentication-problem.definitions'
 import type {
   HttpProblemContribution,
   HttpProblemMapping,

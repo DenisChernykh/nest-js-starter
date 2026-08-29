@@ -1,12 +1,8 @@
 import type { Provider } from '@nestjs/common'
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 
-import { AuthModule } from '@/modules/auth/composition/auth.module'
 import { definePermissions } from '@/modules/auth/authorization/application/permission'
-import {
-  AuthorizationModule,
-  type ConfiguredAuthorizationModule,
-} from '@/modules/auth/authorization/composition/authorization.module'
+import { AuthorizationModule } from '@/modules/auth/authorization/composition/authorization.module'
 import {
   RoleRegistry,
   type RoleDefinition,
@@ -107,21 +103,5 @@ describe('AuthorizationModule composition', () => {
             provider.provide === APP_INTERCEPTOR),
       ),
     ).toEqual([])
-  })
-
-  it('lets the legacy root register the global chain around one configured module', () => {
-    const legacy = AuthModule.forRoot({ roleDefinitions: [] })
-    const [configured] = legacy.imports as [ConfiguredAuthorizationModule]
-
-    expect(legacy.imports).toHaveLength(1)
-    expect(configured.module).toBe(AuthorizationModule)
-    expect(legacy.exports).toEqual([configured])
-    expect(legacy.providers).toEqual([
-      { provide: APP_GUARD, useExisting: AuthenticationGuard },
-      { provide: APP_GUARD, useExisting: BrowserOriginGuard },
-      { provide: APP_GUARD, useExisting: SessionCsrfGuard },
-      { provide: APP_GUARD, useExisting: PermissionGuard },
-      { provide: APP_INTERCEPTOR, useExisting: AuthRequestInterceptor },
-    ])
   })
 })

@@ -1,16 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import type { AccountAdministrationMutationPort } from '../../application/account-administration-mutation.port'
-import type { AccountActorAuthorization } from '../../application/actor-authorization-requirement'
+import type { AccountAdministrationMutationPort } from '../application/account-administration-mutation.port'
+import type { AccountActorAuthorization } from '../../authorization/application/account-actor-authorization'
 import {
   AccountRevisionConflictError,
   AccountSelfMutationForbiddenError,
-} from '../../application/account-administration.service'
-import type { AdminAccount } from '../../application/account-administration.port'
+} from '../application/account-administration.errors'
+import type { AdminAccount } from '../application/account-administration.model'
 import {
   AuthorizationDeniedError,
   AuthStateConflictError,
-} from '../../application/auth-errors'
+} from '../../public-contracts/auth-errors'
 import {
   adminAccountInclude,
   mapAdminAccount,

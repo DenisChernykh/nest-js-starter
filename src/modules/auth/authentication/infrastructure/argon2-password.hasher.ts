@@ -5,7 +5,7 @@ import {
   verify as argon2Verify,
 } from 'argon2'
 
-import { PasswordHashingError } from '../../application/auth-errors'
+import { PasswordHashingError } from '../../public-contracts/auth-errors'
 import type {
   PasswordHasherPort,
   PasswordVerification,

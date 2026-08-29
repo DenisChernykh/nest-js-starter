@@ -3,9 +3,9 @@ import { Inject, Injectable } from '@nestjs/common'
 import type {
   SelfServiceRegistrationInput,
   SelfServiceRegistrationResult,
-} from '../../../application/auth.types'
-import type { RegistrationPersistencePort } from '../../../application/registration-persistence.port'
-import { isNormalizedEmailUniqueConflict } from '../../../infrastructure/prisma-auth-unique-constraint'
+} from '../application/registration-persistence.port'
+import type { RegistrationPersistencePort } from '../application/registration-persistence.port'
+import { isNormalizedEmailUniqueConflict } from '../../infrastructure/prisma-normalized-email-conflict'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import {
   TRANSACTION_PORT,

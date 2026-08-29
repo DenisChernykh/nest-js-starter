@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import type { Response } from 'express'
 
-import type { IssuedBrowserSession } from '../application/session-store.port'
+import type { IssuedBrowserSession } from '../application/session-issuance.contract'
 import { readCanonicalSessionToken } from './session-cookie'
 
 interface CookieRequest {

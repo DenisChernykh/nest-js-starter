@@ -1,8 +1,8 @@
 import request from 'supertest'
 import type { Pool } from 'pg'
 
-import { AuthTokenInvalidOrExpiredError } from '@/modules/auth/application/self-service-auth.policy'
-import { EmailVerificationRequiredError } from '@/modules/auth/application/auth-errors'
+import { AuthTokenInvalidOrExpiredError } from '@/modules/auth/account-lifecycle/application/self-service-auth.policy'
+import { EmailVerificationRequiredError } from '@/modules/auth/public-contracts/auth-errors'
 import {
   createAuthTestHarness,
   type AuthTestHarness,

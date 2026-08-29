@@ -4,9 +4,13 @@ import {
   EmailVerificationRequiredError,
   type AuthFailureCode,
   AuthRateLimitedError,
-} from '@/modules/auth/application/auth-errors'
-import { AuthTokenInvalidOrExpiredError } from '@/modules/auth/application/self-service-auth.policy'
-import { AccountRevisionConflictError } from '@/modules/auth/application/account-administration.service'
+} from '@/modules/auth/public-contracts/auth-errors'
+import { AccountRevisionConflictError } from '@/modules/auth/account-administration/application/account-administration.errors'
+import {
+  AccountEtagMalformedError,
+  AccountEtagPreconditionRequiredError,
+} from '@/modules/auth/account-administration/presentation/account-etag.codec'
+import { AuthTokenInvalidOrExpiredError } from '@/modules/auth/account-lifecycle/application/self-service-auth.policy'
 import {
   AUTH_FAILURE_PROBLEM_CODES,
   AUTH_HTTP_PROBLEM_CONTRIBUTION,
@@ -15,16 +19,12 @@ import {
   AUTH_ACCOUNT_ETAG_MALFORMED_PROBLEM,
   AUTH_ACCOUNT_PRECONDITION_FAILED_PROBLEM,
   AUTH_ACCOUNT_PRECONDITION_REQUIRED_PROBLEM,
-  AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM,
-  EMAIL_VERIFICATION_REQUIRED_PROBLEM,
-} from '@/modules/auth/presentation/auth-problem.definitions'
+} from '@/modules/auth/account-administration/presentation/account-administration-problem.definitions'
+import { AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM } from '@/modules/auth/account-lifecycle/presentation/account-lifecycle-problem.definitions'
+import { EMAIL_VERIFICATION_REQUIRED_PROBLEM } from '@/modules/auth/authentication/presentation/authentication-problem.definitions'
 import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'
 import { HttpProblemRegistry } from '@/platform/http/errors/http-problem.registry'
 import type { CoreProblemCode } from '@/platform/http/errors/problem-registry'
-import {
-  AccountEtagMalformedError,
-  AccountEtagPreconditionRequiredError,
-} from '@/modules/auth/presentation/account-etag.codec'
 
 const registry = new HttpProblemRegistry([
   CORE_HTTP_PROBLEM_CONTRIBUTION,

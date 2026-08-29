@@ -1,5 +1,5 @@
 import { AuthenticateSessionUseCase } from '@/modules/auth/authorization/application/authenticate-session.use-case'
-import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
+import { AuthDependencyUnavailableError } from '@/modules/auth/public-contracts/auth-errors'
 import type { IdentitySecurityStatePort } from '@/modules/auth/identity/application/identity-security-state.port'
 import { definePermissions } from '@/modules/auth/authorization/application/permission'
 import { RoleRegistry } from '@/modules/auth/authorization/application/role-registry'

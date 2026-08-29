@@ -3,12 +3,12 @@ import { Inject, Injectable } from '@nestjs/common'
 import {
   AuthDependencyUnavailableError,
   AuthError,
-} from '../../application/auth-errors'
+} from '../../public-contracts/auth-errors'
 import {
   AUTH_AUDIT,
   NOOP_AUTH_AUDIT,
   type AuthAuditPort,
-} from '../../application/auth-audit.port'
+} from '../../public-contracts/auth-audit.port'
 import {
   SessionCleanupService,
   type AuthDurableMutationResult,

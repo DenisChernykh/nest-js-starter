@@ -1,4 +1,4 @@
-import { AuthenticationRequiredError } from '@/modules/auth/application/auth-errors'
+import { AuthenticationRequiredError } from '@/modules/auth/public-contracts/auth-errors'
 import {
   SessionCleanupService,
   type AuthSessionCleanupObserver,

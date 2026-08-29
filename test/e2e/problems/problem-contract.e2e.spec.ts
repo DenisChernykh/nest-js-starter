@@ -20,7 +20,7 @@ import {
   AuthorizationDeniedError,
   AuthRateLimitedError,
   AuthStateConflictError,
-} from '@/modules/auth/application/auth-errors'
+} from '@/modules/auth/public-contracts/auth-errors'
 import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
 import { RuntimeConfigModule } from '@/platform/config/runtime-config.module'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'

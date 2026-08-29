@@ -196,4 +196,21 @@ describe('dependency-cruiser policy', () => {
     )
     expect(result.status).toBeGreaterThan(0)
   })
+
+  it('allows providers to call SessionIssuer but rejects raw session access', () => {
+    const invalidResults = [
+      runFixture('identity-access-provider-session-invalid'),
+      runFixture('identity-access-provider-platform-redis-invalid'),
+      runFixture('identity-access-provider-ioredis-invalid'),
+    ]
+    const validResult = runFixture('identity-access-provider-session-valid')
+
+    for (const invalidResult of invalidResults) {
+      expect(`${invalidResult.stdout}${invalidResult.stderr}`).toContain(
+        'identity-access-providers-must-use-session-issuer-only',
+      )
+      expect(invalidResult.status).toBeGreaterThan(0)
+    }
+    expect(validResult.status).toBe(0)
+  })
 })

@@ -4,19 +4,19 @@ import {
   AuthDependencyUnavailableError,
   AuthError,
   AuthenticationRequiredError,
-} from '../../application/auth-errors'
+} from '../../public-contracts/auth-errors'
 import {
+  type AuthProjection,
   IDENTITY_SECURITY_STATE,
   type IdentitySecurityStatePort,
 } from '../../identity/application/identity-security-state.port'
-import type { UserStatus } from '../../identity/domain/user-status'
 import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 export interface ResolvedSessionIdentity {
   readonly userId: string
   readonly sessionId: string
   readonly normalizedEmail: string
-  readonly status: UserStatus
+  readonly status: AuthProjection['status']
   readonly roleKeys: readonly string[]
 }
 

@@ -189,6 +189,25 @@ module.exports = {
       },
     },
     {
+      name: 'identity-access-providers-must-use-session-issuer-only',
+      severity: 'error',
+      comment:
+        'Authentication providers may issue a session only through SessionIssuer and cannot access any other Sessions contract or implementation.',
+      from: {
+        path: '(^|/)modules/identity-access/authentication/providers(/|$)',
+      },
+      to: {
+        path: [
+          '(^|/)modules/identity-access/sessions(/|$)',
+          '(^|/)platform/redis(/|$)',
+          '(^|/)(node_modules/)?ioredis(/|$)',
+          '(^|/)(node_modules/)?redis(/|$)',
+        ],
+        pathNot:
+          '(^|/)modules/identity-access/sessions/application/session-issuer\\.ts$',
+      },
+    },
+    {
       name: 'identity-access-account-lifecycle-must-not-deep-import-capability-adapters',
       severity: 'error',
       comment:

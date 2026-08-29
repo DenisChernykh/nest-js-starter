@@ -1,10 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common'
 
 import type {
-  SelfServiceDeliveryTarget,
-  SelfServiceTokenInput,
-} from '../../../application/auth.types'
-import type { EmailVerificationPersistencePort } from '../../../application/email-verification-persistence.port'
+  AccountLifecycleDeliveryTarget,
+  AccountLifecycleTokenInput,
+} from '../../application/account-lifecycle.types'
+import type { EmailVerificationPersistencePort } from '../application/email-verification-persistence.port'
 import { Prisma, type PrismaClient } from '@/generated/prisma/client'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import {
@@ -23,9 +23,9 @@ export class PrismaEmailVerificationAdapter implements EmailVerificationPersiste
 
   public async rotateEmailVerificationToken(
     normalizedEmail: string,
-    token: SelfServiceTokenInput,
+    token: AccountLifecycleTokenInput,
     now: Date,
-  ): Promise<SelfServiceDeliveryTarget | undefined> {
+  ): Promise<AccountLifecycleDeliveryTarget | undefined> {
     if (token.expiresAt <= now) return undefined
     return this.transaction.run(() =>
       this.provider.withClient(async (client) => {
@@ -62,7 +62,7 @@ export class PrismaEmailVerificationAdapter implements EmailVerificationPersiste
   public async confirmEmailVerification(
     tokenDigest: string,
     now: Date,
-  ): Promise<SelfServiceDeliveryTarget | undefined> {
+  ): Promise<AccountLifecycleDeliveryTarget | undefined> {
     return this.transaction.run(() =>
       this.provider.withClient(async (client) => {
         const tokenOwner = await client.emailVerificationToken.findUnique({

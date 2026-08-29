@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import type { CanActivate, ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
-import { AuthorizationDeniedError } from '../../application/auth-errors'
+import { AuthorizationDeniedError } from '../../public-contracts/auth-errors'
 import { REQUIRE_PERMISSION_METADATA } from '../../public-contracts/require-permission.decorator'
 import { AuthRequestContext } from './auth-request.context'
 import type { PermissionKey } from '@/shared/application/permission'

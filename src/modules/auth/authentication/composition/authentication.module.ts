@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common'
 
-import { AUTH_AUDIT } from '../../application/auth-audit.port'
+import { AUTH_AUDIT } from '../../public-contracts/auth-audit.port'
 import { SessionsModule } from '../../sessions/composition/sessions.module'
 import { ChangePasswordUseCase } from '../application/change-password.use-case'
 import { LOGIN_RATE_LIMITER } from '../application/login-rate-limiter.port'

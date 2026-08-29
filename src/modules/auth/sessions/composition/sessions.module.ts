@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common'
 
-import { AUTH_AUDIT } from '../../application/auth-audit.port'
+import { AUTH_AUDIT } from '../../public-contracts/auth-audit.port'
 import { IdentityModule } from '../../identity/composition/identity.module'
 import { GetCsrfTokenQuery } from '../application/get-csrf-token.query'
 import { ListSessionsQuery } from '../application/list-sessions.query'

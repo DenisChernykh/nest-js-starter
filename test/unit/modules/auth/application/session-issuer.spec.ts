@@ -1,4 +1,4 @@
-import { AuthenticationFailedError } from '@/modules/auth/application/auth-errors'
+import { AuthenticationFailedError } from '@/modules/auth/public-contracts/auth-errors'
 import type { IdentitySecurityStatePort } from '@/modules/auth/identity/application/identity-security-state.port'
 import { SessionIssuer } from '@/modules/auth/sessions/application/session-issuer'
 import type { SessionStorePort } from '@/modules/auth/sessions/application/session-store.port'

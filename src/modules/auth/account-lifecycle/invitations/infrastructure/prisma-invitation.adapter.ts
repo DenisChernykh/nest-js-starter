@@ -1,14 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import type { AccountActorAuthorization } from '../../../application/account-administration.port'
-import { AccountSelfMutationForbiddenError } from '../../../application/account-administration.service'
-import { AuthorizationDeniedError } from '../../../application/auth-errors'
+import { AccountLifecycleSelfMutationForbiddenError } from '../../application/account-lifecycle-errors'
+import type { AccountActorAuthorization } from '../../../authorization/application/account-actor-authorization'
+import { AuthorizationDeniedError } from '../../../public-contracts/auth-errors'
 import type {
-  SelfServiceDeliveryTarget,
-  SelfServiceTokenInput,
-} from '../../../application/auth.types'
-import type { InvitationPersistencePort } from '../../../application/invitation-persistence.port'
-import { isNormalizedEmailUniqueConflict } from '../../../infrastructure/prisma-auth-unique-constraint'
+  AccountLifecycleDeliveryTarget,
+  AccountLifecycleTokenInput,
+} from '../../application/account-lifecycle.types'
+import type { InvitationPersistencePort } from '../application/invitation-persistence.port'
+import { isNormalizedEmailUniqueConflict } from '../../infrastructure/prisma-normalized-email-conflict'
 import { Prisma, type PrismaClient } from '@/generated/prisma/client'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import {
@@ -32,8 +32,8 @@ export class PrismaInvitationAdapter implements InvitationPersistencePort {
       readonly roleKeys: readonly string[]
       readonly actorId: string
       readonly actorAuthorization: AccountActorAuthorization
-    } & SelfServiceTokenInput,
-  ): Promise<SelfServiceDeliveryTarget | undefined> {
+    } & AccountLifecycleTokenInput,
+  ): Promise<AccountLifecycleDeliveryTarget | undefined> {
     try {
       return await this.transaction.run(() =>
         this.provider.withClient(async (client) => {
@@ -72,9 +72,9 @@ export class PrismaInvitationAdapter implements InvitationPersistencePort {
     readonly actorId: string
     readonly accountId: string
     readonly actorAuthorization: AccountActorAuthorization
-    readonly token: SelfServiceTokenInput
+    readonly token: AccountLifecycleTokenInput
     readonly now: Date
-  }): Promise<SelfServiceDeliveryTarget | undefined> {
+  }): Promise<AccountLifecycleDeliveryTarget | undefined> {
     if (input.token.expiresAt <= input.now) return undefined
     assertDistinctAccountIds(input.actorId, input.accountId)
     return this.transaction.run(() =>
@@ -175,7 +175,7 @@ export class PrismaInvitationAdapter implements InvitationPersistencePort {
 
 function assertDistinctAccountIds(actorId: string, accountId: string): void {
   if (actorId.toLowerCase() === accountId.toLowerCase())
-    throw new AccountSelfMutationForbiddenError()
+    throw new AccountLifecycleSelfMutationForbiddenError()
 }
 
 async function assertActorAuthorized(

@@ -6,12 +6,12 @@ import {
   AuthenticationFailedError,
   AuthRateLimitedError,
   EmailVerificationRequiredError,
-} from '../../application/auth-errors'
+} from '../../public-contracts/auth-errors'
 import {
   AUTH_AUDIT,
   NOOP_AUTH_AUDIT,
   type AuthAuditPort,
-} from '../../application/auth-audit.port'
+} from '../../public-contracts/auth-audit.port'
 import { AUTH_DUMMY_PASSWORD_HASH } from './password-auth.tokens'
 import {
   LOGIN_RATE_LIMITER,
@@ -25,8 +25,10 @@ import {
   PASSWORD_CREDENTIALS,
   type PasswordCredentialPort,
 } from './password-credential.port'
-import { SessionIssuer } from '../../sessions/application/session-issuer'
-import type { IssuedBrowserSession } from '../../sessions/application/session-store.port'
+import {
+  type IssuedBrowserSession,
+  SessionIssuer,
+} from '../../sessions/application/session-issuer'
 
 /** Untrusted login fields plus safe request metadata. */
 export interface LoginInput {

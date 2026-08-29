@@ -1,15 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import type { AccountActorAuthorization } from '../../../application/account-administration.port'
-import { AccountSelfMutationForbiddenError } from '../../../application/account-administration.service'
-import { AuthorizationDeniedError } from '../../../application/auth-errors'
+import { AccountLifecycleSelfMutationForbiddenError } from '../../application/account-lifecycle-errors'
+import type { AccountActorAuthorization } from '../../../authorization/application/account-actor-authorization'
+import { AuthorizationDeniedError } from '../../../public-contracts/auth-errors'
 import type {
-  ConfirmPasswordResetInput,
+  AccountLifecycleDeliveryTarget,
+  AccountLifecycleTokenInput,
+  ConfirmPasswordResetPersistenceInput,
   PasswordResetTokenSource,
-  SelfServiceDeliveryTarget,
-  SelfServiceTokenInput,
-} from '../../../application/auth.types'
-import type { PasswordRecoveryPersistencePort } from '../../../application/password-recovery-persistence.port'
+} from '../../application/account-lifecycle.types'
+import type { PasswordRecoveryPersistencePort } from '../application/password-recovery-persistence.port'
 import { Prisma, type PrismaClient } from '@/generated/prisma/client'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import {
@@ -28,9 +28,9 @@ export class PrismaPasswordRecoveryAdapter implements PasswordRecoveryPersistenc
 
   public async rotatePasswordResetToken(
     normalizedEmail: string,
-    token: SelfServiceTokenInput,
+    token: AccountLifecycleTokenInput,
     now: Date,
-  ): Promise<SelfServiceDeliveryTarget | undefined> {
+  ): Promise<AccountLifecycleDeliveryTarget | undefined> {
     if (token.expiresAt <= now) return undefined
     return this.transaction.run(() =>
       this.provider.withClient(async (client) => {
@@ -98,8 +98,8 @@ export class PrismaPasswordRecoveryAdapter implements PasswordRecoveryPersistenc
   }
 
   public async confirmPasswordReset(
-    input: ConfirmPasswordResetInput,
-  ): Promise<SelfServiceDeliveryTarget | undefined> {
+    input: ConfirmPasswordResetPersistenceInput,
+  ): Promise<AccountLifecycleDeliveryTarget | undefined> {
     return this.transaction.run(() =>
       this.provider.withClient(async (client) => {
         const tokenOwner = await client.passwordResetToken.findUnique({
@@ -168,9 +168,9 @@ export class PrismaPasswordRecoveryAdapter implements PasswordRecoveryPersistenc
     readonly actorId: string
     readonly accountId: string
     readonly actorAuthorization: AccountActorAuthorization
-    readonly token: SelfServiceTokenInput
+    readonly token: AccountLifecycleTokenInput
     readonly now: Date
-  }): Promise<SelfServiceDeliveryTarget | undefined> {
+  }): Promise<AccountLifecycleDeliveryTarget | undefined> {
     if (input.token.expiresAt <= input.now) return undefined
     assertDistinctAccountIds(input.actorId, input.accountId)
     return this.transaction.run(() =>
@@ -221,7 +221,7 @@ function passwordResetSourceToPrisma(
 
 function assertDistinctAccountIds(actorId: string, accountId: string): void {
   if (actorId.toLowerCase() === accountId.toLowerCase())
-    throw new AccountSelfMutationForbiddenError()
+    throw new AccountLifecycleSelfMutationForbiddenError()
 }
 
 async function assertActorAuthorized(

@@ -1,14 +1,14 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import type { AccountProvisioningPort } from '../../../application/account-provisioning.port'
-import type {
-  CreateUserResult,
-  InitialAdminInput,
-  InitialAdminResult,
-  UserProvisioningInput,
-} from '../../../application/auth.types'
-import { IdentitySecurityStateIntegrityError } from '../../../identity/application/identity-security-state.port'
-import { isNormalizedEmailUniqueConflict } from '../../../infrastructure/prisma-auth-unique-constraint'
+import {
+  AccountProvisioningIntegrityError,
+  type AccountProvisioningPort,
+  type CreateUserResult,
+  type InitialAdminInput,
+  type InitialAdminResult,
+  type UserProvisioningInput,
+} from '../application/account-provisioning.port'
+import { isNormalizedEmailUniqueConflict } from './prisma-normalized-email-conflict'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import {
   TRANSACTION_PORT,
@@ -36,7 +36,7 @@ export class PrismaAccountProvisioningAdapter implements AccountProvisioningPort
           where: { id: 1 },
           select: { adminBootstrapCompletedAt: true },
         })
-        if (state === null) throw new IdentitySecurityStateIntegrityError()
+        if (state === null) throw new AccountProvisioningIntegrityError()
         if (state.adminBootstrapCompletedAt !== null) return { created: false }
 
         const user = await client.user.create({

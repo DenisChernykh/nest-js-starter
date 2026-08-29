@@ -4,7 +4,7 @@ import {
   RequirePermission,
   type AuthenticatedPrincipal,
 } from '@/modules/auth'
-import { AuthenticationRequiredError as InternalAuthenticationRequiredError } from '@/modules/auth/application/auth-errors'
+import { AuthenticationRequiredError as InternalAuthenticationRequiredError } from '@/modules/auth/public-contracts/auth-errors'
 import {
   attachAuthenticatedPrincipal,
   readAuthenticatedPrincipal,

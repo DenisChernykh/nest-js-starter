@@ -4,13 +4,16 @@ import { Test } from '@nestjs/testing'
 import {
   ACCOUNT_PROVISIONING,
   type AccountProvisioningPort,
-} from '@/modules/auth/application/account-provisioning.port'
+} from '@/modules/auth/account-administration/provisioning/application/account-provisioning.port'
+import { CreateInitialAdminUseCase } from '@/modules/auth/account-administration/provisioning/application/create-initial-admin.use-case'
+import { CreateUserUseCase } from '@/modules/auth/account-administration/provisioning/application/create-user.use-case'
+import { PROVISIONING_PASSWORD_HASHER } from '@/modules/auth/account-administration/provisioning/application/provisioning-password-hasher.port'
 import {
   AUTH_AUDIT,
   NOOP_AUTH_AUDIT,
-} from '@/modules/auth/application/auth-audit.port'
-import type { AuthMailDeliveryPort } from '@/modules/auth/application/auth-mail-delivery.port'
-import { AUTH_MAIL_DELIVERY } from '@/modules/auth/application/auth-mail-delivery.port'
+} from '@/modules/auth/public-contracts/auth-audit.port'
+import type { AuthMailDeliveryPort } from '@/modules/auth/account-lifecycle/application/auth-mail-delivery.port'
+import { AUTH_MAIL_DELIVERY } from '@/modules/auth/account-lifecycle/application/auth-mail-delivery.port'
 import { AUTH_DUMMY_PASSWORD_HASH } from '@/modules/auth/authentication/application/password-auth.tokens'
 import {
   AUTH_SESSION_CLEANUP_OBSERVER,
@@ -20,16 +23,14 @@ import {
 } from '@/modules/auth/sessions/application/session-cleanup.service'
 import { AuthenticateSessionUseCase } from '@/modules/auth/authorization/application/authenticate-session.use-case'
 import { ChangePasswordUseCase } from '@/modules/auth/authentication/application/change-password.use-case'
-import { ConfirmEmailVerificationUseCase } from '@/modules/auth/application/confirm-email-verification.use-case'
-import { ConfirmPasswordResetUseCase } from '@/modules/auth/application/confirm-password-reset.use-case'
-import { CreateInitialAdminUseCase } from '@/modules/auth/application/create-initial-admin.use-case'
-import { CreateUserUseCase } from '@/modules/auth/application/create-user.use-case'
+import { ConfirmEmailVerificationUseCase } from '@/modules/auth/account-lifecycle/email-verification/application/confirm-email-verification.use-case'
+import { ConfirmPasswordResetUseCase } from '@/modules/auth/account-lifecycle/password-recovery/application/confirm-password-reset.use-case'
 import { GetCsrfTokenQuery } from '@/modules/auth/sessions/application/get-csrf-token.query'
 import { GetMeQuery } from '@/modules/auth/authorization/application/get-me.query'
 import {
   EMAIL_VERIFICATION_PERSISTENCE,
   type EmailVerificationPersistencePort,
-} from '@/modules/auth/application/email-verification-persistence.port'
+} from '@/modules/auth/account-lifecycle/email-verification/application/email-verification-persistence.port'
 import {
   IDENTITY_SECURITY_STATE,
   type IdentitySecurityStatePort,
@@ -53,18 +54,18 @@ import {
 import {
   PASSWORD_RECOVERY_PERSISTENCE,
   type PasswordRecoveryPersistencePort,
-} from '@/modules/auth/application/password-recovery-persistence.port'
+} from '@/modules/auth/account-lifecycle/password-recovery/application/password-recovery-persistence.port'
 import type { PermissionKey } from '@/modules/auth/authorization/application/permission'
 import { RevokeSessionUseCase } from '@/modules/auth/sessions/application/revoke-session.use-case'
-import { ONE_TIME_TOKEN_CODEC } from '@/modules/auth/application/one-time-token-codec.port'
-import { PUBLIC_AUTH_RATE_LIMITER } from '@/modules/auth/application/public-auth-rate-limiter.port'
-import { RegisterUserUseCase } from '@/modules/auth/application/register-user.use-case'
+import { ONE_TIME_TOKEN_CODEC } from '@/modules/auth/account-lifecycle/application/one-time-token-codec.port'
+import { PUBLIC_AUTH_RATE_LIMITER } from '@/modules/auth/account-lifecycle/application/public-auth-rate-limiter.port'
+import { RegisterUserUseCase } from '@/modules/auth/account-lifecycle/registration/application/register-user.use-case'
 import {
   REGISTRATION_PERSISTENCE,
   type RegistrationPersistencePort,
-} from '@/modules/auth/application/registration-persistence.port'
-import { RequestPasswordResetUseCase } from '@/modules/auth/application/request-password-reset.use-case'
-import { ResendEmailVerificationUseCase } from '@/modules/auth/application/resend-email-verification.use-case'
+} from '@/modules/auth/account-lifecycle/registration/application/registration-persistence.port'
+import { RequestPasswordResetUseCase } from '@/modules/auth/account-lifecycle/password-recovery/application/request-password-reset.use-case'
+import { ResendEmailVerificationUseCase } from '@/modules/auth/account-lifecycle/email-verification/application/resend-email-verification.use-case'
 import {
   createAuthRoleRegistry,
   RoleRegistry,
@@ -80,26 +81,18 @@ import {
 import { SessionIssuer } from '@/modules/auth/sessions/application/session-issuer'
 import { ResolveSessionIdentityQuery } from '@/modules/auth/sessions/application/resolve-session-identity.query'
 import type { AuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-principal'
-import { PrismaAccountAdministrationMutationAdapter } from '@/modules/auth/account-administration/infrastructure/prisma-account-administration-mutation.adapter'
-import { PrismaAccountAdministrationReadAdapter } from '@/modules/auth/account-administration/infrastructure/prisma-account-administration-read.adapter'
-import { PrismaAccountProvisioningAdapter } from '@/modules/auth/account-administration/provisioning/infrastructure/prisma-account-provisioning.adapter'
-import { PrismaEmailVerificationAdapter } from '@/modules/auth/account-lifecycle/email-verification/infrastructure/prisma-email-verification.adapter'
-import { PrismaInvitationAdapter } from '@/modules/auth/account-lifecycle/invitations/infrastructure/prisma-invitation.adapter'
-import { PrismaPasswordRecoveryAdapter } from '@/modules/auth/account-lifecycle/password-recovery/infrastructure/prisma-password-recovery.adapter'
-import { PrismaRegistrationAdapter } from '@/modules/auth/account-lifecycle/registration/infrastructure/prisma-registration.adapter'
 import { PrismaPasswordCredentialAdapter } from '@/modules/auth/authentication/infrastructure/prisma-password-credential.adapter'
 import { PrismaIdentitySecurityStateAdapter } from '@/modules/auth/identity/infrastructure/prisma-identity-security-state.adapter'
 import { Argon2PasswordHasher } from '@/modules/auth/authentication/infrastructure/argon2-password.hasher'
 import { RedisLoginRateLimiter } from '@/modules/auth/authentication/infrastructure/redis-login-rate-limiter'
 import { RedisSessionStore } from '@/modules/auth/sessions/infrastructure/redis-session.store'
 import { PrismaSessionGenerationAdapter } from '@/modules/auth/sessions/infrastructure/prisma-session-generation.adapter'
-import { AuthModule } from '@/modules/auth/composition/auth.module'
 import { IdentityModule } from '@/modules/auth/identity/composition/identity.module'
 import { SessionsModule } from '@/modules/auth/sessions/composition/sessions.module'
 import { AuthenticationModule } from '@/modules/auth/authentication/composition/authentication.module'
-import { SelfServiceAuthPolicy } from '@/modules/auth/application/self-service-auth.policy'
-import type { OneTimeTokenCodecPort } from '@/modules/auth/application/one-time-token-codec.port'
-import type { PublicAuthRateLimiterPort } from '@/modules/auth/application/public-auth-rate-limiter.port'
+import { SelfServiceAuthPolicy } from '@/modules/auth/account-lifecycle/application/self-service-auth.policy'
+import type { OneTimeTokenCodecPort } from '@/modules/auth/account-lifecycle/application/one-time-token-codec.port'
+import type { PublicAuthRateLimiterPort } from '@/modules/auth/account-lifecycle/application/public-auth-rate-limiter.port'
 
 const applicationClasses = [
   AuthenticateSessionUseCase,
@@ -190,6 +183,7 @@ describe('auth application Nest dependency injection', () => {
         { provide: REGISTRATION_PERSISTENCE, useValue: persistence },
         { provide: SESSION_GENERATION, useValue: persistence },
         { provide: PASSWORD_HASHER, useValue: passwords },
+        { provide: PROVISIONING_PASSWORD_HASHER, useValue: passwords },
         { provide: LOGIN_RATE_LIMITER, useValue: limiter },
         { provide: SESSION_STORE, useValue: sessions },
         { provide: AUTH_AUDIT, useValue: NOOP_AUTH_AUDIT },
@@ -262,34 +256,11 @@ describe('auth application Nest dependency injection', () => {
           provider !== null &&
           'provide' in provider,
       )
-    const authProviders = providersOf(AuthModule)
     const identityDefinitions = definitionsOf(IdentityModule)
     const sessionProviders = providersOf(SessionsModule)
     const sessionDefinitions = definitionsOf(SessionsModule)
     const authenticationProviders = providersOf(AuthenticationModule)
     const authenticationDefinitions = definitionsOf(AuthenticationModule)
-
-    expect(Reflect.getMetadata(MODULE_METADATA.IMPORTS, AuthModule)).toEqual(
-      expect.arrayContaining([
-        IdentityModule,
-        SessionsModule,
-        AuthenticationModule,
-      ]),
-    )
-    expect(authProviders).toEqual(
-      expect.arrayContaining([
-        PrismaAccountAdministrationMutationAdapter,
-        PrismaAccountAdministrationReadAdapter,
-        PrismaAccountProvisioningAdapter,
-        PrismaEmailVerificationAdapter,
-        PrismaInvitationAdapter,
-        PrismaPasswordRecoveryAdapter,
-        PrismaRegistrationAdapter,
-      ]),
-    )
-    expect(authProviders).not.toEqual(
-      expect.arrayContaining([AuthenticateSessionUseCase, GetMeQuery]),
-    )
 
     expect(identityDefinitions).toEqual(
       expect.arrayContaining([

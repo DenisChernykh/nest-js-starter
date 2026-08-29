@@ -3,11 +3,11 @@ import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.ex
 import { RedisKeyBuilder } from '@/platform/redis/redis-key.builder'
 import { RedisScriptRunner } from '@/platform/redis/redis-script.runner'
 
-import { AuthDependencyUnavailableError } from '../../application/auth-errors'
+import { AuthDependencyUnavailableError } from '../../public-contracts/auth-errors'
+import type { IssuedBrowserSession } from '../application/session-issuance.contract'
 import type {
   BrowserSessionSummary,
   IssueSessionInput,
-  IssuedBrowserSession,
   SessionStorePort,
   StoredSessionRecord,
 } from '../application/session-store.port'

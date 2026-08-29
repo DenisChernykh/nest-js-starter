@@ -1,4 +1,4 @@
-import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
+import { AuthDependencyUnavailableError } from '@/modules/auth/public-contracts/auth-errors'
 import { RedisSessionStore } from '@/modules/auth/sessions/infrastructure/redis-session.store'
 import { NodeSessionCryptoAdapter } from '@/modules/auth/sessions/infrastructure/node-session-crypto.adapter'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'

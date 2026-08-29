@@ -3,7 +3,7 @@ import {
   type ExecutionContext,
 } from '@nestjs/common'
 
-import { AuthCsrfRejectedError } from '@/modules/auth/application/auth-errors'
+import { AuthCsrfRejectedError } from '@/modules/auth/public-contracts/auth-errors'
 import { BrowserOriginGuard } from '@/modules/auth/authorization/presentation/browser-origin.guard'
 
 function context(

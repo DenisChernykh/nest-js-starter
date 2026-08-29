@@ -2,7 +2,7 @@ import type { ArgumentsHost } from '@nestjs/common'
 import { HttpAdapterHost } from '@nestjs/core'
 import type { AbstractHttpAdapter } from '@nestjs/core'
 
-import { AuthCsrfRejectedError } from '@/modules/auth/application/auth-errors'
+import { AuthCsrfRejectedError } from '@/modules/auth/public-contracts/auth-errors'
 import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { CORE_HTTP_PROBLEM_CONTRIBUTION } from '@/platform/http/errors/http-problem.mapper'

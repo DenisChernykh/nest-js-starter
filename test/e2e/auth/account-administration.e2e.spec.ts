@@ -20,6 +20,8 @@ interface MailpitMessageList {
   readonly messages: readonly MailpitMessageSummary[]
 }
 
+const requestId = '019219c3-dc52-7cc1-9e70-f293ca14c198'
+
 describe('account administration HTTP contract', () => {
   let runtime: AuthE2eRuntime
   let disabledRuntime: AuthE2eRuntime
@@ -171,8 +173,14 @@ describe('account administration HTTP contract', () => {
       { status: 'disabled' },
     )
     expect(missing.status).toBe(428)
-    expect(await missing.json()).toMatchObject({
+    expect(await missing.json()).toEqual({
+      type: 'https://nest-js-starter.invalid/problems/auth-account-precondition-required',
+      title: 'Account ETag required',
+      status: 428,
+      detail: 'A current account ETag is required for this mutation.',
+      instance: `urn:request:${requestId}`,
       code: 'AUTH_ACCOUNT_PRECONDITION_REQUIRED',
+      requestId,
     })
 
     const malformed = await adminMutation(
@@ -184,6 +192,15 @@ describe('account administration HTTP contract', () => {
       'W/"weak"',
     )
     expect(malformed.status).toBe(400)
+    expect(await malformed.json()).toEqual({
+      type: 'https://nest-js-starter.invalid/problems/auth-account-etag-malformed',
+      title: 'Malformed account ETag',
+      status: 400,
+      detail: 'The If-Match header is not a valid account ETag.',
+      instance: `urn:request:${requestId}`,
+      code: 'AUTH_ACCOUNT_ETAG_MALFORMED',
+      requestId,
+    })
 
     await expectUserSessionIndex(runtime, targetId, 1)
     const disabled = await adminMutation(
@@ -214,6 +231,15 @@ describe('account administration HTTP contract', () => {
       etag ?? '',
     )
     expect(stale.status).toBe(412)
+    expect(await stale.json()).toEqual({
+      type: 'https://nest-js-starter.invalid/problems/auth-account-precondition-failed',
+      title: 'Account ETag no longer current',
+      status: 412,
+      detail: 'The account has changed since the supplied ETag was issued.',
+      instance: `urn:request:${requestId}`,
+      code: 'AUTH_ACCOUNT_PRECONDITION_FAILED',
+      requestId,
+    })
 
     const actorEtag = `"account-${adminId.toUpperCase()}-0"`
     const selfMutation = await adminMutation(
@@ -497,6 +523,7 @@ function adminMutation(
       origin: baseUrl,
       'content-type': 'application/json',
       'x-csrf-token': session.csrfToken,
+      'x-request-id': requestId,
       ...(ifMatch === undefined ? {} : { 'if-match': ifMatch }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),

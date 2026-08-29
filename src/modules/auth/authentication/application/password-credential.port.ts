@@ -1,8 +1,8 @@
-import type { UserStatus } from '../../identity/domain/user-status'
+export type CredentialStatus = 'active' | 'disabled'
 
 export interface CredentialSnapshot {
   readonly userId: string
-  readonly status: UserStatus
+  readonly status: CredentialStatus
   readonly emailVerifiedAt: Date | undefined
   readonly passwordHash: string
   readonly passwordVersion: number

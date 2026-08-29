@@ -2,11 +2,11 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { AuthenticateSessionUseCase } from '@/modules/auth/authorization/application/authenticate-session.use-case'
-import type { AuthAuditPort } from '@/modules/auth/application/auth-audit.port'
+import type { AuthAuditPort } from '@/modules/auth/public-contracts/auth-audit.port'
 import {
   AuthDependencyUnavailableError,
   AuthenticationRequiredError,
-} from '@/modules/auth/application/auth-errors'
+} from '@/modules/auth/public-contracts/auth-errors'
 import { definePermissions } from '@/modules/auth/authorization/application/permission'
 import { DocsAccessPolicyAdapter } from '@/modules/auth/authorization/presentation/docs-access-policy.adapter'
 

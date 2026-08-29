@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import { AuthenticationRequiredError } from '../../application/auth-errors'
+import { AuthenticationRequiredError } from '../../public-contracts/auth-errors'
 import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 
 /** Session-bound anti-CSRF value returned only for a valid opaque token. */

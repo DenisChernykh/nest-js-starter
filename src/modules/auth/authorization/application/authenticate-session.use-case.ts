@@ -4,7 +4,7 @@ import {
   AuthDependencyUnavailableError,
   AuthError,
   AuthenticationRequiredError,
-} from '../../application/auth-errors'
+} from '../../public-contracts/auth-errors'
 import type { AuthenticatedPrincipal } from '../../public-contracts/authenticated-principal'
 import { ResolveSessionIdentityQuery } from '../../sessions/application/resolve-session-identity.query'
 import { RoleRegistry } from './role-registry'

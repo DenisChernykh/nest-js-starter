@@ -1,7 +1,7 @@
 import { Module, type DynamicModule } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
-import type { AuthAuditPort } from '../../application/auth-audit.port'
+import type { AuthAuditPort } from '../../public-contracts/auth-audit.port'
 import { GetCsrfTokenQuery } from '../../sessions/application/get-csrf-token.query'
 import { SessionsModule } from '../../sessions/composition/sessions.module'
 import { AuthenticateSessionUseCase } from '../application/authenticate-session.use-case'

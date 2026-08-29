@@ -1,7 +1,7 @@
 import type {
   AccountAdministrationState,
   AdminAccount,
-} from '../../application/account-administration.port'
+} from '../application/account-administration.model'
 import type { Prisma } from '@/generated/prisma/client'
 
 export const adminAccountInclude = {

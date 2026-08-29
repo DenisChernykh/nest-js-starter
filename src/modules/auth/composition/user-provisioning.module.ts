@@ -1,19 +1,19 @@
-import { CreateUserUseCase } from '../application/create-user.use-case'
+import { CreateUserUseCase } from '../account-administration/provisioning/application/create-user.use-case'
 import { PrismaAccountProvisioningAdapter } from '../account-administration/provisioning/infrastructure/prisma-account-provisioning.adapter'
+import { Argon2PasswordHasher } from '../authentication/infrastructure/argon2-password.hasher'
 import {
   createAuthRoleRegistry,
   type RoleDefinition,
 } from '../authorization/application/role-registry'
-import { Argon2PasswordHasher } from '../authentication/infrastructure/argon2-password.hasher'
-import type { AuthAuditPort } from '../application/auth-audit.port'
+import type { AuthAuditPort } from '../public-contracts/auth-audit.port'
 import type { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import type { TransactionPort } from '@/shared/application/transaction.port'
 
-export { UnknownRoleAssignmentError } from '../application/auth-errors'
+export { UnknownRoleAssignmentError } from '../public-contracts/auth-errors'
 export type {
   CreateUserInput,
   CreateUserResult,
-} from '../application/create-user.use-case'
+} from '../account-administration/provisioning/application/create-user.use-case'
 
 /** Composes PostgreSQL-only user provisioning from auth-owned adapters. */
 export function createUserCommand(

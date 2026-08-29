@@ -9,8 +9,14 @@ import cookieParser from 'cookie-parser'
 import type { AuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-principal'
 import { AuthenticateSessionUseCase } from '@/modules/auth/authorization/application/authenticate-session.use-case'
 import { ChangePasswordUseCase } from '@/modules/auth/authentication/application/change-password.use-case'
-import { ConfirmEmailVerificationUseCase } from '@/modules/auth/application/confirm-email-verification.use-case'
-import { ConfirmPasswordResetUseCase } from '@/modules/auth/application/confirm-password-reset.use-case'
+import { ConfirmEmailVerificationUseCase } from '@/modules/auth/account-lifecycle/email-verification/application/confirm-email-verification.use-case'
+import { EmailVerificationController } from '@/modules/auth/account-lifecycle/email-verification/presentation/email-verification.controller'
+import { ConfirmPasswordResetUseCase } from '@/modules/auth/account-lifecycle/password-recovery/application/confirm-password-reset.use-case'
+import { RequestPasswordResetUseCase } from '@/modules/auth/account-lifecycle/password-recovery/application/request-password-reset.use-case'
+import { PasswordRecoveryController } from '@/modules/auth/account-lifecycle/password-recovery/presentation/password-recovery.controller'
+import { PublicAuthResponseDelay } from '@/modules/auth/account-lifecycle/presentation/public-auth-response-delay'
+import { RegisterUserUseCase } from '@/modules/auth/account-lifecycle/registration/application/register-user.use-case'
+import { RegistrationController } from '@/modules/auth/account-lifecycle/registration/presentation/registration.controller'
 import { GetCsrfTokenQuery } from '@/modules/auth/sessions/application/get-csrf-token.query'
 import { GetMeQuery } from '@/modules/auth/authorization/application/get-me.query'
 import { ListSessionsQuery } from '@/modules/auth/sessions/application/list-sessions.query'
@@ -18,9 +24,7 @@ import { LoginUseCase } from '@/modules/auth/authentication/application/login.us
 import { LogoutAllUseCase } from '@/modules/auth/sessions/application/logout-all.use-case'
 import { LogoutUseCase } from '@/modules/auth/sessions/application/logout.use-case'
 import { RevokeSessionUseCase } from '@/modules/auth/sessions/application/revoke-session.use-case'
-import { RegisterUserUseCase } from '@/modules/auth/application/register-user.use-case'
-import { RequestPasswordResetUseCase } from '@/modules/auth/application/request-password-reset.use-case'
-import { ResendEmailVerificationUseCase } from '@/modules/auth/application/resend-email-verification.use-case'
+import { ResendEmailVerificationUseCase } from '@/modules/auth/account-lifecycle/email-verification/application/resend-email-verification.use-case'
 import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
 import {
   AUTH_LOGIN_METADATA_FACTORY,
@@ -33,9 +37,7 @@ import { AuthRequestContext } from '@/modules/auth/authorization/presentation/au
 import { AuthRequestInterceptor } from '@/modules/auth/authorization/presentation/auth-request.interceptor'
 import { AuthenticationGuard } from '@/modules/auth/authorization/presentation/authentication.guard'
 import { BrowserOriginGuard } from '@/modules/auth/authorization/presentation/browser-origin.guard'
-import { PublicAuthResponseDelay } from '@/modules/auth/presentation/public-auth-response-delay'
 import { PermissionGuard } from '@/modules/auth/authorization/presentation/permission.guard'
-import { SelfServiceAuthController } from '@/modules/auth/presentation/self-service-auth.controller'
 import { SessionCsrfGuard } from '@/modules/auth/authorization/presentation/session-csrf.guard'
 import { RequestContext } from '@/platform/http/context/request-context'
 import { createRequestContextMiddleware } from '@/platform/http/context/request-context.middleware'
@@ -143,7 +145,9 @@ export async function createAuthTestHarness(
       AuthController,
       AuthenticationController,
       SessionsController,
-      SelfServiceAuthController,
+      RegistrationController,
+      EmailVerificationController,
+      PasswordRecoveryController,
     ],
     providers: [
       Reflector,

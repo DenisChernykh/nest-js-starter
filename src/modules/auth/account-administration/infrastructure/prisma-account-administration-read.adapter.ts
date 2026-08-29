@@ -1,10 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import type { AccountAdministrationReadPort } from '../../application/account-administration-read.port'
+import type { AccountAdministrationReadPort } from '../application/account-administration-read.port'
 import type {
   AccountAdministrationState,
   AdminAccount,
-} from '../../application/account-administration.port'
+} from '../application/account-administration.model'
 import {
   accountStateToPrisma,
   adminAccountInclude,

@@ -1,9 +1,9 @@
-import { CreateInitialAdminUseCase } from '../application/create-initial-admin.use-case'
+import { CreateInitialAdminUseCase } from '../account-administration/provisioning/application/create-initial-admin.use-case'
 import { PrismaAccountProvisioningAdapter } from '../account-administration/provisioning/infrastructure/prisma-account-provisioning.adapter'
 import { Argon2PasswordHasher } from '../authentication/infrastructure/argon2-password.hasher'
 import type { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import type { TransactionPort } from '@/shared/application/transaction.port'
-import type { AuthAuditPort } from '../application/auth-audit.port'
+import type { AuthAuditPort } from '../public-contracts/auth-audit.port'
 
 /** Composes the auth-owned one-shot command without HTTP or Redis providers. */
 export function createInitialAdminCommand(

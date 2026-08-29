@@ -1,6 +1,6 @@
 import { hash, argon2id } from 'argon2'
 
-import { PasswordHashingError } from '@/modules/auth/application/auth-errors'
+import { PasswordHashingError } from '@/modules/auth/public-contracts/auth-errors'
 import { Argon2PasswordHasher } from '@/modules/auth/authentication/infrastructure/argon2-password.hasher'
 
 describe('Argon2PasswordHasher', () => {

@@ -3,6 +3,8 @@ import { Test } from '@nestjs/testing'
 import type { ApiModule as ApiModuleClass } from '@/bootstrap/api/api.module'
 import { API_ROLE_DEFINITIONS } from '@/bootstrap/api/api-auth.roles'
 import { RoleRegistry } from '@/modules/auth/authorization/application/role-registry'
+import { SessionIssuer } from '@/modules/auth/sessions/application/session-issuer'
+import { RedisSessionStore } from '@/modules/auth/sessions/infrastructure/redis-session.store'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 
@@ -31,6 +33,12 @@ describe('ApiModule composition', () => {
       true,
     )
     const roles = testingModule.get(RoleRegistry)
+    const roleRegistries = testingModule.get(RoleRegistry, { each: true })
+    const sessionIssuers = testingModule.get(SessionIssuer, { each: true })
+    const sessionStores = testingModule.get(RedisSessionStore, { each: true })
+    expect(roleRegistries).toEqual([roles])
+    expect(sessionIssuers).toHaveLength(1)
+    expect(sessionStores).toHaveLength(1)
     expect(Object.isFrozen(roles)).toBe(true)
     expect([...roles.resolve('active', ['system.admin'])]).toContain(
       'system.docs.read',

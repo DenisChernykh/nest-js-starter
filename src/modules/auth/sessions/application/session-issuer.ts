@@ -4,22 +4,17 @@ import {
   IDENTITY_SECURITY_STATE,
   type IdentitySecurityStatePort,
 } from '../../identity/application/identity-security-state.port'
-import {
-  SESSION_STORE,
-  type IssuedBrowserSession,
-  type SessionStorePort,
-} from './session-store.port'
+import { SESSION_STORE, type SessionStorePort } from './session-store.port'
+import type {
+  IssueBrowserSessionInput,
+  IssuedBrowserSession,
+} from './session-issuance.contract'
 import {
   AuthDependencyUnavailableError,
   AuthenticationFailedError,
-} from '../../application/auth-errors'
+} from '../../public-contracts/auth-errors'
 
-export interface IssueBrowserSessionInput {
-  readonly userId: string
-  readonly nowMs: number
-  readonly deviceLabel: string
-  readonly networkFingerprint: string
-}
+export type { IssuedBrowserSession } from './session-issuance.contract'
 
 @Injectable()
 export class SessionIssuer {

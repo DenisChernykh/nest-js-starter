@@ -3,7 +3,6 @@ import { Pool } from 'pg'
 
 import { PrismaAccountAdministrationMutationAdapter } from '@/modules/auth/account-administration/infrastructure/prisma-account-administration-mutation.adapter'
 import { PrismaAccountAdministrationReadAdapter } from '@/modules/auth/account-administration/infrastructure/prisma-account-administration-read.adapter'
-import { PrismaAccountProvisioningAdapter } from '@/modules/auth/account-administration/provisioning/infrastructure/prisma-account-provisioning.adapter'
 import { PrismaEmailVerificationAdapter } from '@/modules/auth/account-lifecycle/email-verification/infrastructure/prisma-email-verification.adapter'
 import { PrismaInvitationAdapter } from '@/modules/auth/account-lifecycle/invitations/infrastructure/prisma-invitation.adapter'
 import { PrismaPasswordRecoveryAdapter } from '@/modules/auth/account-lifecycle/password-recovery/infrastructure/prisma-password-recovery.adapter'
@@ -25,7 +24,6 @@ export interface PrismaIdentityAccessTestRuntime {
   readonly identity: PrismaIdentitySecurityStateAdapter
   readonly credentials: PrismaPasswordCredentialAdapter
   readonly sessions: PrismaSessionGenerationAdapter
-  readonly provisioning: PrismaAccountProvisioningAdapter
   readonly registration: PrismaRegistrationAdapter
   readonly verification: PrismaEmailVerificationAdapter
   readonly recovery: PrismaPasswordRecoveryAdapter
@@ -65,7 +63,6 @@ export async function startPrismaIdentityAccessTestRuntime(): Promise<PrismaIden
     identity: new PrismaIdentitySecurityStateAdapter(provider),
     credentials: new PrismaPasswordCredentialAdapter(provider, transaction),
     sessions: new PrismaSessionGenerationAdapter(provider, transaction),
-    provisioning: new PrismaAccountProvisioningAdapter(provider, transaction),
     registration: new PrismaRegistrationAdapter(provider, transaction),
     verification: new PrismaEmailVerificationAdapter(provider, transaction),
     recovery: new PrismaPasswordRecoveryAdapter(provider, transaction),

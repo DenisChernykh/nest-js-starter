@@ -1,7 +1,16 @@
 import { Prisma } from '@/generated/prisma/client'
-import { isNormalizedEmailUniqueConflict } from '@/modules/auth/infrastructure/prisma-auth-unique-constraint'
+import { isNormalizedEmailUniqueConflict as isAdministrationConflict } from '@/modules/auth/account-administration/provisioning/infrastructure/prisma-normalized-email-conflict'
+import { isNormalizedEmailUniqueConflict as isLifecycleConflict } from '@/modules/auth/account-lifecycle/infrastructure/prisma-normalized-email-conflict'
 
-describe('Prisma auth normalized-email unique conflict', () => {
+const classifiers = [isLifecycleConflict, isAdministrationConflict]
+
+function isNormalizedEmailUniqueConflict(error: unknown): boolean {
+  const results = classifiers.map((classify) => classify(error))
+  expect(new Set(results)).toHaveProperty('size', 1)
+  return results[0] ?? false
+}
+
+describe('Prisma normalized-email unique conflict policies', () => {
   for (const target of [['normalizedEmail'], ['normalized_email']]) {
     it(
       'accepts the normalized-email field-array target ' +

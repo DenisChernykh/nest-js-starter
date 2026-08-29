@@ -20,7 +20,7 @@ import {
   AuthenticationFailedError,
   AuthorizationDeniedError,
   AuthRateLimitedError,
-} from '@/modules/auth/application/auth-errors'
+} from '@/modules/auth/public-contracts/auth-errors'
 import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
 import { API_PROBLEM_CATALOG } from '@/bootstrap/api/api-http-problems'
 import { generateOpenApiArtifact } from '@/bootstrap/contracts/generate-openapi'

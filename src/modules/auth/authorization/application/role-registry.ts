@@ -1,9 +1,9 @@
 import {
   DisabledUserError,
   UnknownRoleAssignmentError,
-} from '../../application/auth-errors'
+} from '../../public-contracts/auth-errors'
+import type { ResolvedSessionIdentity } from '../../sessions/application/resolve-session-identity.query'
 import { definePermissions } from './permission'
-import type { UserStatus } from '../../identity/domain/user-status'
 import type { PermissionKey } from '@/shared/application/permission'
 
 /** Immutable code-owned mapping from one durable role to explicit permissions. */
@@ -111,7 +111,7 @@ export class RoleRegistry {
    * @throws UnknownRoleAssignmentError for any role absent from code.
    */
   public resolve(
-    status: UserStatus,
+    status: ResolvedSessionIdentity['status'],
     roleKeys: readonly string[],
   ): ReadonlySet<PermissionKey> {
     if (status === 'disabled') throw new DisabledUserError()

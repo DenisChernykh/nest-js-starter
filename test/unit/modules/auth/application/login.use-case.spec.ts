@@ -1,6 +1,6 @@
-import type { AuthAuditPort } from '@/modules/auth/application/auth-audit.port'
-import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
-import { EmailVerificationRequiredError } from '@/modules/auth/application/auth-errors'
+import type { AuthAuditPort } from '@/modules/auth/public-contracts/auth-audit.port'
+import { AuthDependencyUnavailableError } from '@/modules/auth/public-contracts/auth-errors'
+import { EmailVerificationRequiredError } from '@/modules/auth/public-contracts/auth-errors'
 import { LoginUseCase } from '@/modules/auth/authentication/application/login.use-case'
 import type { LoginRateLimiterPort } from '@/modules/auth/authentication/application/login-rate-limiter.port'
 import type { PasswordCredentialPort } from '@/modules/auth/authentication/application/password-credential.port'
@@ -126,6 +126,22 @@ describe('LoginUseCase', () => {
       expect.objectContaining({ code: 'AUTHENTICATION_FAILED' }),
       expect.objectContaining({ code: 'AUTHENTICATION_FAILED' }),
     ])
+    expect(missing.passwords.verify).toHaveBeenCalledTimes(1)
+    expect(missing.passwords.verify).toHaveBeenCalledWith(
+      'password',
+      '$argon2id$constant-dummy',
+    )
+    for (const target of [wrongPassword, disabled]) {
+      expect(target.passwords.verify).toHaveBeenCalledTimes(1)
+      expect(target.passwords.verify).toHaveBeenCalledWith(
+        'password',
+        'stored-hash',
+      )
+    }
+    for (const target of [missing, wrongPassword, disabled]) {
+      expect(target.passwords.hash).not.toHaveBeenCalled()
+      expect(target.sessions.issue).not.toHaveBeenCalled()
+    }
   })
   it('normalizes email and issues from durable generation and epoch', async () => {
     const target = harness({

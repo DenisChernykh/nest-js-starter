@@ -1,7 +1,7 @@
 import { Injectable, UnsupportedMediaTypeException } from '@nestjs/common'
 import type { CanActivate, ExecutionContext } from '@nestjs/common'
 
-import { AuthCsrfRejectedError } from '../../application/auth-errors'
+import { AuthCsrfRejectedError } from '../../public-contracts/auth-errors'
 
 interface BrowserRequest {
   readonly method: string

@@ -2,7 +2,7 @@ import type { ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
 import type { PermissionKey } from '@/modules/auth/authorization/application/permission'
-import { AuthorizationDeniedError } from '@/modules/auth/application/auth-errors'
+import { AuthorizationDeniedError } from '@/modules/auth/public-contracts/auth-errors'
 import { AuthRequestContext } from '@/modules/auth/authorization/presentation/auth-request.context'
 import { PermissionGuard } from '@/modules/auth/authorization/presentation/permission.guard'
 import {

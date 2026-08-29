@@ -17,7 +17,7 @@ import type { AuthenticatedPrincipal } from '../../public-contracts/authenticate
 import { AuthMutationResponseDto } from '../../public-contracts/auth-mutation-response.dto'
 import { CurrentPrincipal } from '../../public-contracts/current-principal.decorator'
 import { CsrfTokenExempt } from '../../public-contracts/csrf-token-exempt.decorator'
-import { EMAIL_VERIFICATION_REQUIRED_PROBLEM } from '../../presentation/auth-problem.definitions'
+import { EMAIL_VERIFICATION_REQUIRED_PROBLEM } from './authentication-problem.definitions'
 import { AuthCookieAdapter } from '../../sessions'
 import { ChangePasswordRequestDto, LoginRequestDto } from './authentication.dto'
 import { LoginResponseDto } from './authentication-response.dto'

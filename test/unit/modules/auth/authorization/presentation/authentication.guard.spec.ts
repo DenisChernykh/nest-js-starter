@@ -5,7 +5,7 @@ import type { AuthenticateSessionUseCase } from '@/modules/auth/authorization/ap
 import {
   AuthDependencyUnavailableError,
   AuthenticationRequiredError,
-} from '@/modules/auth/application/auth-errors'
+} from '@/modules/auth/public-contracts/auth-errors'
 import { AuthRequestContext } from '@/modules/auth/authorization/presentation/auth-request.context'
 import { AuthenticationGuard } from '@/modules/auth/authorization/presentation/authentication.guard'
 import { readAuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-request'

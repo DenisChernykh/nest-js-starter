@@ -1,8 +1,8 @@
-import type { AuthAuditPort } from '../../application/auth-audit.port'
+import type { AuthAuditPort } from '../../public-contracts/auth-audit.port'
 import {
   AuthDependencyUnavailableError,
   AuthenticationRequiredError,
-} from '../../application/auth-errors'
+} from '../../public-contracts/auth-errors'
 import type { AuthenticateSessionUseCase } from '../application/authenticate-session.use-case'
 import {
   definePermissions,

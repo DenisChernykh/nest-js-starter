@@ -5,7 +5,7 @@ import type { ApplicationRuntimeConfig } from '@/platform/config/runtime-config.
 import { DatabaseModule } from '@/platform/database/database.module'
 import { HealthModule } from '@/platform/http/health/health.module'
 import { LifecycleModule } from '@/platform/lifecycle/lifecycle.module'
-import { AuthModule } from '@/modules/auth/composition/auth.module'
+import { IdentityAccessModule } from '@/modules/auth/composition/identity-access.module'
 import { ApprovalRequestsModule } from '@/modules/approval-requests/composition/approval-requests.module'
 import { RedisModule } from '@/platform/redis/redis.module'
 import { LoggingModule } from '@/platform/logging/logging.module'
@@ -36,7 +36,9 @@ export class ApiModule {
         LifecycleModule,
         HealthModule,
         HttpErrorsModule.forRoot(API_HTTP_PROBLEM_CONTRIBUTIONS),
-        AuthModule.forRoot({ roleDefinitions: API_ROLE_DEFINITIONS }),
+        IdentityAccessModule.forRoot({
+          roleDefinitions: API_ROLE_DEFINITIONS,
+        }),
         ApprovalRequestsModule,
       ],
       providers: [],

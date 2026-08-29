@@ -4,7 +4,7 @@ import {
   randomBytes as nodeRandomBytes,
 } from 'node:crypto'
 
-import type { OneTimeTokenCodecPort } from '../../application/one-time-token-codec.port'
+import type { OneTimeTokenCodecPort } from '../application/one-time-token-codec.port'
 
 export type AccountLifecycleRandomBytesSource = (size: number) => Buffer
 

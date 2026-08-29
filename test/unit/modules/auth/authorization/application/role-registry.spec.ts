@@ -1,7 +1,7 @@
 import {
   DisabledUserError,
   UnknownRoleAssignmentError,
-} from '@/modules/auth/application/auth-errors'
+} from '@/modules/auth/public-contracts/auth-errors'
 import { definePermissions } from '@/modules/auth/authorization/application/permission'
 import {
   createAuthRoleRegistry,

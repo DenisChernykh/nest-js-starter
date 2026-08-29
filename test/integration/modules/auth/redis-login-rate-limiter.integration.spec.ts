@@ -1,6 +1,6 @@
 import type { StartedRedisContainer } from '@testcontainers/redis'
 
-import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
+import { AuthDependencyUnavailableError } from '@/modules/auth/public-contracts/auth-errors'
 import { NodePasswordAuthCryptoAdapter } from '@/modules/auth/authentication/infrastructure/node-password-auth-crypto.adapter'
 import { RedisLoginRateLimiter } from '@/modules/auth/authentication/infrastructure/redis-login-rate-limiter'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
