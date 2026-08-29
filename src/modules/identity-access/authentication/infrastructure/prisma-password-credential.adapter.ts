@@ -64,6 +64,22 @@ export class PrismaPasswordCredentialAdapter implements PasswordCredentialPort {
     return row === null ? undefined : mapCredentialSnapshot(row)
   }
 
+  public withinCredentialVersionFence<T>(
+    userId: string,
+    operation: (snapshot: CredentialSnapshot | undefined) => Promise<T>,
+  ): Promise<T> {
+    return this.transaction.run(() =>
+      this.provider.withClient(async (client) => {
+        await lockUser(client, userId)
+        const row = await client.user.findUnique({
+          where: { id: userId },
+          select: credentialSnapshotSelect,
+        })
+        return operation(row === null ? undefined : mapCredentialSnapshot(row))
+      }),
+    )
+  }
+
   public async replacePasswordIfVersion(
     userId: string,
     expectedVersion: number,

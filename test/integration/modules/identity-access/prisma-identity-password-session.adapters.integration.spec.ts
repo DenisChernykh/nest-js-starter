@@ -3,6 +3,11 @@ import {
   startPrismaIdentityAccessTestRuntime,
   type PrismaIdentityAccessTestRuntime,
 } from './support/prisma-identity-access-test-runtime'
+import { SessionIssuer } from '@/modules/identity-access/sessions/application/session-issuer'
+import type {
+  IssueSessionInput,
+  SessionStorePort,
+} from '@/modules/identity-access/sessions/application/session-store.port'
 
 describe('Prisma identity, password credential and session adapters', () => {
   let runtime: PrismaIdentityAccessTestRuntime
@@ -272,5 +277,71 @@ describe('Prisma identity, password credential and session adapters', () => {
         await client.passwordResetToken.count({ where: { userId: user.id } }),
       ).toBe(0)
     })
+  })
+
+  it('holds the credential fence through session issuance before password invalidation', async () => {
+    const user = await runtime.provider.withClient((client) =>
+      client.user.create({
+        data: {
+          email: 'login-fence@example.com',
+          normalizedEmail: 'login-fence@example.com',
+          emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+          credential: { create: { passwordHash: 'old', version: 2 } },
+        },
+      }),
+    )
+    let enterIssuance: (() => void) | undefined
+    const issuanceEntered = new Promise<void>((resolve) => {
+      enterIssuance = resolve
+    })
+    let releaseIssuance: (() => void) | undefined
+    const issuanceReleased = new Promise<void>((resolve) => {
+      releaseIssuance = resolve
+    })
+    let issuedInput: IssueSessionInput | undefined
+    const issuer = new SessionIssuer(runtime.identity, {
+      issue: async (input: IssueSessionInput) => {
+        issuedInput = input
+        enterIssuance?.()
+        await issuanceReleased
+        return {
+          rawToken: 'raw',
+          publicId: 'public',
+          csrfToken: 'csrf',
+          absoluteExpiresAt: new Date('2026-08-08T00:00:00.000Z'),
+        }
+      },
+    } as unknown as SessionStorePort)
+
+    const fencedIssuance = runtime.credentials.withinCredentialVersionFence(
+      user.id,
+      (snapshot) => {
+        expect(snapshot?.passwordVersion).toBe(2)
+        return issuer.issue({
+          userId: user.id,
+          nowMs: 1_000,
+          deviceLabel: 'browser',
+          networkFingerprint: 'network',
+        })
+      },
+    )
+    await issuanceEntered
+
+    const passwordChange = runtime.credentials.changePasswordAndInvalidate({
+      userId: user.id,
+      expectedVersion: 2,
+      passwordHash: 'new',
+    })
+    await expectPending(passwordChange)
+
+    releaseIssuance?.()
+    await expect(fencedIssuance).resolves.toMatchObject({ publicId: 'public' })
+    await expect(passwordChange).resolves.toBe(true)
+    expect(issuedInput).toEqual(
+      expect.objectContaining({ userId: user.id, sessionGeneration: 0n }),
+    )
+    await expect(
+      runtime.identity.findAuthProjectionByUserId(user.id),
+    ).resolves.toMatchObject({ sessionGeneration: 1n })
   })
 })

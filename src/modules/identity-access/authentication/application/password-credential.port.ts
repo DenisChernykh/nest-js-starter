@@ -21,6 +21,10 @@ export interface PasswordCredentialPort {
   findCredentialByUserId(
     userId: string,
   ): Promise<CredentialSnapshot | undefined>
+  withinCredentialVersionFence<T>(
+    userId: string,
+    operation: (snapshot: CredentialSnapshot | undefined) => Promise<T>,
+  ): Promise<T>
   replacePasswordIfVersion(
     userId: string,
     expectedVersion: number,

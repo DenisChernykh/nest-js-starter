@@ -19,10 +19,18 @@ function harness(
   readonly passwords: PasswordHasherPort
   readonly limiter: LoginRateLimiterPort
   readonly sessions: jest.Mocked<Pick<SessionIssuer, 'issue'>>
+  readonly credentialFence: jest.Mock
   readonly audit: jest.Mocked<AuthAuditPort>
 } {
+  const credentialFence = jest.fn(
+    (
+      _userId: string,
+      operation: (current: typeof snapshot) => Promise<unknown>,
+    ): Promise<unknown> => operation(snapshot),
+  )
   const credentials = {
     findCredentialByNormalizedEmail: jest.fn(() => Promise.resolve(snapshot)),
+    withinCredentialVersionFence: credentialFence,
     replacePasswordIfVersion: jest.fn(() => Promise.resolve(true)),
   } as unknown as PasswordCredentialPort
   const passwords = {
@@ -61,6 +69,7 @@ function harness(
     passwords,
     limiter,
     sessions,
+    credentialFence,
     audit,
   }
 }
@@ -143,7 +152,7 @@ describe('LoginUseCase', () => {
       expect(target.sessions.issue).not.toHaveBeenCalled()
     }
   })
-  it('normalizes email and issues from durable generation and epoch', async () => {
+  it('normalizes email and issues through the credential version fence', async () => {
     const target = harness({
       userId: 'user',
       status: 'active',
@@ -165,12 +174,129 @@ describe('LoginUseCase', () => {
       ipAddress: '192.0.2.1',
       normalizedEmail: 'user@example.com',
     })
-    expect(target.sessions.issue).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'user',
-        nowMs: 1_000,
-      }),
+    expect(target.sessions.issue).toHaveBeenCalledWith({
+      userId: 'user',
+      nowMs: 1_000,
+      deviceLabel: 'browser',
+      networkFingerprint: 'network',
+    })
+    expect(target.credentialFence).toHaveBeenCalledWith(
+      'user',
+      expect.any(Function),
     )
+  })
+
+  it('rejects an old password when the credential changes before issuance', async () => {
+    const initialSnapshot = {
+      userId: 'user',
+      status: 'active' as const,
+      emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+      passwordHash: 'old-hash',
+      passwordVersion: 2,
+    }
+    const target = harness(initialSnapshot)
+    target.credentialFence.mockImplementation(
+      (
+        _userId,
+        operation: (current: typeof initialSnapshot) => Promise<unknown>,
+      ) =>
+        operation({
+          ...initialSnapshot,
+          passwordHash: 'new-hash',
+          passwordVersion: 3,
+        }),
+    )
+    jest
+      .mocked(target.passwords.verify)
+      .mockResolvedValueOnce({ matches: true, needsRehash: false })
+      .mockResolvedValueOnce({ matches: false, needsRehash: false })
+
+    await expect(
+      target.useCase.execute({
+        email: 'user@example.com',
+        password: 'old-password',
+        ipAddress: '192.0.2.1',
+        nowMs: 1_000,
+        deviceLabel: 'browser',
+        networkFingerprint: 'network',
+      }),
+    ).rejects.toMatchObject({ code: 'AUTHENTICATION_FAILED' })
+    expect(target.passwords.verify).toHaveBeenNthCalledWith(
+      2,
+      'old-password',
+      'new-hash',
+    )
+    expect(target.sessions.issue).not.toHaveBeenCalled()
+    expect(target.audit.emit).toHaveBeenCalledWith(
+      expect.objectContaining({ reasonCode: 'INVALID_CREDENTIALS' }),
+    )
+  })
+
+  it('accepts the same password after a concurrent opportunistic rehash', async () => {
+    const initialSnapshot = {
+      userId: 'user',
+      status: 'active' as const,
+      emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+      passwordHash: 'old-hash',
+      passwordVersion: 2,
+    }
+    const target = harness(initialSnapshot)
+    target.credentialFence.mockImplementation(
+      (
+        _userId,
+        operation: (current: typeof initialSnapshot) => Promise<unknown>,
+      ) =>
+        operation({
+          ...initialSnapshot,
+          passwordHash: 'rehash',
+          passwordVersion: 3,
+        }),
+    )
+    jest
+      .mocked(target.passwords.verify)
+      .mockResolvedValueOnce({ matches: true, needsRehash: true })
+      .mockResolvedValueOnce({ matches: true, needsRehash: false })
+
+    await expect(
+      target.useCase.execute({
+        email: 'user@example.com',
+        password: 'password',
+        ipAddress: '192.0.2.1',
+        nowMs: 1_000,
+        deviceLabel: 'browser',
+        networkFingerprint: 'network',
+      }),
+    ).resolves.toMatchObject({ publicId: 'public' })
+    expect(target.credentials.replacePasswordIfVersion).not.toHaveBeenCalled()
+    expect(target.sessions.issue).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails closed when a fenced opportunistic rehash loses its CAS', async () => {
+    const target = harness({
+      userId: 'user',
+      status: 'active',
+      emailVerifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+      passwordHash: 'old-hash',
+      passwordVersion: 2,
+    })
+    jest
+      .mocked(target.passwords.verify)
+      .mockResolvedValue({ matches: true, needsRehash: true })
+    jest
+      .mocked(target.credentials.replacePasswordIfVersion)
+      .mockResolvedValue(false)
+
+    await expect(
+      target.useCase.execute({
+        email: 'user@example.com',
+        password: 'password',
+        ipAddress: '192.0.2.1',
+        nowMs: 1_000,
+        deviceLabel: 'browser',
+        networkFingerprint: 'network',
+      }),
+    ).rejects.toMatchObject({ code: 'AUTHENTICATION_FAILED' })
+    expect(target.sessions.issue).not.toHaveBeenCalled()
   })
 
   it('requires verification after a correct password without rehash or session issuance', async () => {

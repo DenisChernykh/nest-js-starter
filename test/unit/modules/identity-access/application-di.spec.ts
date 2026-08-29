@@ -140,6 +140,8 @@ describe('auth application Nest dependency injection', () => {
       findAuthProjectionByUserId: jest.fn(),
       findCredentialByNormalizedEmail: jest.fn(),
       findCredentialByUserId: jest.fn(),
+      withinCredentialVersionFence: (_userId, operation) =>
+        operation(undefined),
       incrementSessionGeneration: jest.fn(),
       readGlobalSessionEpoch: jest.fn(),
       replacePasswordIfVersion: jest.fn(),

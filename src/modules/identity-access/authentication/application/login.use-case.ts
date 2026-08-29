@@ -87,20 +87,45 @@ export class LoginUseCase {
       if (snapshot.emailVerifiedAt === undefined) {
         throw new EmailVerificationRequiredError()
       }
-      if (verification.needsRehash) {
-        const upgraded = await this.passwords.hash(input.password)
-        await this.credentials.replacePasswordIfVersion(
-          snapshot.userId,
-          snapshot.passwordVersion,
-          upgraded,
-        )
-      }
-      const session = await this.sessions.issue({
-        userId: snapshot.userId,
-        nowMs: input.nowMs,
-        deviceLabel: input.deviceLabel,
-        networkFingerprint: input.networkFingerprint,
-      })
+      const session = await this.credentials.withinCredentialVersionFence(
+        snapshot.userId,
+        async (currentSnapshot) => {
+          const currentVerification =
+            currentSnapshot !== undefined &&
+            currentSnapshot.passwordVersion === snapshot.passwordVersion &&
+            currentSnapshot.passwordHash === snapshot.passwordHash
+              ? verification
+              : await this.passwords.verify(
+                  input.password,
+                  currentSnapshot?.passwordHash ?? this.dummyPasswordHash,
+                )
+          if (
+            currentSnapshot === undefined ||
+            !currentVerification.matches ||
+            currentSnapshot.status !== 'active'
+          ) {
+            throw new AuthenticationFailedError()
+          }
+          if (currentSnapshot.emailVerifiedAt === undefined) {
+            throw new EmailVerificationRequiredError()
+          }
+          if (currentVerification.needsRehash) {
+            const upgraded = await this.passwords.hash(input.password)
+            const replaced = await this.credentials.replacePasswordIfVersion(
+              currentSnapshot.userId,
+              currentSnapshot.passwordVersion,
+              upgraded,
+            )
+            if (!replaced) throw new AuthenticationFailedError()
+          }
+          return this.sessions.issue({
+            userId: currentSnapshot.userId,
+            nowMs: input.nowMs,
+            deviceLabel: input.deviceLabel,
+            networkFingerprint: input.networkFingerprint,
+          })
+        },
+      )
       this.audit.emit({
         action: 'login',
         outcome: 'success',

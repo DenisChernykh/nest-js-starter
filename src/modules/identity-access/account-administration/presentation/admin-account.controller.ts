@@ -5,6 +5,7 @@ import {
   Get,
   Headers,
   HttpCode,
+  Inject,
   Param,
   Put,
   Query,
@@ -31,6 +32,10 @@ import {
   AUTH_ACCOUNTS_ROLES_MANAGE_PERMISSION,
 } from '../../authorization/application/role-registry'
 import type { AuthenticatedPrincipal } from '../../public-contracts/authenticated-principal'
+import {
+  AUTH_AUDIT,
+  type AuthAuditPort,
+} from '../../public-contracts/auth-audit.port'
 import { CurrentPrincipal } from '../../public-contracts/current-principal.decorator'
 import { RequirePermission } from '../../public-contracts/require-permission.decorator'
 import {
@@ -42,7 +47,8 @@ import {
   ReplaceAccountRolesRequestDto,
   UpdateAccountStatusRequestDto,
 } from './admin-account.dto'
-import { formatAccountEtag, parseAccountEtag } from './account-etag.codec'
+import { formatAccountEtag } from './account-etag.codec'
+import { parseAuditedAccountEtag } from './audited-account-etag'
 import {
   AUTH_ACCOUNT_ETAG_MALFORMED_PROBLEM,
   AUTH_ACCOUNT_PRECONDITION_FAILED_PROBLEM,
@@ -54,8 +60,12 @@ import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.
 @ApiTags('admin auth')
 export class AdminAccountController {
   public constructor(
+    @Inject(AccountAdministrationQueries)
     private readonly queries: AccountAdministrationQueries,
+    @Inject(AccountAdministrationMutations)
     private readonly mutations: AccountAdministrationMutations,
+    @Inject(AUTH_AUDIT)
+    private readonly audit: AuthAuditPort,
   ) {}
 
   @Get('accounts')
@@ -153,7 +163,12 @@ export class AdminAccountController {
       actorId: principal.userId,
       accountId: path.accountId,
       status: body.status,
-      expectedRevision: parseAccountEtag(path.accountId, ifMatch),
+      expectedRevision: parseAuditedAccountEtag(this.audit, {
+        action: 'status_change',
+        actorId: principal.userId,
+        accountId: path.accountId,
+        value: ifMatch,
+      }),
     })
     if (account === undefined) return failAccountNotFound()
     response.setHeader('ETag', formatAccountEtag(account))
@@ -200,7 +215,12 @@ export class AdminAccountController {
       actorId: principal.userId,
       accountId: path.accountId,
       roleKeys: body.roleKeys,
-      expectedRevision: parseAccountEtag(path.accountId, ifMatch),
+      expectedRevision: parseAuditedAccountEtag(this.audit, {
+        action: 'role_change',
+        actorId: principal.userId,
+        accountId: path.accountId,
+        value: ifMatch,
+      }),
     })
     if (account === undefined) return failAccountNotFound()
     response.setHeader('ETag', formatAccountEtag(account))
@@ -240,7 +260,12 @@ export class AdminAccountController {
     const retired = await this.mutations.retireAccount({
       actorId: principal.userId,
       accountId: path.accountId,
-      expectedRevision: parseAccountEtag(path.accountId, ifMatch),
+      expectedRevision: parseAuditedAccountEtag(this.audit, {
+        action: 'account_retire',
+        actorId: principal.userId,
+        accountId: path.accountId,
+        value: ifMatch,
+      }),
     })
     if (!retired) failAccountNotFound()
   }
