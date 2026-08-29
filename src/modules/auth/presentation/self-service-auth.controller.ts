@@ -13,7 +13,7 @@ import { ConfirmPasswordResetUseCase } from '../application/confirm-password-res
 import { RegisterUserUseCase } from '../application/register-user.use-case'
 import { RequestPasswordResetUseCase } from '../application/request-password-reset.use-case'
 import { ResendEmailVerificationUseCase } from '../application/resend-email-verification.use-case'
-import { CsrfTokenExempt } from './session-csrf.guard'
+import { CsrfTokenExempt } from '../public-contracts/csrf-token-exempt.decorator'
 import {
   ConfirmEmailVerificationRequestDto,
   ConfirmPasswordResetRequestDto,

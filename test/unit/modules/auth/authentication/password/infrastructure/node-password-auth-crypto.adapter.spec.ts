@@ -1,4 +1,4 @@
-import { NodePasswordAuthCryptoAdapter } from '@/modules/auth/authentication/password/infrastructure/node-password-auth-crypto.adapter'
+import { NodePasswordAuthCryptoAdapter } from '@/modules/auth/authentication/infrastructure/node-password-auth-crypto.adapter'
 
 describe('NodePasswordAuthCryptoAdapter', () => {
   it('computes deterministic HMACs with the caller-owned login key', () => {

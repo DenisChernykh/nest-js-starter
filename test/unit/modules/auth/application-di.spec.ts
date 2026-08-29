@@ -11,19 +11,20 @@ import {
 } from '@/modules/auth/application/auth-audit.port'
 import type { AuthMailDeliveryPort } from '@/modules/auth/application/auth-mail-delivery.port'
 import { AUTH_MAIL_DELIVERY } from '@/modules/auth/application/auth-mail-delivery.port'
+import { AUTH_DUMMY_PASSWORD_HASH } from '@/modules/auth/authentication/application/password-auth.tokens'
 import {
-  AUTH_DUMMY_PASSWORD_HASH,
   AUTH_SESSION_CLEANUP_OBSERVER,
   NOOP_AUTH_SESSION_CLEANUP_OBSERVER,
+  SessionCleanupService,
   type AuthSessionCleanupObserver,
-} from '@/modules/auth/application/auth.types'
+} from '@/modules/auth/sessions/application/session-cleanup.service'
 import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
-import { ChangePasswordUseCase } from '@/modules/auth/application/change-password.use-case'
+import { ChangePasswordUseCase } from '@/modules/auth/authentication/application/change-password.use-case'
 import { ConfirmEmailVerificationUseCase } from '@/modules/auth/application/confirm-email-verification.use-case'
 import { ConfirmPasswordResetUseCase } from '@/modules/auth/application/confirm-password-reset.use-case'
 import { CreateInitialAdminUseCase } from '@/modules/auth/application/create-initial-admin.use-case'
 import { CreateUserUseCase } from '@/modules/auth/application/create-user.use-case'
-import { GetCsrfTokenQuery } from '@/modules/auth/application/get-csrf-token.query'
+import { GetCsrfTokenQuery } from '@/modules/auth/sessions/application/get-csrf-token.query'
 import { GetMeQuery } from '@/modules/auth/application/get-me.query'
 import {
   EMAIL_VERIFICATION_PERSISTENCE,
@@ -32,29 +33,29 @@ import {
 import {
   IDENTITY_SECURITY_STATE,
   type IdentitySecurityStatePort,
-} from '@/modules/auth/application/identity-security-state.port'
+} from '@/modules/auth/identity/application/identity-security-state.port'
 import {
   LOGIN_RATE_LIMITER,
   type LoginRateLimiterPort,
-} from '@/modules/auth/application/login-rate-limiter.port'
-import { ListSessionsQuery } from '@/modules/auth/application/list-sessions.query'
-import { LoginUseCase } from '@/modules/auth/application/login.use-case'
-import { LogoutAllUseCase } from '@/modules/auth/application/logout-all.use-case'
-import { LogoutUseCase } from '@/modules/auth/application/logout.use-case'
+} from '@/modules/auth/authentication/application/login-rate-limiter.port'
+import { ListSessionsQuery } from '@/modules/auth/sessions/application/list-sessions.query'
+import { LoginUseCase } from '@/modules/auth/authentication/application/login.use-case'
+import { LogoutAllUseCase } from '@/modules/auth/sessions/application/logout-all.use-case'
+import { LogoutUseCase } from '@/modules/auth/sessions/application/logout.use-case'
 import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
-} from '@/modules/auth/application/password-hasher.port'
+} from '@/modules/auth/authentication/application/password-hasher.port'
 import {
   PASSWORD_CREDENTIALS,
   type PasswordCredentialPort,
-} from '@/modules/auth/application/password-credential.port'
+} from '@/modules/auth/authentication/application/password-credential.port'
 import {
   PASSWORD_RECOVERY_PERSISTENCE,
   type PasswordRecoveryPersistencePort,
 } from '@/modules/auth/application/password-recovery-persistence.port'
 import type { PermissionKey } from '@/modules/auth/application/permission'
-import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
+import { RevokeSessionUseCase } from '@/modules/auth/sessions/application/revoke-session.use-case'
 import { ONE_TIME_TOKEN_CODEC } from '@/modules/auth/application/one-time-token-codec.port'
 import { PUBLIC_AUTH_RATE_LIMITER } from '@/modules/auth/application/public-auth-rate-limiter.port'
 import { RegisterUserUseCase } from '@/modules/auth/application/register-user.use-case'
@@ -71,12 +72,13 @@ import {
 import {
   SESSION_STORE,
   type SessionStorePort,
-} from '@/modules/auth/application/session-store.port'
+} from '@/modules/auth/sessions/application/session-store.port'
 import {
   SESSION_GENERATION,
   type SessionGenerationPort,
-} from '@/modules/auth/application/session-generation.port'
-import { SessionIssuer } from '@/modules/auth/application/session-issuer'
+} from '@/modules/auth/sessions/application/session-generation.port'
+import { SessionIssuer } from '@/modules/auth/sessions/application/session-issuer'
+import { ResolveSessionIdentityQuery } from '@/modules/auth/sessions/application/resolve-session-identity.query'
 import type { AuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-principal'
 import { PrismaAccountAdministrationMutationAdapter } from '@/modules/auth/account-administration/infrastructure/prisma-account-administration-mutation.adapter'
 import { PrismaAccountAdministrationReadAdapter } from '@/modules/auth/account-administration/infrastructure/prisma-account-administration-read.adapter'
@@ -85,14 +87,16 @@ import { PrismaEmailVerificationAdapter } from '@/modules/auth/account-lifecycle
 import { PrismaInvitationAdapter } from '@/modules/auth/account-lifecycle/invitations/infrastructure/prisma-invitation.adapter'
 import { PrismaPasswordRecoveryAdapter } from '@/modules/auth/account-lifecycle/password-recovery/infrastructure/prisma-password-recovery.adapter'
 import { PrismaRegistrationAdapter } from '@/modules/auth/account-lifecycle/registration/infrastructure/prisma-registration.adapter'
-import { PrismaPasswordCredentialAdapter } from '@/modules/auth/authentication/password/infrastructure/prisma-password-credential.adapter'
+import { PrismaPasswordCredentialAdapter } from '@/modules/auth/authentication/infrastructure/prisma-password-credential.adapter'
 import { PrismaIdentitySecurityStateAdapter } from '@/modules/auth/identity/infrastructure/prisma-identity-security-state.adapter'
-import { Argon2PasswordHasher } from '@/modules/auth/infrastructure/argon2-password.hasher'
-import { RedisLoginRateLimiter } from '@/modules/auth/infrastructure/redis-login-rate-limiter'
-import { RedisSessionStore } from '@/modules/auth/infrastructure/redis-session.store'
+import { Argon2PasswordHasher } from '@/modules/auth/authentication/infrastructure/argon2-password.hasher'
+import { RedisLoginRateLimiter } from '@/modules/auth/authentication/infrastructure/redis-login-rate-limiter'
+import { RedisSessionStore } from '@/modules/auth/sessions/infrastructure/redis-session.store'
 import { PrismaSessionGenerationAdapter } from '@/modules/auth/sessions/infrastructure/prisma-session-generation.adapter'
 import { AuthModule } from '@/modules/auth/composition/auth.module'
-import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
+import { IdentityModule } from '@/modules/auth/identity/composition/identity.module'
+import { SessionsModule } from '@/modules/auth/sessions/composition/sessions.module'
+import { AuthenticationModule } from '@/modules/auth/authentication/composition/authentication.module'
 import { SelfServiceAuthPolicy } from '@/modules/auth/application/self-service-auth.policy'
 import type { OneTimeTokenCodecPort } from '@/modules/auth/application/one-time-token-codec.port'
 import type { PublicAuthRateLimiterPort } from '@/modules/auth/application/public-auth-rate-limiter.port'
@@ -113,15 +117,11 @@ const applicationClasses = [
   RevokeSessionUseCase,
   RegisterUserUseCase,
   RequestPasswordResetUseCase,
+  ResolveSessionIdentityQuery,
   ResendEmailVerificationUseCase,
+  SessionCleanupService,
   SessionIssuer,
 ] as const
-
-const apiApplicationClasses = applicationClasses.filter(
-  (applicationClass) =>
-    applicationClass !== CreateInitialAdminUseCase &&
-    applicationClass !== CreateUserUseCase,
-)
 
 interface ProviderDefinition {
   readonly provide: unknown
@@ -251,21 +251,34 @@ describe('auth application Nest dependency injection', () => {
     await moduleRef.close()
   })
 
-  it('composes application classes directly and aliases ports to adapters', () => {
-    const providers = Reflect.getMetadata(
-      MODULE_METADATA.PROVIDERS,
-      AuthModule,
-    ) as readonly unknown[]
-    const definitions = providers.filter(
-      (provider): provider is ProviderDefinition =>
-        typeof provider === 'object' &&
-        provider !== null &&
-        'provide' in provider,
-    )
+  it('composes capability modules with narrow exported tokens', () => {
+    const providersOf = (module: object): readonly unknown[] =>
+      (Reflect.getMetadata(MODULE_METADATA.PROVIDERS, module) ??
+        []) as readonly unknown[]
+    const definitionsOf = (module: object): readonly ProviderDefinition[] =>
+      providersOf(module).filter(
+        (provider): provider is ProviderDefinition =>
+          typeof provider === 'object' &&
+          provider !== null &&
+          'provide' in provider,
+      )
+    const authProviders = providersOf(AuthModule)
+    const identityDefinitions = definitionsOf(IdentityModule)
+    const sessionProviders = providersOf(SessionsModule)
+    const sessionDefinitions = definitionsOf(SessionsModule)
+    const authenticationProviders = providersOf(AuthenticationModule)
+    const authenticationDefinitions = definitionsOf(AuthenticationModule)
 
-    expect(providers).toEqual(expect.arrayContaining(apiApplicationClasses))
-    expect(providers).toEqual(
+    expect(Reflect.getMetadata(MODULE_METADATA.IMPORTS, AuthModule)).toEqual(
       expect.arrayContaining([
+        IdentityModule,
+        SessionsModule,
+        AuthenticationModule,
+      ]),
+    )
+    expect(authProviders).toEqual(
+      expect.arrayContaining([
+        AuthenticateSessionUseCase,
         PrismaAccountAdministrationMutationAdapter,
         PrismaAccountAdministrationReadAdapter,
         PrismaAccountProvisioningAdapter,
@@ -273,50 +286,53 @@ describe('auth application Nest dependency injection', () => {
         PrismaInvitationAdapter,
         PrismaPasswordRecoveryAdapter,
         PrismaRegistrationAdapter,
-        PrismaIdentitySecurityStateAdapter,
-        PrismaPasswordCredentialAdapter,
-        PrismaSessionGenerationAdapter,
       ]),
     )
 
-    for (const applicationClass of apiApplicationClasses) {
-      expect(
-        definitions.find(
-          ({ provide, useFactory }) =>
-            provide === applicationClass && useFactory !== undefined,
-        ),
-      ).toBeUndefined()
-    }
-
-    expect(definitions).toEqual(
+    expect(identityDefinitions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           provide: IDENTITY_SECURITY_STATE,
           useExisting: PrismaIdentitySecurityStateAdapter,
         }),
-        expect.objectContaining({
-          provide: PASSWORD_CREDENTIALS,
-          useExisting: PrismaPasswordCredentialAdapter,
-        }),
+      ]),
+    )
+    expect(sessionProviders).toEqual(
+      expect.arrayContaining([
+        SessionIssuer,
+        ResolveSessionIdentityQuery,
+        SessionCleanupService,
+        PrismaSessionGenerationAdapter,
+      ]),
+    )
+    expect(sessionDefinitions).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           provide: SESSION_GENERATION,
           useExisting: PrismaSessionGenerationAdapter,
         }),
         expect.objectContaining({
-          provide: ACCOUNT_PROVISIONING,
-          useExisting: PrismaAccountProvisioningAdapter,
+          provide: SESSION_STORE,
+          useExisting: RedisSessionStore,
         }),
+      ]),
+    )
+    expect(
+      Reflect.getMetadata(MODULE_METADATA.EXPORTS, SessionsModule),
+    ).not.toContain(SESSION_STORE)
+    expect(authenticationProviders).toEqual(
+      expect.arrayContaining([
+        LoginUseCase,
+        ChangePasswordUseCase,
+        PrismaPasswordCredentialAdapter,
+        Argon2PasswordHasher,
+      ]),
+    )
+    expect(authenticationDefinitions).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
-          provide: REGISTRATION_PERSISTENCE,
-          useExisting: PrismaRegistrationAdapter,
-        }),
-        expect.objectContaining({
-          provide: EMAIL_VERIFICATION_PERSISTENCE,
-          useExisting: PrismaEmailVerificationAdapter,
-        }),
-        expect.objectContaining({
-          provide: PASSWORD_RECOVERY_PERSISTENCE,
-          useExisting: PrismaPasswordRecoveryAdapter,
+          provide: PASSWORD_CREDENTIALS,
+          useExisting: PrismaPasswordCredentialAdapter,
         }),
         expect.objectContaining({
           provide: PASSWORD_HASHER,
@@ -326,23 +342,15 @@ describe('auth application Nest dependency injection', () => {
           provide: LOGIN_RATE_LIMITER,
           useExisting: RedisLoginRateLimiter,
         }),
-        expect.objectContaining({
-          provide: SESSION_STORE,
-          useExisting: RedisSessionStore,
-        }),
-        expect.objectContaining({
-          provide: AUTH_AUDIT,
-          useExisting: AuthAuditLogger,
-        }),
       ]),
     )
     expect(
-      definitions.find(
+      sessionDefinitions.find(
         ({ provide }) => provide === AUTH_SESSION_CLEANUP_OBSERVER,
       )?.useValue,
     ).toBe(NOOP_AUTH_SESSION_CLEANUP_OBSERVER)
     expect(
-      typeof definitions.find(
+      typeof authenticationDefinitions.find(
         ({ provide }) => provide === AUTH_DUMMY_PASSWORD_HASH,
       )?.useValue,
     ).toBe('string')

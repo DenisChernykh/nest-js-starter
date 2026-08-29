@@ -24,7 +24,7 @@ import {
 import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
-} from './password-hasher.port'
+} from '../authentication/application/password-hasher.port'
 import {
   PASSWORD_RECOVERY_PERSISTENCE,
   type PasswordRecoveryPersistencePort,

@@ -5,7 +5,7 @@ import {
   CreateUserUseCase,
   type CreateUserResult,
 } from '@/modules/auth/application/create-user.use-case'
-import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
+import type { PasswordHasherPort } from '@/modules/auth/authentication/application/password-hasher.port'
 import { definePermissions } from '@/modules/auth/application/permission'
 import {
   createAuthRoleRegistry,

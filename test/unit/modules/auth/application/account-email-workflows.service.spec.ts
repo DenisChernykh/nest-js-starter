@@ -16,7 +16,7 @@ import {
 import type { OneTimeTokenCodecPort } from '@/modules/auth/application/one-time-token-codec.port'
 import type { InvitationPersistencePort } from '@/modules/auth/application/invitation-persistence.port'
 import type { PasswordRecoveryPersistencePort } from '@/modules/auth/application/password-recovery-persistence.port'
-import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
+import type { PasswordHasherPort } from '@/modules/auth/authentication/application/password-hasher.port'
 import type { PublicAuthRateLimiterPort } from '@/modules/auth/application/public-auth-rate-limiter.port'
 import {
   AUTH_ACCOUNTS_MANAGE_PERMISSION,

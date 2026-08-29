@@ -1,4 +1,13 @@
-import type { AuthProjection } from './auth.types'
+import type { UserStatus } from '../domain/user-status'
+
+export interface AuthProjection {
+  readonly userId: string
+  readonly email: string
+  readonly normalizedEmail: string
+  readonly status: UserStatus
+  readonly sessionGeneration: bigint
+  readonly roleKeys: readonly string[]
+}
 
 export interface IdentitySecurityStatePort {
   findAuthProjectionByUserId(

@@ -21,8 +21,7 @@ import {
   type RoleDefinition,
 } from './role-registry'
 import type { PermissionKey } from '@/shared/application/permission'
-import type { AuthSessionCleanupObserver } from './auth.types'
-import type { SessionStorePort } from './session-store.port'
+import { SessionCleanupService } from '../sessions/application/session-cleanup.service'
 import {
   AUTH_AUDIT,
   NOOP_AUTH_AUDIT,
@@ -78,8 +77,7 @@ export class AccountAdministrationService {
     private readonly mutations: AccountAdministrationMutationPort,
     private readonly config: AccountAdministrationPolicyConfig,
     private readonly roles?: RoleRegistry,
-    private readonly sessions?: SessionStorePort,
-    private readonly cleanupObserver?: AuthSessionCleanupObserver,
+    private readonly sessionCleanup?: SessionCleanupService,
     @Inject(AUTH_AUDIT)
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}
@@ -282,14 +280,12 @@ export class AccountAdministrationService {
     operation: 'account-disable' | 'account-retire' | 'admin-logout-all',
     accountId: string,
   ): Promise<boolean> {
-    if (this.sessions === undefined) return true
-    try {
-      await this.sessions.revokeAll(accountId)
-      return true
-    } catch {
-      this.cleanupObserver?.cleanupIncomplete(operation, accountId)
-      return false
-    }
+    return this.sessionCleanup === undefined
+      ? true
+      : this.sessionCleanup.cleanupAfterDurableInvalidation(
+          operation,
+          accountId,
+        )
   }
 
   private async auditedMutation<T>(

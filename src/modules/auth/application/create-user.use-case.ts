@@ -14,7 +14,7 @@ import type { CreateUserResult } from './auth.types'
 import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
-} from './password-hasher.port'
+} from '../authentication/application/password-hasher.port'
 import { RoleRegistry } from './role-registry'
 
 /** Operator-supplied values for provisioning one product user. */

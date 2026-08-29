@@ -1,14 +1,17 @@
 import { AuthenticationRequiredError } from '@/modules/auth/application/auth-errors'
-import type { AuthSessionCleanupObserver } from '@/modules/auth/application/auth.types'
-import { GetCsrfTokenQuery } from '@/modules/auth/application/get-csrf-token.query'
+import {
+  SessionCleanupService,
+  type AuthSessionCleanupObserver,
+} from '@/modules/auth/sessions/application/session-cleanup.service'
+import { GetCsrfTokenQuery } from '@/modules/auth/sessions/application/get-csrf-token.query'
 import { GetMeQuery } from '@/modules/auth/application/get-me.query'
-import { ListSessionsQuery } from '@/modules/auth/application/list-sessions.query'
-import { LogoutAllUseCase } from '@/modules/auth/application/logout-all.use-case'
-import { LogoutUseCase } from '@/modules/auth/application/logout.use-case'
+import { ListSessionsQuery } from '@/modules/auth/sessions/application/list-sessions.query'
+import { LogoutAllUseCase } from '@/modules/auth/sessions/application/logout-all.use-case'
+import { LogoutUseCase } from '@/modules/auth/sessions/application/logout.use-case'
 import { definePermissions } from '@/modules/auth/application/permission'
-import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
-import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
-import type { SessionGenerationPort } from '@/modules/auth/application/session-generation.port'
+import { RevokeSessionUseCase } from '@/modules/auth/sessions/application/revoke-session.use-case'
+import type { SessionStorePort } from '@/modules/auth/sessions/application/session-store.port'
+import type { SessionGenerationPort } from '@/modules/auth/sessions/application/session-generation.port'
 import type { AuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-principal'
 
 /* eslint-disable @typescript-eslint/unbound-method */
@@ -90,7 +93,10 @@ describe('auth session management', () => {
       cleanupIncomplete: jest.fn(() => order.push('event')),
     } satisfies AuthSessionCleanupObserver
     await expect(
-      new LogoutAllUseCase(generation, sessions, observer).execute('user'),
+      new LogoutAllUseCase(
+        generation,
+        new SessionCleanupService(sessions, observer),
+      ).execute('user'),
     ).resolves.toEqual({ cleanupComplete: false })
     expect(order).toEqual(['generation', 'cleanup', 'event'])
   })

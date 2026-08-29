@@ -1,20 +1,13 @@
 import { timingSafeEqual } from 'node:crypto'
 
-import { Injectable, SetMetadata } from '@nestjs/common'
+import { Injectable } from '@nestjs/common'
 import type { CanActivate, ExecutionContext } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 
 import { AuthCsrfRejectedError } from '../application/auth-errors'
-import type { GetCsrfTokenQuery } from '../application/get-csrf-token.query'
+import type { GetCsrfTokenQuery } from '../sessions/application/get-csrf-token.query'
+import { CSRF_TOKEN_EXEMPT_METADATA } from '../public-contracts/csrf-token-exempt.decorator'
 import type { AuthRequestContext } from './auth-request.context'
-
-/** Metadata key for the login endpoint's CSRF-token-only exemption. */
-export const CSRF_TOKEN_EXEMPT_METADATA = Symbol('auth:csrf-token-exempt')
-
-/** Exempts one endpoint from the session-bound token check only. */
-export function CsrfTokenExempt(): MethodDecorator {
-  return SetMetadata(CSRF_TOKEN_EXEMPT_METADATA, true)
-}
 
 /** Constant-time comparator contract for two canonical CSRF token values. */
 export type CsrfTokenComparator = (

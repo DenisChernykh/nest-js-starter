@@ -6,10 +6,9 @@ import {
   type AuthAuditPort,
 } from './auth-audit.port'
 import {
-  AUTH_SESSION_CLEANUP_OBSERVER,
+  SessionCleanupService,
   type AuthDurableMutationResult,
-  type AuthSessionCleanupObserver,
-} from './auth.types'
+} from '../sessions/application/session-cleanup.service'
 import { AuthDependencyUnavailableError, AuthError } from './auth-errors'
 import {
   PASSWORD_RECOVERY_PERSISTENCE,
@@ -26,8 +25,7 @@ import {
 import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
-} from './password-hasher.port'
-import { SESSION_STORE, type SessionStorePort } from './session-store.port'
+} from '../authentication/application/password-hasher.port'
 
 export interface ConfirmPasswordResetInput {
   readonly token: string
@@ -45,10 +43,8 @@ export class ConfirmPasswordResetUseCase {
     private readonly codec: OneTimeTokenCodecPort,
     @Inject(SelfServiceAuthPolicy)
     private readonly policy: SelfServiceAuthPolicy,
-    @Inject(SESSION_STORE) private readonly sessions: SessionStorePort,
-    @Inject(AUTH_SESSION_CLEANUP_OBSERVER)
-    private readonly cleanupObserver:
-      AuthSessionCleanupObserver | undefined = undefined,
+    @Inject(SessionCleanupService)
+    private readonly cleanup: SessionCleanupService,
     @Inject(AUTH_AUDIT)
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}
@@ -77,29 +73,22 @@ export class ConfirmPasswordResetUseCase {
         passwordHash,
       })
       if (target === undefined) throw new AuthTokenInvalidOrExpiredError()
-      try {
-        await this.sessions.revokeAll(target.userId)
-        this.audit.emit({
-          action: 'password_reset_confirm',
-          outcome: 'success',
-          reasonCode: 'PASSWORD_RESET_COMPLETED',
-          actorId: target.userId,
-          targetType: 'user',
-          targetId: target.userId,
-        })
-        return { cleanupComplete: true }
-      } catch {
-        this.cleanupObserver?.cleanupIncomplete('password-reset', target.userId)
-        this.audit.emit({
-          action: 'password_reset_confirm',
-          outcome: 'partial',
-          reasonCode: 'CLEANUP_INCOMPLETE',
-          actorId: target.userId,
-          targetType: 'user',
-          targetId: target.userId,
-        })
-        return { cleanupComplete: false }
-      }
+      const cleanupComplete =
+        await this.cleanup.cleanupAfterDurableInvalidation(
+          'password-reset',
+          target.userId,
+        )
+      this.audit.emit({
+        action: 'password_reset_confirm',
+        outcome: cleanupComplete ? 'success' : 'partial',
+        reasonCode: cleanupComplete
+          ? 'PASSWORD_RESET_COMPLETED'
+          : 'CLEANUP_INCOMPLETE',
+        actorId: target.userId,
+        targetType: 'user',
+        targetId: target.userId,
+      })
+      return { cleanupComplete }
     } catch (error: unknown) {
       if (error instanceof AuthError) {
         if (error instanceof AuthTokenInvalidOrExpiredError) {

@@ -1,8 +1,6 @@
-import type {
-  AuthProjection,
-  CredentialSnapshot,
-} from '../application/auth.types'
-import type { UserStatus } from '../domain/user-status'
+import type { CredentialSnapshot } from '../authentication/application/password-credential.port'
+import type { AuthProjection } from '../identity/application/identity-security-state.port'
+import type { UserStatus } from '../identity/domain/user-status'
 
 /** Structural Prisma row needed by the auth projection mapper. */
 export interface AuthProjectionRow {

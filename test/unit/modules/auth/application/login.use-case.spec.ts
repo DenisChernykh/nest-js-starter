@@ -1,11 +1,11 @@
 import type { AuthAuditPort } from '@/modules/auth/application/auth-audit.port'
 import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
 import { EmailVerificationRequiredError } from '@/modules/auth/application/auth-errors'
-import { LoginUseCase } from '@/modules/auth/application/login.use-case'
-import type { LoginRateLimiterPort } from '@/modules/auth/application/login-rate-limiter.port'
-import type { PasswordCredentialPort } from '@/modules/auth/application/password-credential.port'
-import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
-import type { SessionIssuer } from '@/modules/auth/application/session-issuer'
+import { LoginUseCase } from '@/modules/auth/authentication/application/login.use-case'
+import type { LoginRateLimiterPort } from '@/modules/auth/authentication/application/login-rate-limiter.port'
+import type { PasswordCredentialPort } from '@/modules/auth/authentication/application/password-credential.port'
+import type { PasswordHasherPort } from '@/modules/auth/authentication/application/password-hasher.port'
+import type { SessionIssuer } from '@/modules/auth/sessions/application/session-issuer'
 
 /* eslint-disable @typescript-eslint/unbound-method */
 

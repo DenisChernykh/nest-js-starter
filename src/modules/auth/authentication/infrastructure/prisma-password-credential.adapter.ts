@@ -3,8 +3,8 @@ import { Inject, Injectable } from '@nestjs/common'
 import type {
   ChangePasswordAndInvalidateInput,
   PasswordCredentialPort,
-} from '../../../application/password-credential.port'
-import type { CredentialSnapshot } from '../../../application/auth.types'
+} from '../application/password-credential.port'
+import type { CredentialSnapshot } from '../application/password-credential.port'
 import { Prisma, type PrismaClient } from '@/generated/prisma/client'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import {

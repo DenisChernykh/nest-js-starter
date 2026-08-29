@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import type { AuthenticatedPrincipal } from '../public-contracts/authenticated-principal'
+import type { AuthenticatedPrincipal } from '../../public-contracts/authenticated-principal'
 import type { BrowserSessionSummary } from './session-store.port'
 import { SESSION_STORE, type SessionStorePort } from './session-store.port'
 

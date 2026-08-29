@@ -1,17 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import { AuthDependencyUnavailableError, AuthError } from './auth-errors'
+import {
+  AuthDependencyUnavailableError,
+  AuthError,
+} from '../../application/auth-errors'
 import {
   AUTH_AUDIT,
   NOOP_AUTH_AUDIT,
   type AuthAuditPort,
-} from './auth-audit.port'
+} from '../../application/auth-audit.port'
 import {
-  AUTH_SESSION_CLEANUP_OBSERVER,
+  SessionCleanupService,
   type AuthDurableMutationResult,
-  type AuthSessionCleanupObserver,
-} from './auth.types'
-import { SESSION_STORE, type SessionStorePort } from './session-store.port'
+} from './session-cleanup.service'
 import {
   SESSION_GENERATION,
   type SessionGenerationPort,
@@ -23,11 +24,8 @@ export class LogoutAllUseCase {
   public constructor(
     @Inject(SESSION_GENERATION)
     private readonly generation: SessionGenerationPort,
-    @Inject(SESSION_STORE)
-    private readonly sessions: SessionStorePort,
-    @Inject(AUTH_SESSION_CLEANUP_OBSERVER)
-    private readonly cleanupObserver:
-      AuthSessionCleanupObserver | undefined = undefined,
+    @Inject(SessionCleanupService)
+    private readonly cleanup: SessionCleanupService,
     @Inject(AUTH_AUDIT)
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}
@@ -41,29 +39,19 @@ export class LogoutAllUseCase {
   ): Promise<AuthDurableMutationResult> {
     try {
       await this.generation.incrementSessionGeneration(userId)
-      try {
-        await this.sessions.revokeAll(userId)
-        this.audit.emit({
-          action: 'logout_all',
-          outcome: 'success',
-          reasonCode: 'LOGOUT_ALL_COMPLETED',
-          actorId: userId,
-          targetType: 'user',
-          targetId: userId,
-        })
-        return { cleanupComplete: true }
-      } catch {
-        this.cleanupObserver?.cleanupIncomplete('logout-all', userId)
-        this.audit.emit({
-          action: 'logout_all',
-          outcome: 'partial',
-          reasonCode: 'CLEANUP_INCOMPLETE',
-          actorId: userId,
-          targetType: 'user',
-          targetId: userId,
-        })
-        return { cleanupComplete: false }
-      }
+      const cleanupComplete =
+        await this.cleanup.cleanupAfterDurableInvalidation('logout-all', userId)
+      this.audit.emit({
+        action: 'logout_all',
+        outcome: cleanupComplete ? 'success' : 'partial',
+        reasonCode: cleanupComplete
+          ? 'LOGOUT_ALL_COMPLETED'
+          : 'CLEANUP_INCOMPLETE',
+        actorId: userId,
+        targetType: 'user',
+        targetId: userId,
+      })
+      return { cleanupComplete }
     } catch (error: unknown) {
       this.audit.emit({
         action: 'logout_all',

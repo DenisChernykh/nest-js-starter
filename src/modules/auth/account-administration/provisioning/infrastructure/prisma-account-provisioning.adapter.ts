@@ -7,7 +7,7 @@ import type {
   InitialAdminResult,
   UserProvisioningInput,
 } from '../../../application/auth.types'
-import { IdentitySecurityStateIntegrityError } from '../../../application/identity-security-state.port'
+import { IdentitySecurityStateIntegrityError } from '../../../identity/application/identity-security-state.port'
 import { isNormalizedEmailUniqueConflict } from '../../../infrastructure/prisma-auth-unique-constraint'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import {

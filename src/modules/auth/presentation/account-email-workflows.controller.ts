@@ -9,7 +9,7 @@ import {
 
 import { AccountEmailWorkflowsService } from '../application/account-email-workflows.service'
 import { AcceptAccountInvitationRequestDto } from './admin-account.dto'
-import { CsrfTokenExempt } from './session-csrf.guard'
+import { CsrfTokenExempt } from '../public-contracts/csrf-token-exempt.decorator'
 import { PublicEndpoint } from '@/platform/http/policy/public-endpoint.decorator'
 import { ApiProblemResponses } from '@/platform/http/docs/api-problem-responses.decorator'
 import { AUTH_TOKEN_INVALID_OR_EXPIRED_PROBLEM } from './auth-problem.definitions'

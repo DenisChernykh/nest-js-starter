@@ -1,13 +1,6 @@
-import {
-  IsEmail,
-  IsString,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator'
 import { ApiProperty } from '@nestjs/swagger'
+import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator'
 
-/** Strict credential payload accepted by the browser login endpoint. */
 export class LoginRequestDto {
   @ApiProperty({
     type: String,
@@ -32,7 +25,6 @@ export class LoginRequestDto {
   public password!: string
 }
 
-/** Strict current/new credential payload for an authenticated account. */
 export class ChangePasswordRequestDto {
   @ApiProperty({
     type: String,
@@ -57,18 +49,4 @@ export class ChangePasswordRequestDto {
   @MinLength(12)
   @MaxLength(1024)
   public newPassword!: string
-}
-
-/** Canonical public session identifier accepted from an owned route path. */
-export class SessionPathDto {
-  @ApiProperty({
-    type: String,
-    minLength: 22,
-    maxLength: 22,
-    pattern: '^[A-Za-z0-9_-]{22}$',
-    example: 'AbCdEfGhIjKlMnOpQrStUv',
-  })
-  @IsString()
-  @Matches(/^[A-Za-z0-9_-]{22}$/u)
-  public sessionId!: string
 }

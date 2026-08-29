@@ -3,8 +3,8 @@ import { Inject, Injectable } from '@nestjs/common'
 import {
   IdentitySecurityStateIntegrityError,
   type IdentitySecurityStatePort,
-} from '../../application/identity-security-state.port'
-import type { AuthProjection } from '../../application/auth.types'
+} from '../application/identity-security-state.port'
+import type { AuthProjection } from '../application/identity-security-state.port'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 
 const authProjectionInclude = {

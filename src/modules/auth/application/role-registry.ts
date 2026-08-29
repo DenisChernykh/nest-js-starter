@@ -1,6 +1,6 @@
 import { DisabledUserError, UnknownRoleAssignmentError } from './auth-errors'
 import { definePermissions } from './permission'
-import type { UserStatus } from '../domain/user-status'
+import type { UserStatus } from '../identity/domain/user-status'
 import type { PermissionKey } from '@/shared/application/permission'
 
 /** Immutable code-owned mapping from one durable role to explicit permissions. */

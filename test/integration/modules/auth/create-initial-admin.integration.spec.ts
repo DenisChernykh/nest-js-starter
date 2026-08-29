@@ -2,7 +2,7 @@ import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql'
 
 import { PrismaAccountProvisioningAdapter } from '@/modules/auth/account-administration/provisioning/infrastructure/prisma-account-provisioning.adapter'
 import { CreateInitialAdminUseCase } from '@/modules/auth/application/create-initial-admin.use-case'
-import { Argon2PasswordHasher } from '@/modules/auth/infrastructure/argon2-password.hasher'
+import { Argon2PasswordHasher } from '@/modules/auth/authentication/infrastructure/argon2-password.hasher'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'
 import { buildApiRuntimeConfig } from '@/platform/config/runtime-environment'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'

@@ -1,4 +1,4 @@
-import { IdentitySecurityStateIntegrityError } from '@/modules/auth/application/identity-security-state.port'
+import { IdentitySecurityStateIntegrityError } from '@/modules/auth/identity/application/identity-security-state.port'
 import { PrismaIdentitySecurityStateAdapter } from '@/modules/auth/identity/infrastructure/prisma-identity-security-state.adapter'
 import type { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 

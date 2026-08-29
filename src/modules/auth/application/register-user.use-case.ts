@@ -31,7 +31,7 @@ import { SelfServiceAuthPolicy } from './self-service-auth.policy'
 import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
-} from './password-hasher.port'
+} from '../authentication/application/password-hasher.port'
 
 export interface RegisterUserInput {
   readonly email: string

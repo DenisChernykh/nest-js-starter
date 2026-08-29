@@ -14,9 +14,12 @@ import { RequestPasswordResetUseCase } from '@/modules/auth/application/request-
 import type { OneTimeTokenCodecPort } from '@/modules/auth/application/one-time-token-codec.port'
 import type { PublicAuthRateLimiterPort } from '@/modules/auth/application/public-auth-rate-limiter.port'
 import { SelfServiceAuthPolicy } from '@/modules/auth/application/self-service-auth.policy'
-import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
-import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
-import type { AuthSessionCleanupObserver } from '@/modules/auth/application/auth.types'
+import type { PasswordHasherPort } from '@/modules/auth/authentication/application/password-hasher.port'
+import type { SessionStorePort } from '@/modules/auth/sessions/application/session-store.port'
+import {
+  SessionCleanupService,
+  type AuthSessionCleanupObserver,
+} from '@/modules/auth/sessions/application/session-cleanup.service'
 
 type SelfServicePersistencePort = RegistrationPersistencePort &
   EmailVerificationPersistencePort &
@@ -265,7 +268,7 @@ describe('self-service account lifecycle use cases', () => {
       password,
       codec(),
       policy,
-      { revokeAll } as unknown as SessionStorePort,
+      new SessionCleanupService({ revokeAll } as unknown as SessionStorePort),
     )
 
     await expect(
@@ -305,7 +308,9 @@ describe('self-service account lifecycle use cases', () => {
         password,
         codec(),
         policy,
-        { revokeAll: jest.fn() } as unknown as SessionStorePort,
+        new SessionCleanupService({
+          revokeAll: jest.fn(),
+        } as unknown as SessionStorePort),
       )
 
       await expect(
@@ -340,10 +345,12 @@ describe('self-service account lifecycle use cases', () => {
       passwords(),
       codec(),
       policy,
-      {
-        revokeAll: jest.fn(() => Promise.reject(new Error('redis'))),
-      } as unknown as SessionStorePort,
-      observer,
+      new SessionCleanupService(
+        {
+          revokeAll: jest.fn(() => Promise.reject(new Error('redis'))),
+        } as unknown as SessionStorePort,
+        observer,
+      ),
       { emit: events.emit },
     )
 
@@ -381,7 +388,9 @@ describe('self-service account lifecycle use cases', () => {
       password,
       codec(),
       policy,
-      { revokeAll: jest.fn() } as unknown as SessionStorePort,
+      new SessionCleanupService({
+        revokeAll: jest.fn(),
+      } as unknown as SessionStorePort),
     )
 
     await expect(
@@ -415,9 +424,9 @@ describe('self-service account lifecycle use cases', () => {
       passwords(),
       codec(),
       administratorOnlyPolicy,
-      {
+      new SessionCleanupService({
         revokeAll: jest.fn(() => Promise.resolve(1)),
-      } as unknown as SessionStorePort,
+      } as unknown as SessionStorePort),
     )
 
     await expect(

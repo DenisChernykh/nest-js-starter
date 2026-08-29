@@ -1,9 +1,10 @@
 import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
 import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
-import type { IdentitySecurityStatePort } from '@/modules/auth/application/identity-security-state.port'
+import type { IdentitySecurityStatePort } from '@/modules/auth/identity/application/identity-security-state.port'
 import { definePermissions } from '@/modules/auth/application/permission'
 import { RoleRegistry } from '@/modules/auth/application/role-registry'
-import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
+import type { SessionStorePort } from '@/modules/auth/sessions/application/session-store.port'
+import { ResolveSessionIdentityQuery } from '@/modules/auth/sessions/application/resolve-session-identity.query'
 
 /* eslint-disable @typescript-eslint/unbound-method */
 
@@ -40,8 +41,7 @@ describe('AuthenticateSessionUseCase', () => {
       readGlobalSessionEpoch: jest.fn(() => Promise.resolve(3n)),
     } as unknown as IdentitySecurityStatePort
     const target = new AuthenticateSessionUseCase(
-      sessions,
-      persistence,
+      new ResolveSessionIdentityQuery(sessions, persistence),
       new RoleRegistry([
         {
           key: 'member.reader',
@@ -69,20 +69,24 @@ describe('AuthenticateSessionUseCase', () => {
       readGlobalSessionEpoch: jest.fn(() => Promise.resolve(3n)),
     } as unknown as IdentitySecurityStatePort
     const stale = new AuthenticateSessionUseCase(
-      {
-        readAndTouch: jest.fn(() => Promise.resolve(record)),
-      } as unknown as SessionStorePort,
-      persistence,
+      new ResolveSessionIdentityQuery(
+        {
+          readAndTouch: jest.fn(() => Promise.resolve(record)),
+        } as unknown as SessionStorePort,
+        persistence,
+      ),
       new RoleRegistry([]),
     )
     await expect(stale.execute('raw', 100)).rejects.toMatchObject({
       code: 'AUTHENTICATION_REQUIRED',
     })
     const missing = new AuthenticateSessionUseCase(
-      {
-        readAndTouch: jest.fn(() => Promise.resolve(undefined)),
-      } as unknown as SessionStorePort,
-      {} as IdentitySecurityStatePort,
+      new ResolveSessionIdentityQuery(
+        {
+          readAndTouch: jest.fn(() => Promise.resolve(undefined)),
+        } as unknown as SessionStorePort,
+        {} as IdentitySecurityStatePort,
+      ),
       new RoleRegistry([]),
     )
     await expect(missing.execute('raw', 100)).rejects.toMatchObject({
@@ -91,10 +95,14 @@ describe('AuthenticateSessionUseCase', () => {
   })
   it('maps unexpected adapter failures to dependency unavailable', async () => {
     const target = new AuthenticateSessionUseCase(
-      {
-        readAndTouch: jest.fn(() => Promise.reject(new Error('driver detail'))),
-      } as unknown as SessionStorePort,
-      {} as IdentitySecurityStatePort,
+      new ResolveSessionIdentityQuery(
+        {
+          readAndTouch: jest.fn(() =>
+            Promise.reject(new Error('driver detail')),
+          ),
+        } as unknown as SessionStorePort,
+        {} as IdentitySecurityStatePort,
+      ),
       new RoleRegistry([]),
     )
     await expect(target.execute('raw', 100)).rejects.toBeInstanceOf(

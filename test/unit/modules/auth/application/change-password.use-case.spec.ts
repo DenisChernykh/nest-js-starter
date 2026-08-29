@@ -1,7 +1,8 @@
-import { ChangePasswordUseCase } from '@/modules/auth/application/change-password.use-case'
-import type { PasswordCredentialPort } from '@/modules/auth/application/password-credential.port'
-import type { PasswordHasherPort } from '@/modules/auth/application/password-hasher.port'
-import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
+import { ChangePasswordUseCase } from '@/modules/auth/authentication/application/change-password.use-case'
+import type { PasswordCredentialPort } from '@/modules/auth/authentication/application/password-credential.port'
+import type { PasswordHasherPort } from '@/modules/auth/authentication/application/password-hasher.port'
+import type { SessionStorePort } from '@/modules/auth/sessions/application/session-store.port'
+import { SessionCleanupService } from '@/modules/auth/sessions/application/session-cleanup.service'
 
 function input(): {
   readonly userId: string
@@ -51,7 +52,11 @@ describe('ChangePasswordUseCase', () => {
         return Promise.resolve(1)
       }),
     } as unknown as SessionStorePort
-    const target = new ChangePasswordUseCase(credentials, passwords, sessions)
+    const target = new ChangePasswordUseCase(
+      credentials,
+      passwords,
+      new SessionCleanupService(sessions),
+    )
     await expect(target.execute(input())).resolves.toEqual({
       cleanupComplete: true,
     })
@@ -79,9 +84,13 @@ describe('ChangePasswordUseCase', () => {
       ),
       hash: jest.fn(() => Promise.resolve('new')),
     } as unknown as PasswordHasherPort
-    const target = new ChangePasswordUseCase(credentials, passwords, {
-      revokeAll: jest.fn(() => Promise.reject(new Error('redis'))),
-    } as unknown as SessionStorePort)
+    const target = new ChangePasswordUseCase(
+      credentials,
+      passwords,
+      new SessionCleanupService({
+        revokeAll: jest.fn(() => Promise.reject(new Error('redis'))),
+      } as unknown as SessionStorePort),
+    )
     await expect(target.execute(input())).resolves.toEqual({
       cleanupComplete: false,
     })

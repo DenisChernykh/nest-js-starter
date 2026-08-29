@@ -13,7 +13,7 @@ import type { InitialAdminResult } from './auth.types'
 import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
-} from './password-hasher.port'
+} from '../authentication/application/password-hasher.port'
 
 /** One-shot administrator credentials supplied only by the local CLI. */
 export interface CreateInitialAdminInput {

@@ -5,17 +5,12 @@ import {
   AuthError,
   AuthenticationFailedError,
   AuthStateConflictError,
-} from './auth-errors'
+} from '../../application/auth-errors'
 import {
   AUTH_AUDIT,
   NOOP_AUTH_AUDIT,
   type AuthAuditPort,
-} from './auth-audit.port'
-import {
-  AUTH_SESSION_CLEANUP_OBSERVER,
-  type AuthDurableMutationResult,
-  type AuthSessionCleanupObserver,
-} from './auth.types'
+} from '../../application/auth-audit.port'
 import {
   PASSWORD_HASHER,
   type PasswordHasherPort,
@@ -24,7 +19,10 @@ import {
   PASSWORD_CREDENTIALS,
   type PasswordCredentialPort,
 } from './password-credential.port'
-import { SESSION_STORE, type SessionStorePort } from './session-store.port'
+import {
+  SessionCleanupService,
+  type AuthDurableMutationResult,
+} from '../../sessions/application/session-cleanup.service'
 
 /** Current/new password mutation fields bound to one authenticated identity. */
 export interface ChangePasswordInput {
@@ -41,11 +39,8 @@ export class ChangePasswordUseCase {
     private readonly credentials: PasswordCredentialPort,
     @Inject(PASSWORD_HASHER)
     private readonly passwords: PasswordHasherPort,
-    @Inject(SESSION_STORE)
-    private readonly sessions: SessionStorePort,
-    @Inject(AUTH_SESSION_CLEANUP_OBSERVER)
-    private readonly cleanupObserver:
-      AuthSessionCleanupObserver | undefined = undefined,
+    @Inject(SessionCleanupService)
+    private readonly cleanup: SessionCleanupService,
     @Inject(AUTH_AUDIT)
     private readonly audit: AuthAuditPort = NOOP_AUTH_AUDIT,
   ) {}
@@ -76,29 +71,20 @@ export class ChangePasswordUseCase {
         passwordHash: nextHash,
       })
       if (!replaced) throw new AuthStateConflictError()
-      try {
-        await this.sessions.revokeAll(input.userId)
-        this.audit.emit({
-          action: 'password_change',
-          outcome: 'success',
-          reasonCode: 'PASSWORD_CHANGED',
-          actorId: input.userId,
-          targetType: 'user',
-          targetId: input.userId,
-        })
-        return { cleanupComplete: true }
-      } catch {
-        this.cleanupObserver?.cleanupIncomplete('change-password', input.userId)
-        this.audit.emit({
-          action: 'password_change',
-          outcome: 'partial',
-          reasonCode: 'CLEANUP_INCOMPLETE',
-          actorId: input.userId,
-          targetType: 'user',
-          targetId: input.userId,
-        })
-        return { cleanupComplete: false }
-      }
+      const cleanupComplete =
+        await this.cleanup.cleanupAfterDurableInvalidation(
+          'change-password',
+          input.userId,
+        )
+      this.audit.emit({
+        action: 'password_change',
+        outcome: cleanupComplete ? 'success' : 'partial',
+        reasonCode: cleanupComplete ? 'PASSWORD_CHANGED' : 'CLEANUP_INCOMPLETE',
+        actorId: input.userId,
+        targetType: 'user',
+        targetId: input.userId,
+      })
+      return { cleanupComplete }
     } catch (error: unknown) {
       if (error instanceof AuthError) {
         this.audit.emit({

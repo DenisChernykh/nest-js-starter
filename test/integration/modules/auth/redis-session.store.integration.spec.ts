@@ -1,7 +1,7 @@
 import type { StartedRedisContainer } from '@testcontainers/redis'
 
-import type { IssuedBrowserSession } from '@/modules/auth/application/session-store.port'
-import { RedisSessionStore } from '@/modules/auth/infrastructure/redis-session.store'
+import type { IssuedBrowserSession } from '@/modules/auth/sessions/application/session-store.port'
+import { RedisSessionStore } from '@/modules/auth/sessions/infrastructure/redis-session.store'
 import { NodeSessionCryptoAdapter } from '@/modules/auth/sessions/infrastructure/node-session-crypto.adapter'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'

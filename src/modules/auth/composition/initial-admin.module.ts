@@ -1,6 +1,6 @@
 import { CreateInitialAdminUseCase } from '../application/create-initial-admin.use-case'
 import { PrismaAccountProvisioningAdapter } from '../account-administration/provisioning/infrastructure/prisma-account-provisioning.adapter'
-import { Argon2PasswordHasher } from '../infrastructure/argon2-password.hasher'
+import { Argon2PasswordHasher } from '../authentication/infrastructure/argon2-password.hasher'
 import type { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import type { TransactionPort } from '@/shared/application/transaction.port'
 import type { AuthAuditPort } from '../application/auth-audit.port'

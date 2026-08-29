@@ -6,7 +6,7 @@ import type { AuthenticateSessionUseCase } from '../application/authenticate-ses
 import { AuthenticationRequiredError } from '../public-contracts/auth-errors'
 import { attachAuthenticatedPrincipal } from '../public-contracts/authenticated-request'
 import type { AuthRequestContext } from './auth-request.context'
-import { readCanonicalSessionToken } from './session-cookie'
+import { readCanonicalSessionToken } from '../sessions/presentation/session-cookie'
 import { PUBLIC_ENDPOINT_METADATA } from '@/platform/http/policy/public-endpoint.decorator'
 
 interface CookieRequest {

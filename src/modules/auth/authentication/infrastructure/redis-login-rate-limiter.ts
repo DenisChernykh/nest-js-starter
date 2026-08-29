@@ -3,7 +3,7 @@ import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.ex
 import { RedisKeyBuilder } from '@/platform/redis/redis-key.builder'
 import { RedisScriptRunner } from '@/platform/redis/redis-script.runner'
 
-import { AuthDependencyUnavailableError } from '../application/auth-errors'
+import { AuthDependencyUnavailableError } from '../../application/auth-errors'
 import type {
   LoginRateLimitDecision,
   LoginRateLimitInput,

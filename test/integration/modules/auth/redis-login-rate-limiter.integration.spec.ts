@@ -1,8 +1,8 @@
 import type { StartedRedisContainer } from '@testcontainers/redis'
 
 import { AuthDependencyUnavailableError } from '@/modules/auth/application/auth-errors'
-import { NodePasswordAuthCryptoAdapter } from '@/modules/auth/authentication/password/infrastructure/node-password-auth-crypto.adapter'
-import { RedisLoginRateLimiter } from '@/modules/auth/infrastructure/redis-login-rate-limiter'
+import { NodePasswordAuthCryptoAdapter } from '@/modules/auth/authentication/infrastructure/node-password-auth-crypto.adapter'
+import { RedisLoginRateLimiter } from '@/modules/auth/authentication/infrastructure/redis-login-rate-limiter'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'
 import { RedisAuthConnectionManager } from '@/platform/redis/redis-auth.connection'

@@ -8,7 +8,7 @@ import { PrismaEmailVerificationAdapter } from '@/modules/auth/account-lifecycle
 import { PrismaInvitationAdapter } from '@/modules/auth/account-lifecycle/invitations/infrastructure/prisma-invitation.adapter'
 import { PrismaPasswordRecoveryAdapter } from '@/modules/auth/account-lifecycle/password-recovery/infrastructure/prisma-password-recovery.adapter'
 import { PrismaRegistrationAdapter } from '@/modules/auth/account-lifecycle/registration/infrastructure/prisma-registration.adapter'
-import { PrismaPasswordCredentialAdapter } from '@/modules/auth/authentication/password/infrastructure/prisma-password-credential.adapter'
+import { PrismaPasswordCredentialAdapter } from '@/modules/auth/authentication/infrastructure/prisma-password-credential.adapter'
 import { PrismaIdentitySecurityStateAdapter } from '@/modules/auth/identity/infrastructure/prisma-identity-security-state.adapter'
 import { PrismaSessionGenerationAdapter } from '@/modules/auth/sessions/infrastructure/prisma-session-generation.adapter'
 import { RuntimeConfigService } from '@/platform/config/runtime-config.service'

@@ -1,8 +1,8 @@
 import type { StartedRedisContainer } from '@testcontainers/redis'
 
 import { NodeAccountLifecycleCryptoAdapter } from '@/modules/auth/account-lifecycle/infrastructure/node-account-lifecycle-crypto.adapter'
-import { NodePasswordAuthCryptoAdapter } from '@/modules/auth/authentication/password/infrastructure/node-password-auth-crypto.adapter'
-import { RedisLoginRateLimiter } from '@/modules/auth/infrastructure/redis-login-rate-limiter'
+import { NodePasswordAuthCryptoAdapter } from '@/modules/auth/authentication/infrastructure/node-password-auth-crypto.adapter'
+import { RedisLoginRateLimiter } from '@/modules/auth/authentication/infrastructure/redis-login-rate-limiter'
 import { RedisPublicAuthRateLimiter } from '@/modules/auth/infrastructure/redis-public-auth-rate-limiter'
 import type { RedisCommandExecutorPort } from '@/platform/redis/redis-command.executor'
 import { RedisClientFactory } from '@/platform/redis/redis-client.factory'

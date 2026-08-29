@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common'
 
-import type { SessionGenerationPort } from '../../application/session-generation.port'
+import type { SessionGenerationPort } from '../application/session-generation.port'
 import { Prisma, type PrismaClient } from '@/generated/prisma/client'
 import { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import {

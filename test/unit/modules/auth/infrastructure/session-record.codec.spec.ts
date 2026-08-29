@@ -1,5 +1,5 @@
-import type { StoredSessionRecord } from '@/modules/auth/application/session-store.port'
-import { sessionRecordCodec } from '@/modules/auth/infrastructure/session-record.codec'
+import type { StoredSessionRecord } from '@/modules/auth/sessions/application/session-store.port'
+import { sessionRecordCodec } from '@/modules/auth/sessions/infrastructure/session-record.codec'
 
 const validRecord: StoredSessionRecord = {
   schema: 1,

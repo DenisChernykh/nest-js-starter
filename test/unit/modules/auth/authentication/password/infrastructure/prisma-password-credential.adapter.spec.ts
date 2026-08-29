@@ -1,4 +1,4 @@
-import { PrismaPasswordCredentialAdapter } from '@/modules/auth/authentication/password/infrastructure/prisma-password-credential.adapter'
+import { PrismaPasswordCredentialAdapter } from '@/modules/auth/authentication/infrastructure/prisma-password-credential.adapter'
 import type { PrismaClientProvider } from '@/platform/database/prisma-client.provider'
 import type { TransactionPort } from '@/shared/application/transaction.port'
 

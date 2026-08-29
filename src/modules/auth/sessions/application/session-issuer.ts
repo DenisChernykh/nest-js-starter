@@ -1,18 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common'
 
 import {
-  AuthDependencyUnavailableError,
-  AuthenticationFailedError,
-} from './auth-errors'
-import {
   IDENTITY_SECURITY_STATE,
   type IdentitySecurityStatePort,
-} from './identity-security-state.port'
+} from '../../identity/application/identity-security-state.port'
 import {
   SESSION_STORE,
   type IssuedBrowserSession,
   type SessionStorePort,
 } from './session-store.port'
+import {
+  AuthDependencyUnavailableError,
+  AuthenticationFailedError,
+} from '../../application/auth-errors'
 
 export interface IssueBrowserSessionInput {
   readonly userId: string

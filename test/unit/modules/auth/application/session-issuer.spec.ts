@@ -1,7 +1,7 @@
 import { AuthenticationFailedError } from '@/modules/auth/application/auth-errors'
-import type { IdentitySecurityStatePort } from '@/modules/auth/application/identity-security-state.port'
-import { SessionIssuer } from '@/modules/auth/application/session-issuer'
-import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
+import type { IdentitySecurityStatePort } from '@/modules/auth/identity/application/identity-security-state.port'
+import { SessionIssuer } from '@/modules/auth/sessions/application/session-issuer'
+import type { SessionStorePort } from '@/modules/auth/sessions/application/session-store.port'
 
 function createHarness(status: 'active' | 'disabled' | 'missing' = 'active'): {
   readonly issuer: SessionIssuer

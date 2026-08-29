@@ -6,7 +6,8 @@ import {
 } from '@/modules/auth/application/account-administration.service'
 import type { AccountAdministrationMutationPort } from '@/modules/auth/application/account-administration-mutation.port'
 import type { AccountAdministrationReadPort } from '@/modules/auth/application/account-administration-read.port'
-import type { SessionStorePort } from '@/modules/auth/application/session-store.port'
+import type { SessionStorePort } from '@/modules/auth/sessions/application/session-store.port'
+import { SessionCleanupService } from '@/modules/auth/sessions/application/session-cleanup.service'
 import type { AuthAuditEvent } from '@/modules/auth/application/auth-audit.port'
 import { AuthAuditLogger } from '@/platform/logging/auth-audit.logger'
 import type { StructuredLogRecord } from '@/platform/logging/logging.contracts'
@@ -148,7 +149,7 @@ describe('AccountAdministrationService', () => {
       persistence,
       { mode: 'enabled' },
       roles,
-      { revokeAll } as unknown as SessionStorePort,
+      new SessionCleanupService({ revokeAll } as unknown as SessionStorePort),
     )
 
     await expect(
@@ -194,7 +195,6 @@ describe('AccountAdministrationService', () => {
       persistence,
       { mode: 'enabled' },
       roles,
-      undefined,
       undefined,
       audit,
     )
@@ -272,7 +272,6 @@ describe('AccountAdministrationService', () => {
       { mode: 'enabled' },
       roles,
       undefined,
-      undefined,
       { emit: (event) => events.push(event) },
     )
 
@@ -308,10 +307,12 @@ describe('AccountAdministrationService', () => {
       persistence,
       { mode: 'enabled' },
       roles,
-      {
-        revokeAll: () => Promise.reject(new Error('redis unavailable')),
-      } as unknown as SessionStorePort,
-      { cleanupIncomplete },
+      new SessionCleanupService(
+        {
+          revokeAll: () => Promise.reject(new Error('redis unavailable')),
+        } as unknown as SessionStorePort,
+        { cleanupIncomplete },
+      ),
       { emit: (event) => events.push(event) },
     )
 

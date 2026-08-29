@@ -8,7 +8,7 @@ import {
   definePermissions,
   type PermissionKey,
 } from '../application/permission'
-import { readCanonicalSessionToken } from '../presentation/session-cookie'
+import { readCanonicalSessionToken } from '../sessions/presentation/session-cookie'
 import type {
   DocsAccessDecision,
   DocsAccessProblemCode,

@@ -8,25 +8,27 @@ import cookieParser from 'cookie-parser'
 
 import type { AuthenticatedPrincipal } from '@/modules/auth/public-contracts/authenticated-principal'
 import { AuthenticateSessionUseCase } from '@/modules/auth/application/authenticate-session.use-case'
-import { ChangePasswordUseCase } from '@/modules/auth/application/change-password.use-case'
+import { ChangePasswordUseCase } from '@/modules/auth/authentication/application/change-password.use-case'
 import { ConfirmEmailVerificationUseCase } from '@/modules/auth/application/confirm-email-verification.use-case'
 import { ConfirmPasswordResetUseCase } from '@/modules/auth/application/confirm-password-reset.use-case'
-import { GetCsrfTokenQuery } from '@/modules/auth/application/get-csrf-token.query'
+import { GetCsrfTokenQuery } from '@/modules/auth/sessions/application/get-csrf-token.query'
 import { GetMeQuery } from '@/modules/auth/application/get-me.query'
-import { ListSessionsQuery } from '@/modules/auth/application/list-sessions.query'
-import { LoginUseCase } from '@/modules/auth/application/login.use-case'
-import { LogoutAllUseCase } from '@/modules/auth/application/logout-all.use-case'
-import { LogoutUseCase } from '@/modules/auth/application/logout.use-case'
-import { RevokeSessionUseCase } from '@/modules/auth/application/revoke-session.use-case'
+import { ListSessionsQuery } from '@/modules/auth/sessions/application/list-sessions.query'
+import { LoginUseCase } from '@/modules/auth/authentication/application/login.use-case'
+import { LogoutAllUseCase } from '@/modules/auth/sessions/application/logout-all.use-case'
+import { LogoutUseCase } from '@/modules/auth/sessions/application/logout.use-case'
+import { RevokeSessionUseCase } from '@/modules/auth/sessions/application/revoke-session.use-case'
 import { RegisterUserUseCase } from '@/modules/auth/application/register-user.use-case'
 import { RequestPasswordResetUseCase } from '@/modules/auth/application/request-password-reset.use-case'
 import { ResendEmailVerificationUseCase } from '@/modules/auth/application/resend-email-verification.use-case'
 import { AUTH_HTTP_PROBLEM_CONTRIBUTION } from '@/modules/auth/composition/auth-http-problem.contribution'
 import {
   AUTH_LOGIN_METADATA_FACTORY,
-  AuthController,
-} from '@/modules/auth/presentation/auth.controller'
-import { AuthCookieAdapter } from '@/modules/auth/presentation/auth-cookie.adapter'
+  AuthenticationController,
+} from '@/modules/auth/authentication/presentation/authentication.controller'
+import { AuthController } from '@/modules/auth/presentation/auth.controller'
+import { SessionsController } from '@/modules/auth/sessions/presentation/sessions.controller'
+import { AuthCookieAdapter } from '@/modules/auth/sessions/presentation/auth-cookie.adapter'
 import { AuthRequestContext } from '@/modules/auth/presentation/auth-request.context'
 import { AuthRequestInterceptor } from '@/modules/auth/presentation/auth-request.interceptor'
 import { AuthenticationGuard } from '@/modules/auth/presentation/authentication.guard'
@@ -137,7 +139,12 @@ export async function createAuthTestHarness(
     responseDelay: { wait: jest.fn(() => Promise.resolve()) },
   }
   const moduleRef = await Test.createTestingModule({
-    controllers: [AuthController, SelfServiceAuthController],
+    controllers: [
+      AuthController,
+      AuthenticationController,
+      SessionsController,
+      SelfServiceAuthController,
+    ],
     providers: [
       Reflector,
       AuthRequestContext,
