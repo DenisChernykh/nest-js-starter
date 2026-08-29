@@ -89,7 +89,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/modules/*/domain/**/*.ts', 'src/shared/domain/**/*.ts'],
+    files: ['src/modules/**/domain/**/*.ts', 'src/shared/domain/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -125,7 +125,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/modules/*/application/**/*.ts'],
+    files: ['src/modules/**/application/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -147,17 +147,16 @@ export default tseslint.config(
                 'Application code depends on ports; only Nest DI metadata is allowed.',
             },
             {
+              regex:
+                '^@/modules/.+/(?:composition|infrastructure|presentation)(?:/|$)',
+              message: 'Application code cannot depend on outer adapters.',
+            },
+            {
               group: [
                 '@/bootstrap',
                 '@/bootstrap/**',
                 '@/platform',
                 '@/platform/**',
-                '@/modules/*/composition',
-                '@/modules/*/composition/**',
-                '@/modules/*/infrastructure',
-                '@/modules/*/infrastructure/**',
-                '@/modules/*/presentation',
-                '@/modules/*/presentation/**',
               ],
               message: 'Application code cannot depend on outer adapters.',
             },
@@ -187,17 +186,17 @@ export default tseslint.config(
               message: 'Shared application code must remain framework-free.',
             },
             {
+              regex:
+                '^@/modules/.+/(?:composition|infrastructure|presentation)(?:/|$)',
+              message:
+                'Shared application code cannot depend on modules or outer adapters.',
+            },
+            {
               group: [
                 '@/bootstrap',
                 '@/bootstrap/**',
                 '@/platform',
                 '@/platform/**',
-                '@/modules/*/composition',
-                '@/modules/*/composition/**',
-                '@/modules/*/infrastructure',
-                '@/modules/*/infrastructure/**',
-                '@/modules/*/presentation',
-                '@/modules/*/presentation/**',
               ],
               message:
                 'Shared application code cannot depend on modules or outer adapters.',
@@ -208,7 +207,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/modules/*/presentation/**/*.ts'],
+    files: ['src/modules/**/presentation/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -216,16 +215,17 @@ export default tseslint.config(
           patterns: [
             { group: ['@test/**'] },
             {
+              regex: '^@/modules/.+/(?:composition|infrastructure)(?:/|$)',
+              message:
+                'Presentation calls application contracts and cannot depend on persistence, composition or bootstrap.',
+            },
+            {
               group: [
                 '@prisma/**',
                 'ioredis',
                 'redis',
                 '@/bootstrap',
                 '@/bootstrap/**',
-                '@/modules/*/composition',
-                '@/modules/*/composition/**',
-                '@/modules/*/infrastructure',
-                '@/modules/*/infrastructure/**',
               ],
               message:
                 'Presentation calls application contracts and cannot depend on persistence, composition or bootstrap.',
@@ -236,7 +236,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/modules/*/infrastructure/**/*.ts'],
+    files: ['src/modules/**/infrastructure/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -244,14 +244,12 @@ export default tseslint.config(
           patterns: [
             { group: ['@test/**'] },
             {
-              group: [
-                '@/bootstrap',
-                '@/bootstrap/**',
-                '@/modules/*/composition',
-                '@/modules/*/composition/**',
-                '@/modules/*/presentation',
-                '@/modules/*/presentation/**',
-              ],
+              regex: '^@/modules/.+/(?:composition|presentation)(?:/|$)',
+              message:
+                'Infrastructure implements ports and cannot depend on presentation, composition or bootstrap.',
+            },
+            {
+              group: ['@/bootstrap', '@/bootstrap/**'],
               message:
                 'Infrastructure implements ports and cannot depend on presentation, composition or bootstrap.',
             },
@@ -261,7 +259,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/modules/*/composition/**/*.ts'],
+    files: ['src/modules/**/composition/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',

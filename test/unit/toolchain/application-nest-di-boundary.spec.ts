@@ -10,6 +10,26 @@ const sharedApplicationPath = join(
   process.cwd(),
   'src/shared/application/transaction.port.ts',
 )
+const nestedDomainPath = join(
+  process.cwd(),
+  'src/modules/identity-access/authentication/password/domain/password.ts',
+)
+const nestedApplicationPath = join(
+  process.cwd(),
+  'src/modules/identity-access/account-lifecycle/registration/application/register-user.use-case.ts',
+)
+const nestedPresentationPath = join(
+  process.cwd(),
+  'src/modules/identity-access/account-lifecycle/registration/presentation/registration.controller.ts',
+)
+const nestedInfrastructurePath = join(
+  process.cwd(),
+  'src/modules/identity-access/authentication/password/infrastructure/password-hasher.adapter.ts',
+)
+const nestedCompositionPath = join(
+  process.cwd(),
+  'src/modules/identity-access/account-lifecycle/registration/composition/registration.module.ts',
+)
 
 async function lintApplicationSource(
   source: string,
@@ -90,4 +110,46 @@ describe('application Nest DI boundary', () => {
       ]),
     )
   })
+
+  it.each([
+    [
+      'domain',
+      nestedDomainPath,
+      "import { Injectable } from '@nestjs/common'\nvoid Injectable",
+      'Domain code must remain framework-free.',
+    ],
+    [
+      'application',
+      nestedApplicationPath,
+      "import { Adapter } from '@/modules/identity-access/authentication/password/infrastructure/password-hasher.adapter'\nvoid Adapter",
+      'Application code cannot depend on outer adapters.',
+    ],
+    [
+      'presentation',
+      nestedPresentationPath,
+      "import { Repository } from '@/modules/identity-access/sessions/infrastructure/session.repository'\nvoid Repository",
+      'Presentation calls application contracts',
+    ],
+    [
+      'infrastructure',
+      nestedInfrastructurePath,
+      "import { Controller } from '@/modules/identity-access/authentication/password/presentation/authentication.controller'\nvoid Controller",
+      'Infrastructure implements ports',
+    ],
+    [
+      'composition',
+      nestedCompositionPath,
+      "import { bootstrap } from '@/bootstrap/api'\nvoid bootstrap",
+      'Composition is wired by bootstrap',
+    ],
+  ])(
+    'applies the %s boundary recursively inside nested capabilities',
+    async (_layer, filePath, source, expectedMessage) => {
+      const messages = await lintApplicationSource(source, filePath)
+
+      expect(messages).toEqual(
+        expect.arrayContaining([expect.stringContaining(expectedMessage)]),
+      )
+    },
+  )
 })
