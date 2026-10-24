@@ -43,4 +43,4 @@ pnpm lint
 
 ## Развёртывание
 
-Контракт развёртывания использует Docker Compose и Caddy: [docker-compose.production.yml](docker-compose.production.yml), [production.env.example](production.env.example) и [руководство оператора](docs/runbooks/deployment.md). В документации описаны подготовка ролей базы данных, миграции, запуск по digest образа, проверка готовности и восстановление.
+Контракт развёртывания использует Docker Compose и Caddy: [docker-compose.production.yml](docker-compose.production.yml), [production.env.example](docs/runbooks/production.env.example) и [руководство оператора](docs/runbooks/deployment.md). В документации описаны подготовка ролей базы данных, миграции, запуск по digest образа, проверка готовности и восстановление.
