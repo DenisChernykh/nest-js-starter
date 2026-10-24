@@ -316,7 +316,7 @@ describe('Compose VPS deployment documentation contract', () => {
       'production.env.example',
       'Compose',
       'Caddy',
-      'No deployment is performed by local checks',
+      'docs/runbooks/deployment.md',
     ]) {
       expect(readme).toContain(text)
     }
