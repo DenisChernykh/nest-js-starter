@@ -9,3 +9,8 @@ test/fixtures/openapi-client/.generated/
 !.env.example
 .DS_Store
 *.log
+.pnpm-store/
+.env.local
+.env.production
+.dev.vars
+!*.example
